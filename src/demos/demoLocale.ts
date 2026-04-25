@@ -37,6 +37,14 @@ export interface DemoStrings {
   heroCtaScroll: string;
   featuresTitle: string;
   features: readonly DemoFeature[];
+  screenshotsTitle: string;
+  screenshotsLead: string;
+  screenshotToolbarAlt: string;
+  screenshotToolbarCaption: string;
+  screenshotToolbarFlatAlt: string;
+  screenshotToolbarFlatCaption: string;
+  screenshotMinimapAlt: string;
+  screenshotMinimapCaption: string;
   opsTitle: string;
   opsRows: [string, string][];
   usageTitle: string;
@@ -94,6 +102,20 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
         body: 'Written for TypeScript. The package is small. You do not need other UI libraries.',
       },
     ],
+    screenshotsTitle: 'In the viewer',
+    screenshotsLead:
+      'Bottom toolbar: flat list vs grouped albums, zoom and transforms; corner minimap when the picture is bigger than the screen.',
+    screenshotToolbarAlt:
+      'Grouped album: toolbar with folder jump, prev/next, counters, filename badge, flip, rotate, fit, 1:1, zoom and lock',
+    screenshotToolbarCaption:
+      'Grouped album: step through images, jump folders, see the filename, flip, rotate, fit / 1:1, and zoom.',
+    screenshotToolbarFlatAlt:
+      'Image viewer toolbar on a flat list: filename badge, image counter, rotate, fit, 1:1, zoom level and lock',
+    screenshotToolbarFlatCaption:
+      'Flat gallery (no folders): filename badge, prev/next with count, rotate, fit / 1:1, zoom, and lock.',
+    screenshotMinimapAlt: 'Corner minimap with a white viewport rectangle over a zoomed-in photo',
+    screenshotMinimapCaption:
+      'Minimap: overview of the whole image with a frame you can drag to pan when zoomed in.',
     opsTitle: 'How to use it',
     opsRows: [
       ['Click a small picture', 'Opens that photo full screen'],
@@ -119,9 +141,9 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo2Title: 'Demo 2 · Photos in folders',
     demo2Desc:
       'Ten photos in three folders, like a trip album. The badge’s second line starts with which folder you are in (e.g. (1/3)), then the folder name; the style of (1/3) matches the in-folder counter between the arrows. The counter between the arrows is only your place inside that folder (e.g. 2/3). Use the double-chevron buttons to jump folders.',
-    demo3Title: 'Demo 3 · Very large photos',
+    demo3Title: 'Demo 3 · Thumbnail first, full image after',
     demo3Desc:
-      'Two huge sky photos on this site. Each item sets a small `minimapSrc` file so the viewer stretches a tiny preview first, then crossfades to the full image after a short wait (progressive loading). File size is in each name.',
+      'Each item uses a small low-res preview (`minimapSrc`) so you see a stretched image right away instead of a long empty wait. When the full file is ready, the viewer holds briefly, then crossfades to the sharp picture. Approximate file size is in each label.',
     photosBadge: (n) => `${n} photos`,
     thumbAria: (label) => `Open photo: ${label}`,
   },
@@ -160,6 +182,14 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
         body: 'TypeScript 优先，ESM/CJS 双构建，无需额外 UI 框架。',
       },
     ],
+    screenshotsTitle: '界面一瞥',
+    screenshotsLead: '底部工具栏：单组列表与分组相册两种布局，以及缩放与变换；放大后可用角落小地图拖动取景。',
+    screenshotToolbarAlt: '分组相册：底部工具栏含组间跳转、翻页与计数、文件名、翻转、旋转、适应视口、1:1、缩放与锁定',
+    screenshotToolbarCaption: '分组相册：组间跳转与组内翻页、文件名、翻转、旋转、适应 / 1:1 与缩放。',
+    screenshotToolbarFlatAlt: '单组列表下的工具栏：文件名、张数、旋转、适应视口、1:1、缩放比例与锁定',
+    screenshotToolbarFlatCaption: '无文件夹时的扁平列表：信息条显示文件名，工具栏为翻页计数、旋转、适应 / 1:1、缩放与锁定。',
+    screenshotMinimapAlt: '角落导航小地图：半透明压暗全景与可拖动的白色取景框',
+    screenshotMinimapCaption: '小地图：缩略全景上的取景框表示当前可见区域，可拖动快速平移。',
     opsTitle: '查看器操作说明',
     opsRows: [
       ['点击缩略图', '全屏打开该图'],
@@ -185,9 +215,9 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo2Title: 'Demo 2 · 多文件夹图片',
     demo2Desc:
       '旅行相册场景，共 3 个文件夹 · 10 张图片。信息条第二行先显示当前第几组、共几组（如 (1/3)），样式与工具栏组内序号一致，与组名略有区分，中间留一点间距；再跟文件夹名称。工具栏中间的序号只表示当前文件夹内第几张（如 2/3）。切换到其他文件夹请用两侧的双箭头按钮。',
-    demo3Title: 'Demo 3 · 超高分辨率图片',
+    demo3Title: 'Demo 3 · 先缩略占位，再切高清',
     demo3Desc:
-      '本地深空摄影大图。每张在数据里单独配置了较小的 `minimapSrc`，查看器会先把小图放大铺满（偏糊），再短暂停留后淡入真正的大图（渐进加载）。括号内为未压缩体积。',
+      '每张图先用较小的低清预览（`minimapSrc`）铺满画面，减少长时间黑屏等待。全尺寸就绪后短暂停留，再淡入清晰画面。标签中标注约略文件大小。',
     photosBadge: (n) => `${n} 张`,
     thumbAria: (label) => `预览图片：${label}`,
   },

@@ -72,7 +72,7 @@
 
 ### Filename Display
 - [x] `ImageItem.name` field displayed in the toolbar info badge
-- [x] `countRender(current, total)` — custom count content (deprecated; use `groupedImages` group navigation / toolbar counter instead)
+- [x] Toolbar shows the default current/total counter (including `groupedImages` ordinals); no custom counter render prop
 
 ---
 

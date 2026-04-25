@@ -14,9 +14,6 @@ dist-ssr
 
 # Temporary / local dev files
 icon-candidates.html
-# Demo 3 full-res samples are large — add locally; small thumbs ship for progressive-loading demo.
-public/test-images/seagull-nebula.jpg
-public/test-images/eagle-nebula.jpg
 
 # Editor directories and files
 .vscode/*

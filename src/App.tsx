@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Demo1SingleGallery } from './demos/Demo1SingleGallery';
 import { Demo2FolderGroups } from './demos/Demo2FolderGroups';
 import { Demo3HighRes } from './demos/Demo3HighRes';
@@ -11,6 +11,38 @@ import {
 } from './demos/demoLocale';
 import { codeBlockStyle, dividerStyle, featureCardStyle, featureGridStyle } from './demos/demoStyles';
 import { LangSwitch } from './demos/shared';
+
+const DEMO_ASSET_BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+/** File pixel widths of `public/demo/demo-viewer-*.jpg` (often @2x captures). */
+const DEMO_VIEWER_SHOT_INTRINSIC_W = {
+  flatList: 980,
+  groupedToolbar: 1316,
+  minimap: 358,
+} as const;
+
+const demoScreenshotFigureStyle: CSSProperties = {
+  margin: 0,
+  width: 'fit-content',
+  maxWidth: '100%',
+};
+
+const demoScreenshotImgBaseStyle: CSSProperties = {
+  display: 'block',
+  height: 'auto',
+  borderRadius: 12,
+  border: '1px solid rgba(255,255,255,0.1)',
+  boxShadow: '0 12px 40px rgba(0,0,0,0.45)',
+};
+
+/** Layout at half intrinsic width (1× UI size for Retina screenshots); still shrinks on narrow viewports. */
+function demoScreenshotStyle(intrinsicWidthPx: number): CSSProperties {
+  const layoutW = Math.round(intrinsicWidthPx / 2);
+  return {
+    ...demoScreenshotImgBaseStyle,
+    width: `min(100%, ${layoutW}px)`,
+  };
+}
 
 export default function App() {
   const [locale, setLocale] = useState<DemoLocale>(readInitialLocale);
@@ -161,6 +193,54 @@ export default function App() {
         </div>
       </section>
 
+      {/* ── Screenshots (core UI) ─────────────────────────────────────────── */}
+      <section style={{ marginBottom: 44 }}>
+        <h2 style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', margin: '0 0 10px' }}>
+          {t.screenshotsTitle}
+        </h2>
+        <p style={{ margin: '0 0 20px', fontSize: 14, color: 'rgba(160,170,195,0.92)', lineHeight: 1.6, maxWidth: 720 }}>
+          {t.screenshotsLead}
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+          <figure style={demoScreenshotFigureStyle}>
+            <img
+              src={`${DEMO_ASSET_BASE}/demo/demo-viewer-toolbar-flat-list.jpg`}
+              alt={t.screenshotToolbarFlatAlt}
+              style={demoScreenshotStyle(DEMO_VIEWER_SHOT_INTRINSIC_W.flatList)}
+              loading="lazy"
+              decoding="async"
+            />
+            <figcaption style={{ margin: '12px 0 0', fontSize: 13, color: '#777', lineHeight: 1.55 }}>
+              {t.screenshotToolbarFlatCaption}
+            </figcaption>
+          </figure>
+          <figure style={demoScreenshotFigureStyle}>
+            <img
+              src={`${DEMO_ASSET_BASE}/demo/demo-viewer-toolbar.jpg`}
+              alt={t.screenshotToolbarAlt}
+              style={demoScreenshotStyle(DEMO_VIEWER_SHOT_INTRINSIC_W.groupedToolbar)}
+              loading="lazy"
+              decoding="async"
+            />
+            <figcaption style={{ margin: '12px 0 0', fontSize: 13, color: '#777', lineHeight: 1.55 }}>
+              {t.screenshotToolbarCaption}
+            </figcaption>
+          </figure>
+          <figure style={demoScreenshotFigureStyle}>
+            <img
+              src={`${DEMO_ASSET_BASE}/demo/demo-viewer-minimap.jpg`}
+              alt={t.screenshotMinimapAlt}
+              style={demoScreenshotStyle(DEMO_VIEWER_SHOT_INTRINSIC_W.minimap)}
+              loading="lazy"
+              decoding="async"
+            />
+            <figcaption style={{ margin: '12px 0 0', fontSize: 13, color: '#777', lineHeight: 1.55 }}>
+              {t.screenshotMinimapCaption}
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
       {/* ── Operations ─────────────────────────────────────────────────────── */}
       <section style={{ marginBottom: 44 }}>
         <h2 style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', margin: '0 0 16px' }}>
@@ -236,7 +316,7 @@ export default function App() {
 
       <hr style={dividerStyle} />
 
-      {/* Demo 3: local high-res samples under public/test-images; first paint, zoom, pan */}
+      {/* Demo 3: full `src` + `minimapSrc` from COS; progressive load */}
       <Demo3HighRes t={t} locale={locale} previewLanguage={previewLanguage} />
     </div>
   );

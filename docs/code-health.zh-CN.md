@@ -30,9 +30,8 @@
 
 ### 1.5 其它
 
-- **`countRender` 仍标 `@deprecated`**：表面积与文档成本。
 - **`flattenGroupedImages` 在 dev 下 `console.warn`**：合理，属唯一库内 warn。
-- **`public/test-images` 大原图 gitignore、仅 thumb 入库**：克隆仓库者 Demo 3 大图可能缺失，属仓库策略而非逻辑错误。
+- **Demo 3 资源策略**：大图与渐进用缩略图均走作者提供的 COS（新加坡）；著作权与原件说明仍以 Commons 页面为准。
 - **自动化测试**：对 Minimap、渐进图、滚轮路径覆盖偏薄，大改时防回归压力较大。
 
 ---
@@ -46,6 +45,7 @@
 | **焦点 effect** | 补充注释：与外层 `visible` 卸载策略的关系。 |
 | **PageUp/PageDown** | 在键盘 hook 内注释说明无分组时由 `prevGroup`/`nextGroup` 内部 guard。 |
 | **CI** | 新增 `.github/workflows/ci.yml`：`lint` + `test` + `build:lib`（push/PR 至 main 等）。 |
+| **API 去包袱** | 自 `types` 与需求文档移除未实现的 `countRender`，仅保留工具栏内置计数展示。 |
 
 ---
 
@@ -54,9 +54,8 @@
 - **继续拆分 `ImagePreview`**：例如滚轮、`useImperativeHandle`、侧箭头子组件文件化等，需按发布节奏分步做。
 - **DelayedTooltip**：评估改为「wrapper + portal」或小型 headless 方案，减少对 `cloneElement` 的依赖。
 - **设计 token**：可选 `tokens.ts` 供 Toolbar 与 demo 共用（或明确「demo 不保证与库视觉一致」）。
-- **移除或彻底隔离 `countRender`**：若确定无使用者，可在下一 major 移除。
 - **补充测试**：渐进加载、分组键盘边界、滚轮聚合一类场景。
-- **Demo 资源**：README 说明大图需自备或从 Release 获取，降低 fork 后困惑。
+- **Demo 资源**：README 已说明 Demo 3 依赖外链大图与本地 thumb；fork 后需联网。
 
 ---
 

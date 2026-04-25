@@ -72,7 +72,7 @@
 
 ### 文件名显示
 - [x] `ImageItem.name` 字段，显示在工具栏信息栏
-- [x] `countRender(current, total)` — 自定义计数内容（已废弃，建议改用 `groupedImages` 分组导航与工具栏计数）
+- [x] 工具栏默认显示当前张 / 总张数（含 `groupedImages` 分组序号）；不提供自定义计数渲染 API
 
 ---
 

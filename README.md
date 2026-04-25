@@ -49,7 +49,7 @@ npm run build     # Vite production build of the demo
 Open `http://localhost:5173` for the demo page (**EN / 中文** toggle in the top-right):
 - **Demo 1** — single gallery, close-on-mask-click, no flip buttons
 - **Demo 2** — folder groups, side arrows, flip buttons
-- **Demo 3** — large local assets (wheel / pan stress test)
+- **Demo 3** — thumbnail-first progressive loading (small `minimapSrc` preview, then full image; wheel / pan stress test; assets from demo CDN)
 
 ---
 

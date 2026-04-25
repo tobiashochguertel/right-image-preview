@@ -2,29 +2,26 @@ import { useMemo, useState } from 'react';
 import { ImagePreview } from '../components/ImagePreview';
 import type { ImageItem } from '../components/ImagePreview';
 import { gridStyle, sectionDescStyle, sectionHeadStyle } from './demoStyles';
+import { DEMO_HIGH_RES_IMAGES, demoApproxMbLabel } from './demoHighResSources';
 import type { DemoLocale, DemoStrings } from './demoLocale';
 import { ThumbCard } from './shared';
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
-
 function largeGallery(locale: DemoLocale): ImageItem[] {
-  const mbZh = '（18.6 MB）';
-  const mbEn = ' (18.6 MB)';
-  const mb2Zh = '（13.6 MB）';
-  const mb2En = ' (13.6 MB)';
   const z = locale === 'zh';
+  const loc = z ? 'zh' : 'en';
+  const { carinaNebulaESO, northAmericaNebula } = DEMO_HIGH_RES_IMAGES;
   return [
     {
-      src: `${BASE}/test-images/seagull-nebula.jpg`,
-      minimapSrc: `${BASE}/test-images/seagull-nebula-thumb.jpg`,
-      alt: 'Seagull Nebula',
-      name: `seagull-nebula.jpg${z ? mbZh : mbEn}`,
+      src: carinaNebulaESO.src,
+      minimapSrc: carinaNebulaESO.minimapSrc,
+      alt: z ? '船底座大星云（ESO）' : 'Carina Nebula (ESO)',
+      name: `${z ? '船底座大星云 · ESO' : 'Carina Nebula, ESO'}${demoApproxMbLabel(carinaNebulaESO.approxBytes, loc)}`,
     },
     {
-      src: `${BASE}/test-images/eagle-nebula.jpg`,
-      minimapSrc: `${BASE}/test-images/eagle-nebula-thumb.jpg`,
-      alt: 'Eagle Nebula',
-      name: `eagle-nebula.jpg${z ? mb2Zh : mb2En}`,
+      src: northAmericaNebula.src,
+      minimapSrc: northAmericaNebula.minimapSrc,
+      alt: z ? '北美洲星云' : 'North America Nebula',
+      name: `${z ? '北美洲星云' : 'North America Nebula'}${demoApproxMbLabel(northAmericaNebula.approxBytes, loc)}`,
     },
   ];
 }

@@ -242,14 +242,6 @@ export interface ImagePreviewProps {
   onMainImageLoadStageChange?: (stage: MainImageLoadStage) => void;
 
   /**
-   * Custom counter renderer, similar to Ant Design's countRender.
-   * Receives (currentIndex + 1, total). Return any React node to replace
-   * the default "n / total" counter in the toolbar.
-   * @deprecated Prefer using {@link groupedImages} for multi-folder scenarios.
-   */
-  countRender?: (current: number, total: number) => React.ReactNode;
-
-  /**
    * Whether clicking the dark overlay backdrop (outside the image, toolbar, and info badge)
    * closes the preview, just like pressing Esc or the close button.
    * Default: `false`.
