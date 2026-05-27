@@ -2,6 +2,12 @@
 
 **English** · [中文](./README.zh-CN.md)
 
+## Live Demo
+
+**👉 [https://zhangjian1713.github.io/right-image-preview/](https://zhangjian1713.github.io/right-image-preview/)**
+
+Open the interactive demo in your browser (toggle **EN / 中文** in the top-right). No install required.
+
 > A dependency-free React image preview component with Lightroom-style discrete zoom stops, multi-group navigation, flip/rotate, keyboard shortcuts, and auto-fading controls.
 
 ---

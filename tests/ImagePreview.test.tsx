@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { createRef, type ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { ImagePreview } from '../src/components/ImagePreview/ImagePreview';
+import { ImagePreview } from '../src/components/ImagePreview';
 import type { ImagePreviewRef } from '../src/components/ImagePreview/types';
 
 // jsdom doesn't load images, so naturalWidth/Height are 0 by default.

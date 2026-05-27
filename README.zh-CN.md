@@ -2,6 +2,12 @@
 
 [English](./README.md) · **中文**
 
+## 在线演示
+
+**👉 [https://zhangjian1713.github.io/right-image-preview/](https://zhangjian1713.github.io/right-image-preview/)**
+
+在浏览器中打开交互式演示（右上角可切换 **EN / 中文**），无需本地安装。
+
 > 无 UI 库依赖的 React 图片预览组件，原生支持固定档位缩放（Lightroom 式）、多图/多组导航、翻转旋转、键盘快捷键与自动渐隐控件。
 
 ---

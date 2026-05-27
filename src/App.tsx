@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { Demo0TriggerMode } from './demos/Demo0TriggerMode';
 import { Demo1SingleGallery } from './demos/Demo1SingleGallery';
 import { Demo2FolderGroups } from './demos/Demo2FolderGroups';
 import { Demo3HighRes } from './demos/Demo3HighRes';
@@ -299,11 +300,15 @@ export default function App() {
         </p>
       </section>
 
-      {/* ── Live demo (Demo 1) ───────────────────────────────────────────── */}
+      {/* ── Live demo: Demo 0 trigger, then Demo 1 … ─────────────────────── */}
       <section style={{ marginBottom: 8 }}>
         <h2 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 6px', color: '#eaeef8' }}>{t.liveDemoTitle}</h2>
         <p style={{ margin: 0, fontSize: 14, color: '#888', lineHeight: 1.55 }}>{t.liveDemoSubtitle}</p>
       </section>
+
+      <Demo0TriggerMode t={t} previewLanguage={previewLanguage} />
+
+      <hr style={dividerStyle} />
 
       <Demo1SingleGallery t={t} previewLanguage={previewLanguage} launchRef={demo1LaunchRef} />
 

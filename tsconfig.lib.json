@@ -12,7 +12,8 @@
     "verbatimModuleSyntax": true,
     "strict": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+    "types": ["vite/client"]
   },
   "include": ["src/components/ImagePreview/**/*.ts", "src/components/ImagePreview/**/*.tsx"]
 }

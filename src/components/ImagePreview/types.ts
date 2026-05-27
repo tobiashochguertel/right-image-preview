@@ -136,7 +136,10 @@ export interface ImagePreviewProps {
    * When set (non-empty), it takes precedence over {@link images}.
    */
   groupedImages?: ImageGroup[];
-  /** Controlled visibility. */
+  /**
+   * Controlled visibility. Omit together with `onOpenChange` (and usually `onClose`) when using
+   * **trigger mode** — pass a single {@link children} element and the preview manages open/close internally.
+   */
   visible?: boolean;
   /**
    * Initial image when using non-empty {@link groupedImages}: which group and which item inside that group.
@@ -275,7 +278,18 @@ export interface ImagePreviewProps {
    */
   language?: string;
 
+  /**
+   * **Trigger mode (single {@link children})**: optional. When you omit `visible`, the preview is
+   * uncontrolled: closed by default, opens on trigger click, closes on Esc / close button / mask (if allowed).
+   * The container does not read the trigger’s `src` — set `src` / `images` on `ImagePreview` only.
+   */
+  children?: React.ReactNode;
   // ── Callbacks ──────────────────────────────────────────────────────────────
+  /**
+   * Fires whenever the preview should open or close (trigger mode, or controlled sync).
+   * **Controlled** + `children`: set `visible` to match `open` (required to open from the trigger if `visible` is set).
+   */
+  onOpenChange?: (open: boolean) => void;
   onClose?: () => void;
   onZoomChange?: (state: ZoomState) => void;
   /** Active image changed; `index` is always the flattened list position (including when using `groupedImages`). */

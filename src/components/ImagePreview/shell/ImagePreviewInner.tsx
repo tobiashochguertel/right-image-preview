@@ -8,10 +8,11 @@ import {
   useRef,
   useState,
 } from 'react';
-import { DelayedTooltip } from './DelayedTooltip';
-import { Minimap } from './Minimap';
-import { Toolbar } from './Toolbar';
-import { runFlushSync } from './flushSyncCompat';
+import { Minimap } from '../Minimap';
+import { ImagePreviewCloseButton } from '../parts/ImagePreviewCloseButton';
+import { ImagePreviewNavArrow } from '../parts/ImagePreviewNavArrow';
+import { Toolbar } from '../Toolbar';
+import { runFlushSync } from '../flushSyncCompat';
 import {
   IMAGE_DECODE_TIMEOUT_MS,
   MIN_PROGRESSIVE_THUMB_VISIBLE_MS,
@@ -25,85 +26,24 @@ import {
   WHEEL_PIXEL_COALESCE_MIN_DELTA,
   WHEEL_PIXEL_MOUSE_NOTCH_MAX,
   WHEEL_PIXEL_MOUSE_NOTCH_MIN,
-} from './imagePreviewTuning';
-import {
-  NAV_ARROW_POLY_NEXT_GROUP_INNER,
-  NAV_ARROW_POLY_NEXT_GROUP_OUTER,
-  NAV_ARROW_POLY_NEXT_SINGLE,
-  NAV_ARROW_POLY_PREV_GROUP_INNER,
-  NAV_ARROW_POLY_PREV_GROUP_OUTER,
-  NAV_ARROW_POLY_PREV_SINGLE,
-} from './navArrowPolylines';
-import { resolveStrings } from './locale';
+} from '../imagePreviewTuning';
+import { findGroup } from '../lib/imagePreviewFindGroup';
+import { scheduleRevealAfterDecode } from '../lib/imagePreviewDecode';
 import {
   resolveDefaultGroupedFlatIndex,
   resolvePreviewImages,
-  type FlattenedGroupSlice,
-} from './flattenGroupedImages';
-import type { ImageItem, ImagePreviewProps, ImagePreviewRef, NativePercent } from './types';
-import { useImagePreviewKeyboard } from './useImagePreviewKeyboard';
-import { useImageTransform } from './useImageTransform';
-import { useProgressiveMainImage } from './useProgressiveMainImage';
-import { useZoomState } from './useZoomState';
+} from '../flattenGroupedImages';
+import { resolveStrings } from '../locale';
+import type { ImagePreviewProps, ImagePreviewRef, NativePercent } from '../types';
+import { useImagePreviewKeyboard } from '../useImagePreviewKeyboard';
+import { useImageTransform } from '../useImageTransform';
+import { useProgressiveMainImage } from '../useProgressiveMainImage';
+import { useZoomState } from '../useZoomState';
 
 const DEFAULT_STOPS: NativePercent[] = [10, 25, 50, 75, 100, 150, 200];
 
-/** Avoid duplicate `decode()` / timeout pairs when both `ref` and `onLoad` run for cached images. */
-const revealDecodeScheduled = new WeakSet<HTMLImageElement>();
-
-function scheduleRevealAfterDecode(img: HTMLImageElement, onReveal: () => void, timeoutMs: number): void {
-  if (revealDecodeScheduled.has(img)) return;
-  revealDecodeScheduled.add(img);
-  let settled = false;
-  const once = () => {
-    if (settled) return;
-    settled = true;
-    onReveal();
-  };
-  const tid = window.setTimeout(once, timeoutMs);
-  if (typeof img.decode === 'function') {
-    img
-      .decode()
-      .then(() => {
-        window.clearTimeout(tid);
-        once();
-      })
-      .catch(() => {
-        window.clearTimeout(tid);
-        once();
-      });
-  } else {
-    window.clearTimeout(tid);
-    queueMicrotask(once);
-  }
-}
-
-function normaliseImages(props: ImagePreviewProps): ImageItem[] {
-  return resolvePreviewImages(props).images;
-}
-
-/** Find which slice the flat index falls into. Returns null if not grouped. */
-function findGroup(
-  slices: FlattenedGroupSlice[] | undefined,
-  idx: number,
-): { group: FlattenedGroupSlice; groupIdx: number } | null {
-  if (!slices) return null;
-  const groupIdx = slices.findIndex((g) => idx >= g.start && idx <= g.end);
-  if (groupIdx === -1) return null;
-  return { group: slices[groupIdx], groupIdx };
-}
-
-// ── Outer shell: only mounts the dialog when visible ───────────────────────
-export const ImagePreview = forwardRef<ImagePreviewRef, ImagePreviewProps>(
-  function ImagePreview(props, ref) {
-    const images = normaliseImages(props);
-    if (!props.visible || images.length === 0) return null;
-    return <ImagePreviewInner {...props} ref={ref} />;
-  },
-);
-
 // ── Inner dialog ───────────────────────────────────────────────────────────
-const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
+export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
   function ImagePreviewInner(props, ref) {
     const {
       stops = DEFAULT_STOPS,
@@ -640,7 +580,7 @@ const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
         onMouseDown={resetHideTimer}
       >
         {/* ── Close button — top-right corner ── */}
-        <CloseButton
+        <ImagePreviewCloseButton
           onClick={() => onClose?.()}
           visible={controlsVisible}
           label={t.close}
@@ -827,7 +767,7 @@ const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
           return (
             <>
               {showLeft && (
-                <NavArrow
+                <ImagePreviewNavArrow
                   direction="left"
                   isGroupJump={leftIsGroup}
                   onClick={leftIsGroup ? prevGroup : prev}
@@ -837,7 +777,7 @@ const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                 />
               )}
               {showRight && (
-                <NavArrow
+                <ImagePreviewNavArrow
                   direction="right"
                   isGroupJump={rightIsGroup}
                   onClick={rightIsGroup ? nextGroup : next}
@@ -885,133 +825,3 @@ const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     );
   },
 );
-
-// ── Close button ───────────────────────────────────────────────────────────
-
-function CloseButton({
-  onClick,
-  visible,
-  label,
-  tip,
-}: {
-  onClick(): void;
-  visible: boolean;
-  label: string;
-  tip: string;
-}) {
-  const [hover, setHover] = useState(false);
-  return (
-    <DelayedTooltip content={tip}>
-      <button
-        type="button"
-        aria-label={label}
-        onClick={onClick}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-        style={{
-          position: 'absolute',
-          top: 14,
-          right: 16,
-          zIndex: 20,
-          width: 46,
-          height: 46,
-          borderRadius: '50%',
-          border: '1px solid rgba(255,255,255,0.22)',
-          background: hover ? 'rgba(8,14,26,0.78)' : 'rgba(8,14,26,0.50)',
-          backdropFilter: 'blur(6px)',
-          WebkitBackdropFilter: 'blur(6px)',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.45)',
-          color: 'rgba(235,242,255,0.92)',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: visible ? 1 : 0.10,
-          transition: visible
-            ? 'opacity 0.12s ease, background 0.15s'
-            : 'opacity 1.6s ease, background 0.15s',
-          flexShrink: 0,
-        }}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}
-          width={18} height={18} aria-hidden="true">
-          <line x1="18" y1="6" x2="6"  y2="18"/>
-          <line x1="6"  y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-    </DelayedTooltip>
-  );
-}
-
-// ── Side nav arrow ─────────────────────────────────────────────────────────
-
-interface NavArrowProps {
-  direction: 'left' | 'right';
-  /** When true the icon becomes a double-chevron (group jump). */
-  isGroupJump?: boolean;
-  onClick(): void;
-  label: string;
-  tip: string;
-  visible: boolean;
-}
-
-function NavArrow({ direction, isGroupJump = false, onClick, label, tip, visible }: NavArrowProps) {
-  const [hover, setHover] = useState(false);
-
-  return (
-    <DelayedTooltip content={tip}>
-      <button
-        type="button"
-        aria-label={label}
-        onClick={onClick}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-        style={{
-          position: 'absolute',
-          top: '50%',
-          [direction]: 16,
-          transform: 'translateY(-50%)',
-          width: 44,
-          height: 44,
-          borderRadius: '50%',
-          border: '1px solid rgba(255,255,255,0.28)',
-          background: hover ? 'rgba(8,14,26,0.80)' : 'rgba(8,14,26,0.52)',
-          backdropFilter: 'blur(6px)',
-          WebkitBackdropFilter: 'blur(6px)',
-          boxShadow: '0 2px 16px rgba(0,0,0,0.55)',
-          color: 'rgba(235,242,255,0.92)',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10,
-          opacity: visible ? 1 : 0.10,
-          transition: visible
-            ? 'opacity 0.12s ease, background 0.15s, box-shadow 0.15s'
-            : 'opacity 1.6s ease, background 0.15s, box-shadow 0.15s',
-        }}
-      >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        strokeWidth={2.5} width={22} height={22} aria-hidden="true">
-        {direction === 'left' ? (
-          isGroupJump ? (
-            <>
-              <polyline points={NAV_ARROW_POLY_PREV_GROUP_OUTER} />
-              <polyline points={NAV_ARROW_POLY_PREV_GROUP_INNER} />
-            </>
-          ) : (
-            <polyline points={NAV_ARROW_POLY_PREV_SINGLE} />
-          )
-        ) : isGroupJump ? (
-          <>
-            <polyline points={NAV_ARROW_POLY_NEXT_GROUP_OUTER} />
-            <polyline points={NAV_ARROW_POLY_NEXT_GROUP_INNER} />
-          </>
-        ) : (
-          <polyline points={NAV_ARROW_POLY_NEXT_SINGLE} />
-        )}
-      </svg>
-    </button>
-    </DelayedTooltip>
-  );
-}

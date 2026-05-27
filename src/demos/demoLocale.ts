@@ -56,6 +56,9 @@ export interface DemoStrings {
   thumbClickHint: string;
   langLabel: string;
   langSwitchHint: string;
+  demo0Title: string;
+  demo0Desc: string;
+  demo0Button: string;
   demo1Title: string;
   demo1Desc: string;
   demo2Title: string;
@@ -131,10 +134,15 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     usageNpm: 'npm install right-image-preview',
     usageDocHint: 'All options, the key list, and developer notes are in the README and docs folder on GitHub.',
     liveDemoTitle: 'Try it',
-    liveDemoSubtitle: 'Click any picture below. Then try zoom, the little map, and the keyboard.',
+    liveDemoSubtitle:
+      'Demo 0 (trigger) first, then the galleries. Click to open the viewer; use zoom, minimap, and keyboard.',
     thumbClickHint: 'Click to open',
     langLabel: 'Language',
     langSwitchHint: 'This page’s language. The viewer uses the same one.',
+    demo0Title: 'Demo 0 · Trigger — uncontrolled',
+    demo0Desc:
+      'Put a single child on `ImagePreview` (e.g. `<img>` or `<button>`). Set `src` / `images` on the component only — the library does not read the trigger. Omit `visible` and `onClose` to use internal open/close state.',
+    demo0Button: 'Open preview',
     demo1Title: 'Demo 1 · One set of photos',
     demo1Desc:
       'Five photos: wide ones, tall ones, mixed sizes. The counter shows where you are (like 2 of 5). No folders in this demo.',
@@ -205,10 +213,15 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     usageNpm: 'npm install right-image-preview',
     usageDocHint: 'Props、ref API 与键盘列表见 GitHub 上 README 与 docs/ 目录。',
     liveDemoTitle: '在线演示',
-    liveDemoSubtitle: '点击下方任意图片打开查看器，可尝试缩放、小地图与快捷键。',
+    liveDemoSubtitle:
+      '先看 Demo 0（触发器），再试下方相册。点击查看器，可试缩放、小地图与快捷键。',
     thumbClickHint: '点击打开',
     langLabel: '语言',
     langSwitchHint: '演示页语言（预览组件界面与之同步）',
+    demo0Title: 'Demo 0 · 触发器（非受控）',
+    demo0Desc:
+      '在 `ImagePreview` 上写**单个子节点**（如 `<img>`、`<button>`）。全屏要用的图只在组件 props 里配置 `src` / `images`——**不会**去读子节点里的 `src`。不传 `visible`、`onClose` 时由内部管理开闭。',
+    demo0Button: '打开预览',
     demo1Title: 'Demo 1 · 单组图片',
     demo1Desc:
       '适合相册、作品集等场景。5 张图片，比例各不相同（含竖图）。工具栏仅显示全局序号（2/5 这样），无文件夹信息。',
