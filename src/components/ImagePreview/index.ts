@@ -1,4 +1,4 @@
-export { ImagePreview } from './ImagePreview';
+export { ImagePreview } from './shell/ImagePreview';
 export {
   flattenGroupedImages,
   resolveDefaultGroupedFlatIndex,

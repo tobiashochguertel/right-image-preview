@@ -46,6 +46,10 @@ interface ToolbarProps {
   // ── Image info ────────────────────────────────────────────────────────────
   imageName?: string;
   groupName?: string;
+  /** 1-based index among non-empty groups (e.g. 1 of 3); shown before {@link groupName}. */
+  groupOrdinal?: number;
+  /** Total non-empty groups; paired with {@link groupOrdinal}. */
+  groupCount?: number;
 
   // ── Feature flags ─────────────────────────────────────────────────────────
   showFlip?: boolean;
@@ -507,7 +511,7 @@ export function Toolbar({
   atGroupStart, atGroupEnd,
   onPrevGroup, onNextGroup,
   showToolbarArrows = true,
-  imageName, groupName,
+  imageName, groupName, groupOrdinal, groupCount,
   showFlip = false,
   zoomLocked,
   controlsVisible = true,
@@ -586,16 +590,48 @@ export function Toolbar({
               style={{ fontSize: 13, fontWeight: 500, color: C.text, flex: '1 1 0' }}
             />
           </div>
-          {/* Group/folder subtitle */}
-          {groupName && (
-            <span style={{
-              fontSize: 11, color: C.textMuted,
-              overflow: 'hidden', textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap', maxWidth: '100%', display: 'block',
-            }}>
-              {groupName}
-            </span>
-          )}
+          {/* Group/folder subtitle: (i/n) uses same tone as the in-group counter; name may differ */}
+          {(groupName != null && groupName !== '') || (groupOrdinal != null && groupCount != null) ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                gap: 6,
+                minWidth: 0,
+                width: '100%',
+                maxWidth: '100%',
+              }}
+            >
+              {groupOrdinal != null && groupCount != null ? (
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: C.textMuted,
+                    fontVariantNumeric: 'tabular-nums',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}
+                >
+                  ({groupOrdinal}/{groupCount})
+                </span>
+              ) : null}
+              {groupName != null && groupName !== '' ? (
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: '#c8d0e0',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    minWidth: 0,
+                    flex: '1 1 0',
+                  }}
+                >
+                  {groupName}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       )}
 

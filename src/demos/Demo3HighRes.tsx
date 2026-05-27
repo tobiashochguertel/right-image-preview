@@ -1,27 +1,27 @@
 import { useMemo, useState } from 'react';
 import { ImagePreview } from '../components/ImagePreview';
 import type { ImageItem } from '../components/ImagePreview';
-import { cardStyle, sectionDescStyle, sectionHeadStyle } from './demoStyles';
+import { gridStyle, sectionDescStyle, sectionHeadStyle } from './demoStyles';
+import { DEMO_HIGH_RES_IMAGES, demoApproxMbLabel } from './demoHighResSources';
 import type { DemoLocale, DemoStrings } from './demoLocale';
-
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+import { ThumbCard } from './shared';
 
 function largeGallery(locale: DemoLocale): ImageItem[] {
-  const mbZh = '（18.6 MB）';
-  const mbEn = ' (18.6 MB)';
-  const mb2Zh = '（13.6 MB）';
-  const mb2En = ' (13.6 MB)';
   const z = locale === 'zh';
+  const loc = z ? 'zh' : 'en';
+  const { carinaNebulaESO, northAmericaNebula } = DEMO_HIGH_RES_IMAGES;
   return [
     {
-      src: `${BASE}/test-images/seagull-nebula.jpg`,
-      alt: 'Seagull Nebula',
-      name: `seagull-nebula.jpg${z ? mbZh : mbEn}`,
+      src: carinaNebulaESO.src,
+      minimapSrc: carinaNebulaESO.minimapSrc,
+      alt: z ? '船底座大星云（ESO）' : 'Carina Nebula (ESO)',
+      name: `${z ? '船底座大星云 · ESO' : 'Carina Nebula, ESO'}${demoApproxMbLabel(carinaNebulaESO.approxBytes, loc)}`,
     },
     {
-      src: `${BASE}/test-images/eagle-nebula.jpg`,
-      alt: 'Eagle Nebula',
-      name: `eagle-nebula.jpg${z ? mb2Zh : mb2En}`,
+      src: northAmericaNebula.src,
+      minimapSrc: northAmericaNebula.minimapSrc,
+      alt: z ? '北美洲星云' : 'North America Nebula',
+      name: `${z ? '北美洲星云' : 'North America Nebula'}${demoApproxMbLabel(northAmericaNebula.approxBytes, loc)}`,
     },
   ];
 }
@@ -36,24 +36,20 @@ export function Demo3HighRes({ t, locale, previewLanguage }: { t: DemoStrings; l
       <section>
         <h2 style={sectionHeadStyle}>{t.demo3Title}</h2>
         <p style={sectionDescStyle}>{t.demo3Desc}</p>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <div style={gridStyle}>
           {items.map((img, idx) => (
-            <button
+            <ThumbCard
               key={img.src}
-              type="button"
-              style={{
-                ...cardStyle,
-                background: '#1a1d27',
-                border: '1px solid #2a2d3a',
-                padding: '10px 18px',
-              }}
+              src={img.minimapSrc ?? img.src}
+              alt={img.alt ?? ''}
+              label={img.name ?? img.alt ?? ''}
+              ariaLabel={t.thumbAria(img.name ?? img.alt ?? '')}
+              clickHint={t.thumbClickHint}
               onClick={() => {
                 setIndex(idx);
                 setVisible(true);
               }}
-            >
-              <span style={{ color: '#8ec7ff', fontSize: 13 }}>{img.name}</span>
-            </button>
+            />
           ))}
         </div>
       </section>
@@ -69,6 +65,9 @@ export function Demo3HighRes({ t, locale, previewLanguage }: { t: DemoStrings; l
         closeOnMaskClick
         wheelEnabled
         doubleClickEnabled
+        switchImageResetTransform
+        progressivePlaceholderMinMs={2800}
+        progressiveFadeMs={600}
         language={previewLanguage}
         onClose={() => setVisible(false)}
       />

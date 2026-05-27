@@ -2,6 +2,12 @@
 
 [English](./README.md) · **中文**
 
+## 在线演示
+
+**👉 [https://zhangjian1713.github.io/right-image-preview/](https://zhangjian1713.github.io/right-image-preview/)**
+
+在浏览器中打开交互式演示（右上角可切换 **EN / 中文**），无需本地安装。
+
 > 无 UI 库依赖的 React 图片预览组件，原生支持固定档位缩放（Lightroom 式）、多图/多组导航、翻转旋转、键盘快捷键与自动渐隐控件。
 
 ---
@@ -49,7 +55,7 @@ npm run build     # 演示站的 Vite 生产构建
 浏览器访问 `http://localhost:5173`，页面**右上角**可切换 **EN / 中文**：
 - **Demo 1**：单组相册，点击遮罩关闭，无翻转按钮
 - **Demo 2**：多文件夹分组，侧边箭头，含翻转按钮
-- **Demo 3**：本地高分辨率样张（滚轮/平移体验）
+- **Demo 3**：先小图占位、再载入全图（渐进加载；滚轮/平移；演示资源走 CDN）
 
 ---
 

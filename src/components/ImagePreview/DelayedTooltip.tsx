@@ -77,10 +77,15 @@ export function DelayedTooltip({
     anchorRef.current = node;
     const r = (children as React.ReactElement & { ref?: React.Ref<HTMLElement> }).ref;
     if (typeof r === 'function') r(node);
-    else if (r && typeof r === 'object') (r as React.MutableRefObject<HTMLElement | null>).current = node;
+    else if (r != null && typeof r === 'object' && 'current' in r) {
+      // Merge into caller's ref object (standard cloneElement + ref forwarding).
+      // eslint-disable-next-line react-hooks/immutability -- ref is not a prop bag; assigning .current is required for forwarding
+      (r as React.MutableRefObject<HTMLElement | null>).current = node;
+    }
   };
 
   const baseProps = children.props as Record<string, unknown>;
+  /* Ref callback is attached here but only runs after mount / on updates — not read during render. */
   const merged = cloneElement(
     children,
     {

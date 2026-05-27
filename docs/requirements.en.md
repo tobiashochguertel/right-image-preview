@@ -72,7 +72,7 @@
 
 ### Filename Display
 - [x] `ImageItem.name` field displayed in the toolbar info badge
-- [x] `countRender(current, total)` — custom count content (deprecated; use `groupedImages` group navigation / toolbar counter instead)
+- [x] Toolbar shows the default current/total counter (including `groupedImages` ordinals); no custom counter render prop
 
 ---
 
@@ -99,7 +99,7 @@
 - [x] Side arrows navigate within group; disabled at boundaries
 - [x] Toolbar gains "prev group" (⏮) / "next group" (⏭) buttons
 - [x] Toolbar counter shows within-group index (e.g. `2/3`), not global index
-- [x] Info badge second line shows folder name (small, dimmed)
+- [x] Info badge second line: `(i/n)` group position (same styling as in-group counter), small gap, then folder name (may differ slightly)
 
 ### Demo Improvements
 - [x] Demo 1: 5 images, single group, no folder info

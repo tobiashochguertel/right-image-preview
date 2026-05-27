@@ -3,10 +3,10 @@ name: Deploy Demo to GitHub Pages
 on:
   push:
     branches:
+      # Only main: matches typical github-pages environment rules (dev → merge to update site).
       - main
-      - feature-init   # also deploy from the current dev branch
 
-  # Allow triggering the workflow manually from the Actions tab
+  # Actions tab → Run workflow (uses the branch you select; use main to match env protection).
   workflow_dispatch:
 
 # Grant the GITHUB_TOKEN the permissions required by actions/deploy-pages

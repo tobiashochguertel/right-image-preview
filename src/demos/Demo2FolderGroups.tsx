@@ -95,6 +95,7 @@ export function Demo2FolderGroups({ t, locale, previewLanguage }: { t: DemoStrin
                   alt={img.alt ?? ''}
                   label={img.name ?? img.alt ?? ''}
                   ariaLabel={t.thumbAria(img.name ?? img.alt ?? '')}
+                  clickHint={t.thumbClickHint}
                   onClick={() => open(gi, ii)}
                 />
               ))}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { MIN_PROGRESSIVE_THUMB_VISIBLE_MS, PROGRESSIVE_PRELOAD_TIMEOUT_MS } from './imagePreviewTuning';
+import { PROGRESSIVE_PRELOAD_TIMEOUT_MS } from './imagePreviewTuning';
 import type { MainImageLoadStage } from './types';
 import type { ImageDimensions } from './useImageTransform';
 
@@ -9,6 +9,8 @@ export interface UseProgressiveMainImageArgs {
   /** When true, the item uses a custom minimap node — progressive main is disabled. */
   minimapCustom: boolean;
   enabled: boolean;
+  /** Minimum ms the placeholder stays visible after the full image is ready (see {@link ImagePreviewProps.progressivePlaceholderMinMs}). */
+  placeholderMinVisibleMs: number;
   onImageLayout: (d: ImageDimensions) => void;
   onStageChange?: (stage: MainImageLoadStage) => void;
 }
@@ -43,6 +45,7 @@ export function useProgressiveMainImage({
   minimapSrc,
   minimapCustom,
   enabled,
+  placeholderMinVisibleMs,
   onImageLayout,
   onStageChange,
 }: UseProgressiveMainImageArgs): UseProgressiveMainImageResult {
@@ -80,7 +83,7 @@ export function useProgressiveMainImage({
     if (revealCompletedRef.current) return;
     clearRevealTimeout();
     const t0 = thumbPlaceholderEnteredAtRef.current;
-    const dwell = MIN_PROGRESSIVE_THUMB_VISIBLE_MS;
+    const dwell = placeholderMinVisibleMs;
     const elapsed = t0 == null ? 0 : performance.now() - t0;
     const wait = Math.max(0, dwell - elapsed);
     revealTimeoutRef.current = window.setTimeout(() => {
@@ -90,7 +93,7 @@ export function useProgressiveMainImage({
       onStageChangeRef.current?.('full-ready');
     }, wait);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- onStageChangeRef
-  }, [clearRevealTimeout]);
+  }, [clearRevealTimeout, placeholderMinVisibleMs]);
 
   useEffect(() => {
     setFullDecoded(false);

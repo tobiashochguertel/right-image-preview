@@ -14,7 +14,6 @@ dist-ssr
 
 # Temporary / local dev files
 icon-candidates.html
-public/test-images/
 
 # Editor directories and files
 .vscode/*

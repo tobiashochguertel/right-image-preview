@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useState, type MutableRefObject } from 'react';
 import { ImagePreview } from '../components/ImagePreview';
-import type { ImageItem, ImagePreviewRef } from '../components/ImagePreview';
+import type { ImageItem } from '../components/ImagePreview';
 import { gridStyle, sectionDescStyle, sectionHeadStyle } from './demoStyles';
 import type { DemoStrings } from './demoLocale';
-import { RefControls, ThumbCard } from './shared';
+import { ThumbCard } from './shared';
 
 const SINGLE_GALLERY: ImageItem[] = [
   { src: 'https://picsum.photos/seed/sg-mtn/1920/1280', alt: '山间云雾', name: 'mountain-mist.jpg' },
@@ -17,19 +17,35 @@ const SINGLE_GALLERY: ImageItem[] = [
   { src: 'https://picsum.photos/seed/sg-sun/3000/2000', alt: '草原日落', name: 'grassland-sunset.jpg' },
 ];
 
-export function Demo1SingleGallery({ t, previewLanguage }: { t: DemoStrings; previewLanguage: string }) {
+export function Demo1SingleGallery({
+  t,
+  previewLanguage,
+  launchRef,
+}: {
+  t: DemoStrings;
+  previewLanguage: string;
+  /** Filled with a function that opens this demo (optional index). Used by the hero “Try” CTA. */
+  launchRef?: MutableRefObject<(index?: number) => void>;
+}) {
   const [visible, setVisible] = useState(false);
   const [index, setIndex] = useState(0);
-  const previewRef = useRef<ImagePreviewRef>(null);
 
-  const open = (i: number) => {
+  const open = useCallback((i = 0) => {
     setIndex(i);
     setVisible(true);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!launchRef) return;
+    launchRef.current = open;
+    return () => {
+      launchRef.current = () => {};
+    };
+  }, [launchRef, open]);
 
   return (
     <>
-      <section>
+      <section id="live-demo">
         <h2 style={sectionHeadStyle}>{t.demo1Title}</h2>
         <p style={sectionDescStyle}>{t.demo1Desc}</p>
         <div style={gridStyle}>
@@ -40,15 +56,14 @@ export function Demo1SingleGallery({ t, previewLanguage }: { t: DemoStrings; pre
               alt={img.alt ?? ''}
               label={img.name ?? img.alt ?? ''}
               ariaLabel={t.thumbAria(img.name ?? img.alt ?? '')}
+              clickHint={t.thumbClickHint}
               onClick={() => open(i)}
             />
           ))}
         </div>
-        <RefControls previewRef={previewRef} t={t} />
       </section>
 
       <ImagePreview
-        ref={previewRef}
         images={SINGLE_GALLERY}
         visible={visible}
         defaultIndex={index}

@@ -8,12 +8,14 @@ import {
   useRef,
   useState,
 } from 'react';
-import { DelayedTooltip } from './DelayedTooltip';
-import { Minimap } from './Minimap';
-import { Toolbar } from './Toolbar';
-import { runFlushSync } from './flushSyncCompat';
+import { Minimap } from '../Minimap';
+import { ImagePreviewCloseButton } from '../parts/ImagePreviewCloseButton';
+import { ImagePreviewNavArrow } from '../parts/ImagePreviewNavArrow';
+import { Toolbar } from '../Toolbar';
+import { runFlushSync } from '../flushSyncCompat';
 import {
   IMAGE_DECODE_TIMEOUT_MS,
+  MIN_PROGRESSIVE_THUMB_VISIBLE_MS,
   PROGRESSIVE_MAIN_DEFAULT_FADE_MS,
   toolbarZoomDropdownWidthPx,
   toolbarZoomLabelSlotPx,
@@ -24,76 +26,24 @@ import {
   WHEEL_PIXEL_COALESCE_MIN_DELTA,
   WHEEL_PIXEL_MOUSE_NOTCH_MAX,
   WHEEL_PIXEL_MOUSE_NOTCH_MIN,
-} from './imagePreviewTuning';
-import { resolveStrings } from './locale';
+} from '../imagePreviewTuning';
+import { findGroup } from '../lib/imagePreviewFindGroup';
+import { scheduleRevealAfterDecode } from '../lib/imagePreviewDecode';
 import {
   resolveDefaultGroupedFlatIndex,
   resolvePreviewImages,
-  type FlattenedGroupSlice,
-} from './flattenGroupedImages';
-import type { ImageItem, ImagePreviewProps, ImagePreviewRef, NativePercent } from './types';
-import { useImageTransform } from './useImageTransform';
-import { useProgressiveMainImage } from './useProgressiveMainImage';
-import { useZoomState } from './useZoomState';
+} from '../flattenGroupedImages';
+import { resolveStrings } from '../locale';
+import type { ImagePreviewProps, ImagePreviewRef, NativePercent } from '../types';
+import { useImagePreviewKeyboard } from '../useImagePreviewKeyboard';
+import { useImageTransform } from '../useImageTransform';
+import { useProgressiveMainImage } from '../useProgressiveMainImage';
+import { useZoomState } from '../useZoomState';
 
 const DEFAULT_STOPS: NativePercent[] = [10, 25, 50, 75, 100, 150, 200];
 
-/** Avoid duplicate `decode()` / timeout pairs when both `ref` and `onLoad` run for cached images. */
-const revealDecodeScheduled = new WeakSet<HTMLImageElement>();
-
-function scheduleRevealAfterDecode(img: HTMLImageElement, onReveal: () => void, timeoutMs: number): void {
-  if (revealDecodeScheduled.has(img)) return;
-  revealDecodeScheduled.add(img);
-  let settled = false;
-  const once = () => {
-    if (settled) return;
-    settled = true;
-    onReveal();
-  };
-  const tid = window.setTimeout(once, timeoutMs);
-  if (typeof img.decode === 'function') {
-    img
-      .decode()
-      .then(() => {
-        window.clearTimeout(tid);
-        once();
-      })
-      .catch(() => {
-        window.clearTimeout(tid);
-        once();
-      });
-  } else {
-    window.clearTimeout(tid);
-    queueMicrotask(once);
-  }
-}
-
-function normaliseImages(props: ImagePreviewProps): ImageItem[] {
-  return resolvePreviewImages(props).images;
-}
-
-/** Find which slice the flat index falls into. Returns null if not grouped. */
-function findGroup(
-  slices: FlattenedGroupSlice[] | undefined,
-  idx: number,
-): { group: FlattenedGroupSlice; groupIdx: number } | null {
-  if (!slices) return null;
-  const groupIdx = slices.findIndex((g) => idx >= g.start && idx <= g.end);
-  if (groupIdx === -1) return null;
-  return { group: slices[groupIdx], groupIdx };
-}
-
-// ── Outer shell: only mounts the dialog when visible ───────────────────────
-export const ImagePreview = forwardRef<ImagePreviewRef, ImagePreviewProps>(
-  function ImagePreview(props, ref) {
-    const images = normaliseImages(props);
-    if (!props.visible || images.length === 0) return null;
-    return <ImagePreviewInner {...props} ref={ref} />;
-  },
-);
-
 // ── Inner dialog ───────────────────────────────────────────────────────────
-const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
+export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
   function ImagePreviewInner(props, ref) {
     const {
       stops = DEFAULT_STOPS,
@@ -113,6 +63,7 @@ const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       initialZoomLocked = false,
       showMinimap = true,
       progressiveMain = true,
+      progressivePlaceholderMinMs = MIN_PROGRESSIVE_THUMB_VISIBLE_MS,
       progressiveFadeMs = PROGRESSIVE_MAIN_DEFAULT_FADE_MS,
       onMainImageLoadStageChange,
       closeOnMaskClick = false,
@@ -206,6 +157,7 @@ const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       minimapSrc: currentImage.minimapSrc,
       minimapCustom: !!currentImage.minimap,
       enabled: progressiveMain,
+      placeholderMinVisibleMs: progressivePlaceholderMinMs,
       onImageLayout: onImageLoad,
       onStageChange: onMainImageLoadStageChange,
     });
@@ -455,90 +407,27 @@ const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       return () => el.removeEventListener('wheel', handleWheel);
     }, [handleWheel]);
 
-    // ── Keyboard ────────────────────────────────────────────────────────────
-    useEffect(() => {
-      const onKeyDown = (e: KeyboardEvent) => {
-        // Any key press wakes up the controls.
-        resetHideTimer();
-
-        // Let the zoom-input field handle its own keys without interference.
-        const target = e.target as HTMLElement;
-        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
-
-        const mod = e.ctrlKey || e.metaKey;
-
-        switch (e.key) {
-          case 'Escape':
-            onClose?.();
-            break;
-
-          // Zoom in: + = ↑
-          case '+':
-          case '=':
-          case 'ArrowUp':
-            e.preventDefault();
-            zoomIn(fitEquivalentNativePercent);
-            break;
-
-          // Zoom out: - ↓
-          case '-':
-          case 'ArrowDown':
-            e.preventDefault();
-            zoomOut(fitEquivalentNativePercent);
-            break;
-
-          // Fit / 100%
-          case '0': fit(); break;
-          case '1': setNative(100); break;
-
-          // Space: toggle fit ↔ 100% (same as double-click)
-          case ' ':
-            e.preventDefault();
-            if (mode === 'fit') setNative(100);
-            else fit();
-            break;
-
-          // Navigate images / rotate (Ctrl/Cmd modifier)
-          case 'ArrowLeft':
-            e.preventDefault();
-            if (mod) {
-              rotateCCW();
-            } else {
-              // When at the first image of a group and a previous group exists,
-              // arrow key mirrors the side "prev-group" double-chevron button.
-              const atStart = currentGroup ? currentIndex === currentGroup.start : currentIndex === 0;
-              if (atStart && currentGroupIdx > 0) prevGroup(); else prev();
-            }
-            break;
-          case 'ArrowRight':
-            e.preventDefault();
-            if (mod) {
-              rotateCW();
-            } else {
-              // When at the last image of a group and a next group exists,
-              // arrow key mirrors the side "next-group" double-chevron button.
-              const atEnd = currentGroup ? currentIndex === currentGroup.end : currentIndex === images.length - 1;
-              const hasNext = groupSlices ? currentGroupIdx < groupSlices.length - 1 : false;
-              if (atEnd && hasNext) nextGroup(); else next();
-            }
-            break;
-
-          // Group navigation
-          case 'PageUp':   e.preventDefault(); prevGroup(); break;
-          case 'PageDown': e.preventDefault(); nextGroup(); break;
-        }
-      };
-      window.addEventListener('keydown', onKeyDown);
-      return () => window.removeEventListener('keydown', onKeyDown);
-    }, [
-      zoomIn, zoomOut, fit, setNative, mode,
-      prev, next, prevGroup, nextGroup,
-      rotateCW, rotateCCW,
-      onClose, fitEquivalentNativePercent,
+    useImagePreviewKeyboard({
       resetHideTimer,
-      // boundary-jump deps
-      currentIndex, currentGroup, currentGroupIdx, groupSlices, images.length,
-    ]);
+      onClose,
+      zoomIn,
+      zoomOut,
+      fit,
+      setNative,
+      mode,
+      prev,
+      next,
+      prevGroup,
+      nextGroup,
+      rotateCW,
+      rotateCCW,
+      fitEquivalentNativePercent,
+      currentIndex,
+      currentGroup,
+      currentGroupIdx,
+      groupSlices,
+      imagesLength: images.length,
+    });
 
     // ── Double-click ────────────────────────────────────────────────────────
     const handleDoubleClick = useCallback(() => {
@@ -548,6 +437,8 @@ const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     }, [doubleClickEnabled, mode, fit, setNative]);
 
     // ── Focus ───────────────────────────────────────────────────────────────
+    // Outer `ImagePreview` unmounts the inner dialog when `visible` is false, so each open
+    // remounts — one focus on mount is enough for the trap.
     useEffect(() => { overlayRef.current?.focus(); }, []);
 
     // ── Imperative ref ──────────────────────────────────────────────────────
@@ -645,19 +536,22 @@ const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
         : 'none';
 
     // Group-aware toolbar props
-    const groupToolbarProps = currentGroup
-      ? {
-          groupCurrentIndex: currentIndex - currentGroup.start + 1,
-          groupTotal:        currentGroup.end - currentGroup.start + 1,
-          atGroupStart:      currentIndex === currentGroup.start,
-          atGroupEnd:        currentIndex === currentGroup.end,
-          hasPrevGroup:      currentGroupIdx > 0,
-          hasNextGroup:      groupSlices ? currentGroupIdx < groupSlices.length - 1 : false,
-          groupName:         currentGroup.name,
-          onPrevGroup:       prevGroup,
-          onNextGroup:       nextGroup,
-        }
-      : {};
+    const groupToolbarProps =
+      currentGroup && groupSlices
+        ? {
+            groupCurrentIndex: currentIndex - currentGroup.start + 1,
+            groupTotal:        currentGroup.end - currentGroup.start + 1,
+            atGroupStart:      currentIndex === currentGroup.start,
+            atGroupEnd:        currentIndex === currentGroup.end,
+            hasPrevGroup:      currentGroupIdx > 0,
+            hasNextGroup:      currentGroupIdx < groupSlices.length - 1,
+            groupName:         currentGroup.name,
+            groupOrdinal:      currentGroupIdx + 1,
+            groupCount:        groupSlices.length,
+            onPrevGroup:       prevGroup,
+            onNextGroup:       nextGroup,
+          }
+        : {};
 
     return (
       <div
@@ -686,7 +580,7 @@ const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
         onMouseDown={resetHideTimer}
       >
         {/* ── Close button — top-right corner ── */}
-        <CloseButton
+        <ImagePreviewCloseButton
           onClick={() => onClose?.()}
           visible={controlsVisible}
           label={t.close}
@@ -873,7 +767,7 @@ const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
           return (
             <>
               {showLeft && (
-                <NavArrow
+                <ImagePreviewNavArrow
                   direction="left"
                   isGroupJump={leftIsGroup}
                   onClick={leftIsGroup ? prevGroup : prev}
@@ -883,7 +777,7 @@ const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                 />
               )}
               {showRight && (
-                <NavArrow
+                <ImagePreviewNavArrow
                   direction="right"
                   isGroupJump={rightIsGroup}
                   onClick={rightIsGroup ? nextGroup : next}
@@ -931,124 +825,3 @@ const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     );
   },
 );
-
-// ── Close button ───────────────────────────────────────────────────────────
-
-function CloseButton({
-  onClick,
-  visible,
-  label,
-  tip,
-}: {
-  onClick(): void;
-  visible: boolean;
-  label: string;
-  tip: string;
-}) {
-  const [hover, setHover] = useState(false);
-  return (
-    <DelayedTooltip content={tip}>
-      <button
-        type="button"
-        aria-label={label}
-        onClick={onClick}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-        style={{
-          position: 'absolute',
-          top: 14,
-          right: 16,
-          zIndex: 20,
-          width: 46,
-          height: 46,
-          borderRadius: '50%',
-          border: '1px solid rgba(255,255,255,0.22)',
-          background: hover ? 'rgba(8,14,26,0.78)' : 'rgba(8,14,26,0.50)',
-          backdropFilter: 'blur(6px)',
-          WebkitBackdropFilter: 'blur(6px)',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.45)',
-          color: 'rgba(235,242,255,0.92)',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: visible ? 1 : 0.10,
-          transition: visible
-            ? 'opacity 0.12s ease, background 0.15s'
-            : 'opacity 1.6s ease, background 0.15s',
-          flexShrink: 0,
-        }}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}
-          width={18} height={18} aria-hidden="true">
-          <line x1="18" y1="6" x2="6"  y2="18"/>
-          <line x1="6"  y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-    </DelayedTooltip>
-  );
-}
-
-// ── Side nav arrow ─────────────────────────────────────────────────────────
-
-interface NavArrowProps {
-  direction: 'left' | 'right';
-  /** When true the icon becomes a double-chevron (group jump). */
-  isGroupJump?: boolean;
-  onClick(): void;
-  label: string;
-  tip: string;
-  visible: boolean;
-}
-
-function NavArrow({ direction, isGroupJump = false, onClick, label, tip, visible }: NavArrowProps) {
-  const [hover, setHover] = useState(false);
-
-  return (
-    <DelayedTooltip content={tip}>
-      <button
-        type="button"
-        aria-label={label}
-        onClick={onClick}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-        style={{
-          position: 'absolute',
-          top: '50%',
-          [direction]: 16,
-          transform: 'translateY(-50%)',
-          width: 44,
-          height: 44,
-          borderRadius: '50%',
-          border: '1px solid rgba(255,255,255,0.28)',
-          background: hover ? 'rgba(8,14,26,0.80)' : 'rgba(8,14,26,0.52)',
-          backdropFilter: 'blur(6px)',
-          WebkitBackdropFilter: 'blur(6px)',
-          boxShadow: '0 2px 16px rgba(0,0,0,0.55)',
-          color: 'rgba(235,242,255,0.92)',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10,
-          opacity: visible ? 1 : 0.10,
-          transition: visible
-            ? 'opacity 0.12s ease, background 0.15s, box-shadow 0.15s'
-            : 'opacity 1.6s ease, background 0.15s, box-shadow 0.15s',
-        }}
-      >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        strokeWidth={2.5} width={22} height={22} aria-hidden="true">
-        {direction === 'left'
-          ? isGroupJump
-            ? <><polyline points="19,18 13,12 19,6"/><polyline points="11,18 5,12 11,6"/></>
-            : <polyline points="15,18 9,12 15,6"/>
-          : isGroupJump
-            ? <><polyline points="5,18 11,12 5,6"/><polyline points="13,18 19,12 13,6"/></>
-            : <polyline points="9,18 15,12 9,6"/>
-        }
-      </svg>
-    </button>
-    </DelayedTooltip>
-  );
-}
