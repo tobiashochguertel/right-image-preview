@@ -25,7 +25,7 @@ import {
   resolveDefaultGroupedFlatIndex,
   resolvePreviewImages,
 } from '../flattenGroupedImages';
-import { resolveStrings } from '../locale';
+import { mergeStrings, resolveStrings } from '../locale';
 import type { ImagePreviewProps, ImagePreviewRef, NativePercent } from '../types';
 import { useImagePreviewKeyboard } from '../useImagePreviewKeyboard';
 import { useImageTransform } from '../useImageTransform';
@@ -65,6 +65,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       overlayClassName,
       overlayStyle,
       language,
+      strings: stringOverrides,
       onClose,
       onZoomChange,
       onIndexChange,
@@ -73,8 +74,12 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       errorFallback,
     } = props;
 
-    // Resolve locale strings once; re-resolves only when `language` changes.
-    const t = useMemo(() => resolveStrings(language), [language]);
+    // Resolve locale strings once; re-resolves when `language` or overrides change.
+    const t = useMemo(
+      () => mergeStrings(resolveStrings(language), stringOverrides),
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- stringOverrides is an object; deep identity not needed
+      [language, stringOverrides],
+    );
     const zoomLabelSlotPx = useMemo(() => toolbarZoomLabelSlotPx(language), [language]);
     const zoomDropdownWidthPx = useMemo(() => toolbarZoomDropdownWidthPx(language), [language]);
 

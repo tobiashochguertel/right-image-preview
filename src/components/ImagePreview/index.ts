@@ -4,7 +4,7 @@ export {
   resolveDefaultGroupedFlatIndex,
   resolvePreviewImages,
 } from './flattenGroupedImages';
-export { resolveStrings } from './locale';
+export { mergeStrings, resolveStrings } from './locale';
 export type { LocaleStrings } from './locale';
 export type { FlattenedGroupSlice } from './flattenGroupedImages';
 export type {

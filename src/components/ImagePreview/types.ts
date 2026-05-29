@@ -295,6 +295,21 @@ export interface ImagePreviewProps {
   language?: string;
 
   /**
+   * Override individual strings in the resolved locale (or supply an entirely
+   * new locale when all fields are provided).
+   *
+   * Merged on top of the locale selected by `language` — supply only the keys
+   * you want to change, everything else falls back to the built-in text.
+   *
+   * @example
+   * ```tsx
+   * // Just change the close button label in an English UI
+   * strings={{ close: 'Dismiss', tipClose: 'Dismiss the preview' }}
+   * ```
+   */
+  strings?: Partial<import('./localeTypes').LocaleStrings>;
+
+  /**
    * **Trigger mode (single {@link children})**: optional. When you omit `visible`, the preview is
    * uncontrolled: closed by default, opens on trigger click, closes on Esc / close button / mask (if allowed).
    * The container does not read the trigger’s `src` — set `src` / `images` on `ImagePreview` only.
