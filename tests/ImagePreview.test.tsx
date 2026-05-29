@@ -345,7 +345,7 @@ describe('ImagePreview component', () => {
         <ImagePreview
           src={SINGLE_SRC}
           visible
-          errorFallback={(_index, _src) => <div data-testid="err-fallback">Failed</div>}
+          errorFallback={() => <div data-testid="err-fallback">Failed</div>}
           {...ZH}
         />,
       );
@@ -359,7 +359,7 @@ describe('ImagePreview component', () => {
         <ImagePreview
           src={SINGLE_SRC}
           visible
-          errorFallback={(_index, _src) => <div data-testid="err-fallback">Failed</div>}
+          errorFallback={() => <div data-testid="err-fallback">Failed</div>}
           {...ZH}
         />,
       );
