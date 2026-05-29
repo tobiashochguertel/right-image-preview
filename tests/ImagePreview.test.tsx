@@ -384,7 +384,6 @@ describe('ImagePreview component', () => {
         <ImagePreview
           src={SINGLE_SRC}
           visible
-          language="zh"
           strings={{ zoomIn: 'Custom Zoom In' }}
           {...ZH}
         />,
