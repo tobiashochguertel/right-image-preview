@@ -252,6 +252,22 @@ export interface ImagePreviewProps {
   closeOnMaskClick?: boolean;
 
   /**
+   * Custom content rendered in place of the image when it fails to load.
+   * Receives the zero-based flat index and the `src` URL of the failing image.
+   * When omitted, the spinner simply disappears on error and no placeholder is shown.
+   *
+   * @example
+   * ```tsx
+   * errorFallback={(index, src) => (
+   *   <div style={{ color: '#fff', padding: 24 }}>
+   *     Failed to load image {index + 1}
+   *   </div>
+   * )}
+   * ```
+   */
+  errorFallback?: (index: number, src: string) => React.ReactNode;
+
+  /**
    * Extra CSS class applied to the overlay backdrop element.
    * Use this to override the background, blur, or any other visual property.
    */
@@ -296,6 +312,11 @@ export interface ImagePreviewProps {
   onIndexChange?: (index: number) => void;
   /** Called when attempting to zoom in at the maximum stop (only when zoomInAtMaxBehaviour === 'notify'). */
   onMaxStopReached?: () => void;
+  /**
+   * Called when the current image fails to load (`<img onError>`).
+   * Receives the zero-based flat index and the `src` URL of the failing image.
+   */
+  onImageError?: (index: number, src: string) => void;
 }
 
 export interface ImagePreviewRef {

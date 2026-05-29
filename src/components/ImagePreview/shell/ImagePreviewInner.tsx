@@ -69,6 +69,8 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       onZoomChange,
       onIndexChange,
       onMaxStopReached,
+      onImageError,
+      errorFallback,
     } = props;
 
     // Resolve locale strings once; re-resolves only when `language` changes.
@@ -97,6 +99,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     });
     const [zoomLocked, setZoomLocked] = useState(initialZoomLocked);
     const [minimapDragging, setMinimapDragging] = useState(false);
+    const [imageLoadError, setImageLoadError] = useState(false);
     const overlayRef = useRef<HTMLDivElement>(null);
 
     // ── Zoom state machine ──────────────────────────────────────────────────
@@ -178,6 +181,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     const goTo = useCallback(
       (idx: number) => {
         setCurrentIndex(idx);
+        setImageLoadError(false);
         onIndexChange?.(idx);
         // Reset zoom only when not locked (and when switchImageResetZoom allows it).
         if (switchImageResetZoom && !zoomLocked) reset();
@@ -507,6 +511,8 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                 }}
                 onError={() => {
                   onMainImgDecoded();
+                  setImageLoadError(true);
+                  onImageError?.(currentIndex, currentImage.src);
                 }}
                 style={{
                   position:      'relative',
@@ -548,6 +554,23 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
               animation:     '_rip_spin 0.75s linear infinite',
             }} />
           </div>
+
+          {/* ── Error fallback ── */}
+          {imageLoadError && errorFallback && (
+            <div
+              style={{
+                position:       'absolute',
+                inset:          0,
+                zIndex:         2,
+                display:        'flex',
+                alignItems:     'center',
+                justifyContent: 'center',
+                pointerEvents:  'none',
+              }}
+            >
+              {errorFallback(currentIndex, currentImage.src)}
+            </div>
+          )}
         </div>
 
         {showMinimap && imageDims && containerSize && (
