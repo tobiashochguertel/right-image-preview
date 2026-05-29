@@ -11,5 +11,19 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './tests/setup.ts',
+    coverage: {
+      provider: 'v8',
+      include: ['src/components/ImagePreview/**/*.ts', 'src/components/ImagePreview/**/*.tsx'],
+      exclude: [
+        'src/components/ImagePreview/index.ts',
+        'src/components/ImagePreview/locales/**',
+        'src/components/ImagePreview/imagePreviewTuning.ts',
+      ],
+      reporter: ['text', 'lcov', 'html'],
+      thresholds: {
+        lines: 50,
+        functions: 50,
+      },
+    },
   },
 })

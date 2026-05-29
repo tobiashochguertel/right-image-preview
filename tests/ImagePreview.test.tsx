@@ -323,4 +323,73 @@ describe('ImagePreview component', () => {
       });
     });
   });
+
+  describe('onImageError and errorFallback', () => {
+    it('calls onImageError when the image fails to load', async () => {
+      const onImageError = vi.fn();
+      render(
+        <ImagePreview
+          src={SINGLE_SRC}
+          visible
+          onImageError={onImageError}
+          {...ZH}
+        />,
+      );
+      const img = screen.getByRole('dialog').querySelector('img')!;
+      fireEvent.error(img);
+      expect(onImageError).toHaveBeenCalledWith(0, SINGLE_SRC);
+    });
+
+    it('renders errorFallback when the image fails to load', async () => {
+      render(
+        <ImagePreview
+          src={SINGLE_SRC}
+          visible
+          errorFallback={(_index, _src) => <div data-testid="err-fallback">Failed</div>}
+          {...ZH}
+        />,
+      );
+      const img = screen.getByRole('dialog').querySelector('img')!;
+      fireEvent.error(img);
+      expect(screen.getByTestId('err-fallback')).toBeInTheDocument();
+    });
+
+    it('does not render errorFallback before an error', () => {
+      render(
+        <ImagePreview
+          src={SINGLE_SRC}
+          visible
+          errorFallback={(_index, _src) => <div data-testid="err-fallback">Failed</div>}
+          {...ZH}
+        />,
+      );
+      expect(screen.queryByTestId('err-fallback')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('strings prop (locale overrides)', () => {
+    it('overrides individual locale strings', () => {
+      render(
+        <ImagePreview
+          src={SINGLE_SRC}
+          visible
+          strings={{ close: 'Dismiss' }}
+        />,
+      );
+      expect(screen.getByLabelText('Dismiss')).toBeInTheDocument();
+    });
+
+    it('strings override takes precedence over language prop', () => {
+      render(
+        <ImagePreview
+          src={SINGLE_SRC}
+          visible
+          language="zh"
+          strings={{ zoomIn: 'Custom Zoom In' }}
+          {...ZH}
+        />,
+      );
+      expect(screen.getByLabelText('Custom Zoom In')).toBeInTheDocument();
+    });
+  });
 });
