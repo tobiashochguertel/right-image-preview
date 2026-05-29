@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Dev Server",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "${workspaceFolder}",
+      "serverReadyAction": {
+        "pattern": "Local:\\s+http://localhost:(\\d+)/right-image-preview/",
+        "uriFormat": "http://localhost:%s/right-image-preview/",
+        "action": "openSimpleBrowser"
+      }
+    }
+  ]
+}
