@@ -177,6 +177,14 @@ export interface ImagePreviewProps {
   doubleClickEnabled?: boolean;
 
   /**
+   * Enable two-finger pinch-to-zoom on touch screens and multi-touch trackpads.
+   * The gesture uses continuous scaling (not stop-snapped) during the pinch;
+   * the midpoint between the two fingers acts as the zoom anchor.
+   * Default: `true`.
+   */
+  pinchEnabled?: boolean;
+
+  /**
    * Reset zoom state when switching images.
    * Default: true.
    */

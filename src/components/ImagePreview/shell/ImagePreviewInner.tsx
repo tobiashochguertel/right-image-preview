@@ -30,6 +30,7 @@ import type { ImagePreviewProps, ImagePreviewRef, NativePercent } from '../types
 import { useImagePreviewKeyboard } from '../useImagePreviewKeyboard';
 import { useImageTransform } from '../useImageTransform';
 import { useProgressiveMainImage } from '../useProgressiveMainImage';
+import { usePinchZoom } from '../usePinchZoom';
 import { useWheelZoom } from '../useWheelZoom';
 import { useZoomState } from '../useZoomState';
 
@@ -49,6 +50,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       zoomInAtMaxBehaviour = 'noop',
       wheelEnabled = true,
       doubleClickEnabled = true,
+      pinchEnabled = true,
       switchImageResetZoom = true,
       switchImageResetTransform = true,
       fitResetPan = true,
@@ -77,7 +79,6 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     // Resolve locale strings once; re-resolves when `language` or overrides change.
     const t = useMemo(
       () => mergeStrings(resolveStrings(language), stringOverrides),
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- stringOverrides is an object; deep identity not needed
       [language, stringOverrides],
     );
     const zoomLabelSlotPx = useMemo(() => toolbarZoomLabelSlotPx(language), [language]);
@@ -249,6 +250,19 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       zoomOut,
       peekZoomIn,
       peekZoomOut,
+      zoomAnchorTranslate,
+    });
+
+    // ── Pinch-to-zoom (touch / multi-touch trackpad) ─────────────────────────
+    usePinchZoom({
+      containerRef: overlayRef,
+      enabled: pinchEnabled,
+      mode,
+      currentScale: transform.scale,
+      stops: sortedStops,
+      fitEquivalentNativePercent,
+      fit,
+      setNative,
       zoomAnchorTranslate,
     });
 
