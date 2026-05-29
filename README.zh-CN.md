@@ -26,7 +26,8 @@
 | **控件自动渐隐** | 3 秒无操作后控件渐隐至约 10% 透明度，任意活动立即恢复 |
 | **导航小地图** | 主图溢出视口时右下角缩略图 + 可拖视口框；可通过 `showMinimap` 关闭 |
 | **小地图独立图源** | 每条 **`ImageItem`**（及单图 **`src`** 模式）可设 **`minimapSrc`** / **`minimap`**，用小缩略图或自定义节点；默认仍用主图 **`src`** |
-| **界面语言** | **`language`** 内置 **英文**与**简体中文**（`en`、`zh`、`zh-CN` 等） |
+| **触控双指捏合缩放** | 双指捏合/展开实现连续缩放；缩放锚点跟随双指中点；可用 **`pinchEnabled`** 关闭 |
+| **界面语言** | **`language`** 内置 **英文**与**简体中文**（`en`、`zh`、`zh-CN` 等）；可用 **`strings`** 覆盖任意文案 |
 | **丰富的键盘快捷键** | Esc / ±方向键 / Space / PageUp-Down / Ctrl+方向键 |
 | **可访问性** | `role="dialog"` + `aria-modal`，所有按钮带 `aria-label`，焦点管理 |
 | **TypeScript 一等类型** | 完整类型导出，`forwardRef` 支持命令式 ref API |
@@ -136,7 +137,7 @@ import { ImagePreview } from 'right-image-preview';
 | `wheelEnabled` | `boolean` | `true` | 是否启用滚轮缩放 |
 | `doubleClickEnabled` | `boolean` | `true` | 双击切换 Fit ↔ 100% |
 | `switchImageResetZoom` | `boolean` | `true` | 切图时是否重置缩放（锁定时被覆盖） |
-| `switchImageResetTransform` | `boolean` | `false` | 切图时是否重置翻转/旋转 |
+| `switchImageResetTransform` | `boolean` | `true` | 切图时是否重置翻转/旋转 |
 | `fitResetPan` | `boolean` | `true` | 切回 Fit 时是否归零平移 |
 | `showFlip` | `boolean` | `false` | 是否显示翻转按钮 |
 | `arrows` | `'both' \| 'side' \| 'toolbar' \| 'none'` | `'both'` | 仅控制**两侧**箭头；非空 `groupedImages` 时工具栏上一张/下一张始终显示 |
@@ -146,6 +147,10 @@ import { ImagePreview } from 'right-image-preview';
 | `onZoomChange` | `(state: ZoomState) => void` | — | 缩放状态变化回调 |
 | `onIndexChange` | `(index: number) => void` | — | 图片索引变化回调 |
 | `onMaxStopReached` | `() => void` | — | 到达最大档位回调（需配合 `'notify'`） |
+| `onImageError` | `(index: number, src: string) => void` | — | 当前图片加载失败时的回调，接收图片扁平下标与 `src` URL |
+| `errorFallback` | `(index: number, src: string) => ReactNode` | — | 图片加载失败时居中渲染的自定义占位内容；导航到其他图片后错误状态自动重置 |
+| `pinchEnabled` | `boolean` | `true` | 是否启用双指捏合缩放（触屏 / 多点触控板） |
+| `strings` | `Partial<LocaleStrings>` | — | 覆盖任意 UI 文案字段；叠加在 `language` 所选语言之上；只需提供要改的字段 |
 
 #### `arrows` 取值说明
 
@@ -188,7 +193,7 @@ interface ZoomState {
 }
 ```
 
-包内还导出 **`resolvePreviewImages`**、**`flattenGroupedImages`**、**`resolveDefaultGroupedFlatIndex`**、**`FlattenedGroupSlice`** 与 **`DefaultGroupedSelection`**，便于在组件外复用相同的扁平列表与组内下标范围。
+包内还导出 **`resolvePreviewImages`**、**`flattenGroupedImages`**、**`resolveDefaultGroupedFlatIndex`**、**`FlattenedGroupSlice`** 与 **`DefaultGroupedSelection`**，便于在组件外复用相同的扁平列表与组内下标范围。**`resolveStrings`** 与 **`mergeStrings`** 也一并导出，可用于在组件外以编程方式构建自定义 locale 对象。
 
 ### Ref API
 
@@ -246,23 +251,37 @@ interface ImagePreviewRef {
 ```
 src/
   components/ImagePreview/
-    types.ts              # TypeScript 类型定义
-    flattenGroupedImages.ts  # resolvePreviewImages / flattenGroupedImages 辅助函数
-    useZoomState.ts       # 缩放状态机 Hook（纯逻辑，无 DOM）
-    useImageTransform.ts  # 尺寸测量 + CSS transform 计算 + 拖拽平移
-    Toolbar.tsx           # 底部工具栏
-    ImagePreview.tsx      # 主组件（遮罩/键盘/滚轮/双击/渐隐）
-    index.ts              # 公开导出
-  App.tsx                 # 演示页外壳
-  demos/                  # 各 Demo 与演示站文案（不打进 npm 包）
+    types.ts                   # TypeScript 类型定义
+    flattenGroupedImages.ts    # resolvePreviewImages / flattenGroupedImages 辅助函数
+    useZoomState.ts            # 缩放状态机 Hook（纯逻辑，无 DOM）
+    useImageTransform.ts       # 尺寸测量 + CSS transform 计算 + 拖拽平移
+    useWheelZoom.ts            # 滚轮缩放 Hook
+    usePinchZoom.ts            # 触控双指捏合缩放 Hook
+    injectGlobalStyle.ts       # 单例 CSS 注入工具（SSR 安全）
+    locale.ts / localeTypes.ts / locales/  # 国际化字符串
+    Toolbar.tsx                # 底部工具栏
+    Minimap.tsx                # 导航小地图
+    shell/
+      ImagePreview.tsx         # 外层 shell（trigger 模式分发）
+      ImagePreviewInner.tsx    # 对话框实现
+      ImagePreviewTriggerShell.tsx
+    parts/
+      ImagePreviewCloseButton.tsx
+      ImagePreviewNavArrow.tsx
+    index.ts                   # 公开导出
+  App.tsx                      # 演示页外壳
+  demos/                       # 各 Demo 与演示站文案（不打进 npm 包）
 docs/
-  api.md / api.zh-CN.md          # Props & Ref API 参考
-  keyboard.md / keyboard.zh-CN.md # 键盘快捷键说明
-  requirements.md                 # 需求迭代记录
+  api.md / api.zh-CN.md              # Props & Ref API 参考
+  keyboard.md / keyboard.zh-CN.md   # 键盘快捷键说明
+  requirements.md                    # 需求迭代记录
 tests/
-  setup.ts                # Vitest + jsdom 配置
-  useZoomState.test.ts    # 状态机单元测试
-  ImagePreview.test.tsx   # 组件集成测试
+  setup.ts                     # Vitest + jsdom 配置
+  useZoomState.test.ts         # 缩放状态机单元测试
+  flattenGroupedImages.test.ts
+  locale.test.ts               # Locale / mergeStrings 单元测试
+  injectGlobalStyle.test.ts
+  ImagePreview.test.tsx        # 组件集成测试
 ```
 
 ---
@@ -284,7 +303,6 @@ fitEquivalentNativePercent    = fitScale × 100（供 UI 显示"适应 ≈ xx%"�
 
 ## 后续迭代方向
 
-- 触控双指捏合手势（Pinch-to-zoom）
 - 图片预加载策略（前后各预加载 N 张）
 - 旋转 90°/270° 时的严格 1:1 约束（宽高调换）
 - 弹簧物理动画（缩放/平移更自然的惯性）

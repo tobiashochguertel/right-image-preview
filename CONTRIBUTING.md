@@ -46,16 +46,26 @@ Please be respectful and constructive in all interactions. We follow the standar
 
 ```
 src/components/ImagePreview/
-  types.ts              ← shared TypeScript types
-  useZoomState.ts       ← zoom state machine (pure logic)
-  useImageTransform.ts  ← DOM measurements + CSS transforms + pan
-  Toolbar.tsx           ← toolbar UI
-  ImagePreview.tsx      ← main component
-  index.ts              ← public exports
+  types.ts                  ← shared TypeScript types
+  useZoomState.ts           ← zoom state machine (pure logic, no DOM)
+  useImageTransform.ts      ← DOM measurements + CSS transforms + drag-to-pan
+  useWheelZoom.ts           ← mouse-wheel zoom (extracted hook)
+  usePinchZoom.ts           ← touch pinch-to-zoom
+  injectGlobalStyle.ts      ← one-shot CSS injection utility (SSR-safe)
+  locale.ts / localeTypes.ts / locales/  ← i18n strings
+  Toolbar.tsx               ← bottom toolbar UI
+  Minimap.tsx               ← navigation minimap
+  shell/
+    ImagePreview.tsx        ← outer shell (trigger-mode dispatch)
+    ImagePreviewInner.tsx   ← dialog implementation
+    ImagePreviewTriggerShell.tsx
+  parts/                    ← small sub-components (close button, nav arrows)
+  index.ts                  ← public exports
 ```
 
 - **State logic** lives in `useZoomState.ts` — keep it free of DOM and React rendering concerns.
 - **DOM/transform logic** lives in `useImageTransform.ts`.
+- **Interaction hooks** (`useWheelZoom`, `usePinchZoom`) handle one input modality each — keep them single-concern.
 - **All public types** must be exported from `index.ts`.
 
 ---
@@ -71,7 +81,8 @@ src/components/ImagePreview/
 2. Make your changes, keeping commits focused and descriptive.
 3. Ensure tests pass and add new tests for non-trivial changes:
    ```bash
-   npm test
+   npm test                  # fast run (no coverage)
+   npm run test:coverage     # run with coverage report (enforces 50% threshold)
    ```
 4. Run the TypeScript compiler to confirm no type errors:
    ```bash

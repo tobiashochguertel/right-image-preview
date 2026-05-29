@@ -46,16 +46,26 @@
 
 ```
 src/components/ImagePreview/
-  types.ts              ← 共享 TypeScript 类型
-  useZoomState.ts       ← 缩放状态机（纯逻辑，无 DOM）
-  useImageTransform.ts  ← DOM 测量 + CSS transform + 拖拽平移
-  Toolbar.tsx           ← 工具栏 UI
-  ImagePreview.tsx      ← 主组件
-  index.ts              ← 公开导出
+  types.ts                  ← 共享 TypeScript 类型
+  useZoomState.ts           ← 缩放状态机（纯逻辑，无 DOM）
+  useImageTransform.ts      ← DOM 测量 + CSS transform + 拖拽平移
+  useWheelZoom.ts           ← 滚轮缩放 Hook（已从主组件提取）
+  usePinchZoom.ts           ← 触控双指捏合缩放 Hook
+  injectGlobalStyle.ts      ← 单例 CSS 注入工具（SSR 安全）
+  locale.ts / localeTypes.ts / locales/  ← 国际化字符串
+  Toolbar.tsx               ← 底部工具栏 UI
+  Minimap.tsx               ← 导航小地图
+  shell/
+    ImagePreview.tsx        ← 外层 shell（trigger 模式分发）
+    ImagePreviewInner.tsx   ← 对话框实现
+    ImagePreviewTriggerShell.tsx
+  parts/                    ← 小型子组件（关闭按钮、导航箭头）
+  index.ts                  ← 公开导出
 ```
 
 - **状态逻辑**：在 `useZoomState.ts` 中维护，不依赖 DOM 和渲染逻辑。
 - **DOM/变换逻辑**：在 `useImageTransform.ts` 中维护。
+- **交互 Hook**（`useWheelZoom`、`usePinchZoom`）每个只负责一种输入方式，保持单一职责。
 - **所有公开类型**：必须从 `index.ts` 导出。
 
 ---
@@ -71,7 +81,8 @@ src/components/ImagePreview/
 2. 进行修改，保持每个 commit 聚焦且描述清晰。
 3. 确保测试通过，非琐碎的改动需补充测试用例：
    ```bash
-   npm test
+   npm test                  # 快速运行（不含覆盖率）
+   npm run test:coverage     # 含覆盖率报告（强制 50% 阈值）
    ```
 4. 检查是否有 TypeScript 类型错误：
    ```bash
