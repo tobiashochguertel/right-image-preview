@@ -23,11 +23,17 @@ jobs:
 
       - run: npm ci
 
+      - name: Type check
+        run: npx tsc --noEmit
+
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        run: npm test -- --run
+      - name: Test with coverage
+        run: npm run test:coverage
 
       - name: Build library
         run: npm run build:lib
+
+      - name: Check bundle size
+        run: npm run size

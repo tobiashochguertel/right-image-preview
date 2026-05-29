@@ -3,7 +3,6 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -12,35 +11,32 @@ import { Minimap } from '../Minimap';
 import { ImagePreviewCloseButton } from '../parts/ImagePreviewCloseButton';
 import { ImagePreviewNavArrow } from '../parts/ImagePreviewNavArrow';
 import { Toolbar } from '../Toolbar';
-import { runFlushSync } from '../flushSyncCompat';
 import {
   IMAGE_DECODE_TIMEOUT_MS,
   MIN_PROGRESSIVE_THUMB_VISIBLE_MS,
   PROGRESSIVE_MAIN_DEFAULT_FADE_MS,
   toolbarZoomDropdownWidthPx,
   toolbarZoomLabelSlotPx,
-  WHEEL_ACCUM_PIXELS_PER_STOP,
-  WHEEL_MAX_STEPS_PER_DRAIN,
-  WHEEL_PAGE_DELTA_SCALE,
-  WHEEL_PIXEL_COALESCE_GAP_MS,
-  WHEEL_PIXEL_COALESCE_MIN_DELTA,
-  WHEEL_PIXEL_MOUSE_NOTCH_MAX,
-  WHEEL_PIXEL_MOUSE_NOTCH_MIN,
 } from '../imagePreviewTuning';
+import { injectGlobalStyle } from '../injectGlobalStyle';
 import { findGroup } from '../lib/imagePreviewFindGroup';
 import { scheduleRevealAfterDecode } from '../lib/imagePreviewDecode';
 import {
   resolveDefaultGroupedFlatIndex,
   resolvePreviewImages,
 } from '../flattenGroupedImages';
-import { resolveStrings } from '../locale';
+import { mergeStrings, resolveStrings } from '../locale';
 import type { ImagePreviewProps, ImagePreviewRef, NativePercent } from '../types';
 import { useImagePreviewKeyboard } from '../useImagePreviewKeyboard';
 import { useImageTransform } from '../useImageTransform';
 import { useProgressiveMainImage } from '../useProgressiveMainImage';
+import { usePinchZoom } from '../usePinchZoom';
+import { useWheelZoom } from '../useWheelZoom';
 import { useZoomState } from '../useZoomState';
 
 const DEFAULT_STOPS: NativePercent[] = [10, 25, 50, 75, 100, 150, 200];
+
+injectGlobalStyle('rip-spin', '@keyframes _rip_spin{to{transform:rotate(360deg)}}');
 
 // ── Inner dialog ───────────────────────────────────────────────────────────
 export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
@@ -54,6 +50,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       zoomInAtMaxBehaviour = 'noop',
       wheelEnabled = true,
       doubleClickEnabled = true,
+      pinchEnabled = true,
       switchImageResetZoom = true,
       switchImageResetTransform = true,
       fitResetPan = true,
@@ -70,14 +67,20 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       overlayClassName,
       overlayStyle,
       language,
+      strings: stringOverrides,
       onClose,
       onZoomChange,
       onIndexChange,
       onMaxStopReached,
+      onImageError,
+      errorFallback,
     } = props;
 
-    // Resolve locale strings once; re-resolves only when `language` changes.
-    const t = useMemo(() => resolveStrings(language), [language]);
+    // Resolve locale strings once; re-resolves when `language` or overrides change.
+    const t = useMemo(
+      () => mergeStrings(resolveStrings(language), stringOverrides),
+      [language, stringOverrides],
+    );
     const zoomLabelSlotPx = useMemo(() => toolbarZoomLabelSlotPx(language), [language]);
     const zoomDropdownWidthPx = useMemo(() => toolbarZoomDropdownWidthPx(language), [language]);
 
@@ -102,6 +105,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     });
     const [zoomLocked, setZoomLocked] = useState(initialZoomLocked);
     const [minimapDragging, setMinimapDragging] = useState(false);
+    const [imageLoadError, setImageLoadError] = useState(false);
     const overlayRef = useRef<HTMLDivElement>(null);
 
     // ── Zoom state machine ──────────────────────────────────────────────────
@@ -183,6 +187,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     const goTo = useCallback(
       (idx: number) => {
         setCurrentIndex(idx);
+        setImageLoadError(false);
         onIndexChange?.(idx);
         // Reset zoom only when not locked (and when switchImageResetZoom allows it).
         if (switchImageResetZoom && !zoomLocked) reset();
@@ -234,180 +239,34 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       };
     }, [resetHideTimer]);
 
-    // ── Wheel ───────────────────────────────────────────────────────────────
-    // Track the live CSS scale between React renders.  When wheel events fire
-    // faster than React can render (e.g. trackpad smooth scroll), the closure
-    // value of `transform.scale` becomes stale after the first zoom.  Using a
-    // ref that we update synchronously after every zoom event ensures s1 is
-    // always the most-recently-applied scale, not the last-rendered one.
-    const pendingScaleRef = useRef(transform.scale);
-    useLayoutEffect(() => {
-      pendingScaleRef.current = transform.scale;
-    }, [transform.scale]);
+    // ── Wheel zoom ───────────────────────────────────────────────────────────
+    useWheelZoom({
+      containerRef: overlayRef,
+      enabled: wheelEnabled,
+      mode,
+      currentScale: transform.scale,
+      fitEquivalentNativePercent,
+      zoomIn,
+      zoomOut,
+      peekZoomIn,
+      peekZoomOut,
+      zoomAnchorTranslate,
+    });
 
-    // Wheel zoom:
-    // - LINE: each line ⇒ stops (±1 per slow detent).
-    // - PIXEL, |deltaY| in notch band ⇒ one stop / event.
-    // - PIXEL, small |deltaY| + long gap since last wheel ⇒ one stop (small‑increment mice).
-    // - Else accumulate pixel/page deltas until |accum| ≥ threshold (smooth trackpads).
-    //
-    // Multi-stop bursts use `flushSync` so `useZoomState`’s `stateRef` updates between steps.
-    const wheelAccumRef = useRef(0);
-    const wheelDrainRafRef = useRef<number | null>(null);
-    const wheelDrainStepRef = useRef<() => boolean>(() => false);
-    const lastWheelClientRef = useRef({ x: 0, y: 0 });
-    /** For coalescing slow, small pixel deltas into one stop per physical detent. */
-    const lastWheelEventTimeRef = useRef(0);
+    // ── Pinch-to-zoom (touch / multi-touch trackpad) ─────────────────────────
+    usePinchZoom({
+      containerRef: overlayRef,
+      enabled: pinchEnabled,
+      mode,
+      currentScale: transform.scale,
+      stops: sortedStops,
+      fitEquivalentNativePercent,
+      fit,
+      setNative,
+      zoomAnchorTranslate,
+    });
 
-    useEffect(
-      () => () => {
-        if (wheelDrainRafRef.current !== null) {
-          cancelAnimationFrame(wheelDrainRafRef.current);
-          wheelDrainRafRef.current = null;
-        }
-      },
-      [],
-    );
-
-    const pixelOrPageDeltaY = (e: WheelEvent): number => {
-      if (e.deltaMode === WheelEvent.DOM_DELTA_PAGE) return e.deltaY * WHEEL_PAGE_DELTA_SCALE;
-      return e.deltaY;
-    };
-
-    const handleWheel = useCallback(
-      (e: WheelEvent) => {
-        if (!wheelEnabled) return;
-        e.preventDefault();
-
-        lastWheelClientRef.current = { x: e.clientX, y: e.clientY };
-
-        const t = performance.now();
-        const dtSinceLastWheel = t - lastWheelEventTimeRef.current;
-        lastWheelEventTimeRef.current = t;
-
-        const S = WHEEL_ACCUM_PIXELS_PER_STOP;
-        const MAX = WHEEL_MAX_STEPS_PER_DRAIN;
-        const notchMin = WHEEL_PIXEL_MOUSE_NOTCH_MIN;
-        const notchMax = WHEEL_PIXEL_MOUSE_NOTCH_MAX;
-
-        /** One physical `wheel` event must not advance multiple zoom-in stops from Fit (pixel drain / multi-line would chain 10%→…→100%). */
-        const startedInFit = mode === 'fit';
-        let zoomInStepsThisEvent = 0;
-
-        const applyOneWheelStep = (directionIn: boolean): boolean => {
-          if (startedInFit && directionIn && zoomInStepsThisEvent >= 1) {
-            wheelAccumRef.current = 0;
-            return false;
-          }
-
-          const peek = directionIn
-            ? peekZoomIn(fitEquivalentNativePercent)
-            : peekZoomOut();
-          if (peek === null) {
-            wheelAccumRef.current = 0;
-            return false;
-          }
-
-          const rect = overlayRef.current?.getBoundingClientRect();
-          const { x: clientX, y: clientY } = lastWheelClientRef.current;
-          const cx = rect ? clientX - rect.left - rect.width / 2 : 0;
-          const cy = rect ? clientY - rect.top - rect.height / 2 : 0;
-
-          const s1 = pendingScaleRef.current;
-          const s2 =
-            peek.mode === 'fit'
-              ? (fitEquivalentNativePercent ?? peek.percent) / 100
-              : peek.percent / 100;
-
-          runFlushSync(() => {
-            zoomAnchorTranslate(s1, s2, cx, cy);
-            pendingScaleRef.current = s2;
-            if (directionIn) zoomIn(fitEquivalentNativePercent);
-            else zoomOut(fitEquivalentNativePercent);
-          });
-          if (startedInFit && directionIn) zoomInStepsThisEvent++;
-          return true;
-        };
-
-        // ── Line-based wheels / browsers: slow scroll still sends ~±1 line per detent ──
-        if (e.deltaMode === WheelEvent.DOM_DELTA_LINE && e.deltaY !== 0) {
-          const nLines = Math.min(MAX, Math.max(1, Math.round(Math.abs(e.deltaY))));
-          const directionIn = e.deltaY < 0;
-          for (let i = 0; i < nLines; i++) {
-            if (!applyOneWheelStep(directionIn)) break;
-          }
-          return;
-        }
-
-        // ── Pixel mode: “big notch” band, or slow small‑delta detents, else accumulate ──
-        if (e.deltaMode === WheelEvent.DOM_DELTA_PIXEL) {
-          const ady = Math.abs(e.deltaY);
-          if (ady >= notchMin && ady <= notchMax && e.deltaY !== 0) {
-            wheelAccumRef.current = 0;
-            applyOneWheelStep(e.deltaY < 0);
-            return;
-          }
-          if (
-            e.deltaY !== 0 &&
-            ady >= WHEEL_PIXEL_COALESCE_MIN_DELTA &&
-            ady < notchMin &&
-            dtSinceLastWheel >= WHEEL_PIXEL_COALESCE_GAP_MS
-          ) {
-            wheelAccumRef.current = 0;
-            applyOneWheelStep(e.deltaY < 0);
-            return;
-          }
-        }
-
-        wheelAccumRef.current += pixelOrPageDeltaY(e);
-
-        const drainOnce = (): boolean => {
-          const a = wheelAccumRef.current;
-          if (Math.abs(a) < S) return false;
-
-          const directionIn = a < 0;
-          if (directionIn && a > -S) return false;
-          if (!directionIn && a < S) return false;
-
-          if (!applyOneWheelStep(directionIn)) return false;
-
-          wheelAccumRef.current += directionIn ? S : -S;
-          return true;
-        };
-
-        wheelDrainStepRef.current = drainOnce;
-
-        const runDrain = () => {
-          let s = 0;
-          while (s < MAX && wheelDrainStepRef.current()) s++;
-        };
-        runDrain();
-
-        const scheduleMore = () => {
-          if (Math.abs(wheelAccumRef.current) < S) return;
-          if (wheelDrainRafRef.current !== null) return;
-          wheelDrainRafRef.current = requestAnimationFrame(() => {
-            wheelDrainRafRef.current = null;
-            runDrain();
-            scheduleMore();
-          });
-        };
-        scheduleMore();
-      },
-      [
-        wheelEnabled, mode, zoomIn, zoomOut, peekZoomIn, peekZoomOut,
-        fitEquivalentNativePercent, zoomAnchorTranslate,
-      ],
-    );
-
-    useEffect(() => {
-      const el = overlayRef.current;
-      if (!el) return;
-      el.addEventListener('wheel', handleWheel, { passive: false });
-      return () => el.removeEventListener('wheel', handleWheel);
-    }, [handleWheel]);
-
-    useImagePreviewKeyboard({
+        useImagePreviewKeyboard({
       resetHideTimer,
       onClose,
       zoomIn,
@@ -671,6 +530,8 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                 }}
                 onError={() => {
                   onMainImgDecoded();
+                  setImageLoadError(true);
+                  onImageError?.(currentIndex, currentImage.src);
                 }}
                 style={{
                   position:      'relative',
@@ -688,8 +549,6 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
           </div>
 
           {/* ── Loading spinner ── */}
-          {/* Keyframes are defined inline once; harmless to repeat on re-mount. */}
-          <style>{`@keyframes _rip_spin{to{transform:rotate(360deg)}}`}</style>
           <div
             aria-label={t.loadingImage}
             aria-live="polite"
@@ -714,6 +573,23 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
               animation:     '_rip_spin 0.75s linear infinite',
             }} />
           </div>
+
+          {/* ── Error fallback ── */}
+          {imageLoadError && errorFallback && (
+            <div
+              style={{
+                position:       'absolute',
+                inset:          0,
+                zIndex:         2,
+                display:        'flex',
+                alignItems:     'center',
+                justifyContent: 'center',
+                pointerEvents:  'none',
+              }}
+            >
+              {errorFallback(currentIndex, currentImage.src)}
+            </div>
+          )}
         </div>
 
         {showMinimap && imageDims && containerSize && (

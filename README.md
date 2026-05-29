@@ -26,7 +26,8 @@ Open the interactive demo in your browser (toggle **EN / 中文** in the top-rig
 | **Auto-fade controls** | All controls fade to ~10 % opacity after 3 s of inactivity; any activity instantly restores them |
 | **Navigation minimap** | Corner thumbnail + draggable viewport frame when the image overflows; optional via `showMinimap` |
 | **Minimap source per item** | Each **`ImageItem`** (and single-**`src`** mode) can set **`minimapSrc`** / **`minimap`** so the map uses a lighter tile or custom node; defaults to the main **`src`** |
-| **Localized toolbar** | **`language`** prop with built-in **English** and **Simplified Chinese** (`en`, `zh`, `zh-CN`, …) |
+| **Touch pinch-to-zoom** | Two-finger pinch/spread for continuous zoom; anchor follows the midpoint between fingers; disable with **`pinchEnabled`** |
+| **Localized toolbar** | **`language`** prop with built-in **English** and **Simplified Chinese** (`en`, `zh`, `zh-CN`, …); override individual strings with **`strings`** |
 | **Rich keyboard shortcuts** | Esc · +/- · arrow keys · Space · PageUp/Down · Ctrl+arrow |
 | **Accessibility** | `role="dialog"` + `aria-modal`, all buttons have `aria-label`, focus is trapped |
 | **TypeScript first** | Full type exports, `forwardRef` imperative ref API |
@@ -136,7 +137,7 @@ import { ImagePreview } from 'right-image-preview';
 | `wheelEnabled` | `boolean` | `true` | Enable mouse-wheel zoom |
 | `doubleClickEnabled` | `boolean` | `true` | Double-click to toggle Fit ↔ 100 % |
 | `switchImageResetZoom` | `boolean` | `true` | Reset zoom when switching images (overridden by zoom lock) |
-| `switchImageResetTransform` | `boolean` | `false` | Reset flip/rotation when switching images |
+| `switchImageResetTransform` | `boolean` | `true` | Reset flip/rotation when switching images |
 | `fitResetPan` | `boolean` | `true` | Reset pan offset when switching to Fit mode |
 | `showFlip` | `boolean` | `false` | Show horizontal/vertical flip buttons |
 | `arrows` | `'both' \| 'side' \| 'toolbar' \| 'none'` | `'both'` | **Side** arrows only; with non-empty `groupedImages`, toolbar prev/next always on |
@@ -146,6 +147,10 @@ import { ImagePreview } from 'right-image-preview';
 | `onZoomChange` | `(state: ZoomState) => void` | — | Called whenever zoom state changes |
 | `onIndexChange` | `(index: number) => void` | — | Called when the active image changes |
 | `onMaxStopReached` | `() => void` | — | Called when zooming in at max stop (requires `'notify'`) |
+| `onImageError` | `(index: number, src: string) => void` | — | Called when the current image fails to load; receives flat index and `src` URL |
+| `errorFallback` | `(index: number, src: string) => ReactNode` | — | Render custom content centred over the viewport when an image fails to load; navigating away resets the error state |
+| `pinchEnabled` | `boolean` | `true` | Enable two-finger pinch-to-zoom on touch screens and multi-touch trackpads |
+| `strings` | `Partial<LocaleStrings>` | — | Override individual UI strings; merged on top of the locale selected by `language`; supply only the keys you want to change |
 
 #### `arrows` values
 
@@ -188,7 +193,7 @@ interface ZoomState {
 }
 ```
 
-The package also exports **`resolvePreviewImages`**, **`flattenGroupedImages`**, **`resolveDefaultGroupedFlatIndex`**, **`FlattenedGroupSlice`**, and **`DefaultGroupedSelection`** if you need the same flattened list and per-group index ranges outside the component.
+The package also exports **`resolvePreviewImages`**, **`flattenGroupedImages`**, **`resolveDefaultGroupedFlatIndex`**, **`FlattenedGroupSlice`**, and **`DefaultGroupedSelection`** if you need the same flattened list and per-group index ranges outside the component. **`resolveStrings`** and **`mergeStrings`** are also exported for building custom locale objects programmatically.
 
 ### Ref API
 
@@ -246,25 +251,37 @@ interface ImagePreviewRef {
 ```
 src/
   components/ImagePreview/
-    types.ts              # TypeScript type definitions
-    flattenGroupedImages.ts  # resolvePreviewImages / flattenGroupedImages helpers
-    useZoomState.ts       # Zoom state machine hook (pure logic, no DOM)
-    useImageTransform.ts  # Size measurement + CSS transform + drag-to-pan
-    Toolbar.tsx           # Bottom toolbar (zoom / rotate / flip / nav / filename)
-    ImagePreview.tsx      # Main component (overlay / keyboard / wheel / double-click / auto-fade)
-    index.ts              # Public exports
-  App.tsx                 # Demo shell
-  demos/                  # Demo sections + demo-only copy (not published to npm)
+    types.ts                   # TypeScript type definitions
+    flattenGroupedImages.ts    # resolvePreviewImages / flattenGroupedImages helpers
+    useZoomState.ts            # Zoom state machine hook (pure logic, no DOM)
+    useImageTransform.ts       # Size measurement + CSS transform + drag-to-pan
+    useWheelZoom.ts            # Mouse-wheel zoom hook
+    usePinchZoom.ts            # Touch pinch-to-zoom hook
+    injectGlobalStyle.ts       # One-shot CSS injection utility (SSR-safe)
+    locale.ts / localeTypes.ts / locales/  # i18n strings
+    Toolbar.tsx                # Bottom toolbar (zoom / rotate / flip / nav / filename)
+    Minimap.tsx                # Navigation minimap overlay
+    shell/
+      ImagePreview.tsx         # Outer shell (trigger-mode dispatch)
+      ImagePreviewInner.tsx    # Dialog implementation
+      ImagePreviewTriggerShell.tsx
+    parts/
+      ImagePreviewCloseButton.tsx
+      ImagePreviewNavArrow.tsx
+    index.ts                   # Public exports
+  App.tsx                      # Demo shell
+  demos/                       # Demo sections + demo-only copy (not published to npm)
 docs/
-  api.md                  # Full API reference (English)
-  api.zh-CN.md            # Full API reference (中文)
-  keyboard.md             # Keyboard shortcuts (English)
-  keyboard.zh-CN.md       # Keyboard shortcuts (中文)
-  requirements.md         # Requirement history (中文)
+  api.md / api.zh-CN.md        # Full API reference
+  keyboard.md / keyboard.zh-CN.md  # Keyboard shortcuts
+  requirements.md              # Requirement history
 tests/
-  setup.ts                # Vitest + jsdom setup
-  useZoomState.test.ts    # State machine unit tests
-  ImagePreview.test.tsx   # Component integration tests
+  setup.ts                     # Vitest + jsdom setup
+  useZoomState.test.ts         # Zoom state machine unit tests
+  flattenGroupedImages.test.ts
+  locale.test.ts               # Locale / mergeStrings unit tests
+  injectGlobalStyle.test.ts
+  ImagePreview.test.tsx        # Component integration tests
 ```
 
 ---
@@ -286,7 +303,6 @@ fitEquivalentNativePercent   = fitScale × 100  (used to display "Fit ≈ xx%")
 
 ## Roadmap
 
-- Pinch-to-zoom touch gesture
 - Image preloading strategy (N images ahead/behind)
 - Strict 1:1 constraint when rotated 90°/270° (swap width/height)
 - Spring-physics animation for zoom and pan

@@ -23,3 +23,18 @@ export function resolveStrings(language?: string): LocaleStrings {
   const primary = language.split(/[-_]/)[0].toLowerCase();
   return LOCALES[primary] ?? enStrings;
 }
+
+/**
+ * Merge caller-supplied overrides on top of the base locale resolved from `language`.
+ *
+ * Any field present in `overrides` replaces the corresponding built-in string;
+ * omitted fields fall back to the base locale. Returns the base locale object
+ * unchanged when `overrides` is `undefined` or empty.
+ */
+export function mergeStrings(
+  base: LocaleStrings,
+  overrides?: Partial<LocaleStrings>,
+): LocaleStrings {
+  if (!overrides) return base;
+  return { ...base, ...overrides };
+}
