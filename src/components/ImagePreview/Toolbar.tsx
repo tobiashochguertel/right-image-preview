@@ -56,6 +56,8 @@ interface ToolbarProps {
   zoomLocked: boolean;
   /** When false the toolbar fades to ghost opacity (driven by CSS transition). */
   controlsVisible?: boolean;
+  /** Distance from the overlay bottom edge (px). Raised when a thumbnail strip is shown. */
+  bottomPx?: number;
 
   // ── Actions ───────────────────────────────────────────────────────────────
   onZoomIn(): void;
@@ -515,6 +517,7 @@ export function Toolbar({
   showFlip = false,
   zoomLocked,
   controlsVisible = true,
+  bottomPx = 20,
   stops,
   onZoomIn, onZoomOut, onFit, onOneToOne, onSetNative,
   onRotateCW, onRotateCCW, onFlipH, onFlipV,
@@ -547,7 +550,7 @@ export function Toolbar({
     <div
       style={{
         position: 'absolute',
-        bottom: 20,
+        bottom: bottomPx,
         left: '50%',
         transform: 'translateX(-50%)',
         display: 'flex',

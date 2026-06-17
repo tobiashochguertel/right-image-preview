@@ -52,6 +52,7 @@
 | `arrows` | `'both' \| 'side' \| 'toolbar' \| 'none'` | `'both'` | 仅控制**图片两侧**箭头；见下表（非空 `groupedImages` 时工具栏上一张/下一张始终显示） |
 | `showFlip` | `boolean` | `false` | 是否显示水平/垂直翻转按钮 |
 | `showMinimap` | `boolean` | `true` | 主图超出视口时是否显示右下角导航小地图（拖动虚线框平移） |
+| `thumbnails` | `'none' \| 'classic'` | `'none'` | 预览层内缩略图条；`'classic'` = 底部横向列表（分组时仅当前组）；可导航图片 ≤ 1 时自动隐藏 |
 | `language` | `string` | `'en'` | 界面语言：内置 `en`、`zh`（按主语言子标签匹配，如 `zh-CN` → `zh`） |
 
 #### `arrows` 取值说明

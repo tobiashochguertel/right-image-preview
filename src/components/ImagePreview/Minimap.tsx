@@ -16,8 +16,8 @@ import {
 const INNER = 152; // inner thumbnail box (px)
 const BORDER = 2;
 /** Flush to preview corner; bottom ~toolbar baseline (toolbar uses bottom: 20). */
-const MINIMAP_RIGHT = 10;
-const MINIMAP_BOTTOM = 22;
+export const MINIMAP_RIGHT = 10;
+export const MINIMAP_BOTTOM = 22;
 
 const DIM_OVERLAY_FILL = 'rgba(0,0,0,0.52)';
 
@@ -92,6 +92,8 @@ export interface MinimapProps {
   flipH: boolean;
   flipV: boolean;
   controlsVisible: boolean;
+  /** Distance from overlay bottom (px). Raised when a thumbnail strip is shown. */
+  bottomPx?: number;
   onPanByDelta: (dx: number, dy: number) => void;
   /**
    * Click-drag on the minimap outside the viewport frame: centre `(nx,ny)` then continue as a drag session.
@@ -130,6 +132,7 @@ export function Minimap({
   flipH,
   flipV,
   controlsVisible,
+  bottomPx = MINIMAP_BOTTOM,
   onPanByDelta,
   onJumpToNatural,
   onUserActivity,
@@ -367,7 +370,7 @@ export function Minimap({
       style={{
         position: 'absolute',
         right: MINIMAP_RIGHT,
-        bottom: MINIMAP_BOTTOM,
+        bottom: bottomPx,
         zIndex: 25,
         padding: BORDER,
         background: 'rgba(8,12,22,0.88)',

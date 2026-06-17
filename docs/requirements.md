@@ -241,3 +241,16 @@
 - [x] `CONTRIBUTING.md`（英文）+ `CONTRIBUTING.zh-CN.md`（中文）
 - [x] `.github/ISSUE_TEMPLATE/` — bug report 与 feature request 模板
 - [x] `package.json` 补全 description、keywords、license、repository 等开源字段
+
+---
+
+## 阶段 14 — Classic 底部缩略图条
+
+### 需求
+- [x] 新增 `thumbnails?: 'none' | 'classic'`（默认 `'none'`）
+- [x] `'classic'` 时在预览层底部显示横向可滚动缩略图条；激活项高亮边框
+- [x] 缩略图 URL 优先使用 {@link ImageItem.minimapSrc}，否则回退 `src`
+- [x] 可导航图片 ≤ 1 张时自动隐藏（含单图、当前组仅一张）
+- [x] `groupedImages` 模式下条带仅展示 **当前组** 内图片；点击跳转 flat index
+- [x] 条带显示时工具栏与小地图整体上移，避免重叠
+- [x] 条带参与控件自动渐隐（与工具栏一致）

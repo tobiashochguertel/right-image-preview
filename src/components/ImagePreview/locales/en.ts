@@ -25,6 +25,8 @@ export const enStrings: LocaleStrings = {
   close: 'Close (Esc)',
   loadingImage: 'Loading image',
   minimapNav: 'Navigation minimap',
+  thumbnailsNav: 'Image thumbnails',
+  thumbStripItem: (index, total) => `Image ${index} of ${total}`,
 
   tipFitToViewport:
     'Show the whole picture in the window. The image may look smaller so nothing is cropped.',

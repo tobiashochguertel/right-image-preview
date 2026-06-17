@@ -25,6 +25,8 @@ export const zhStrings: LocaleStrings = {
   close: '关闭 (Esc)',
   loadingImage: '图片加载中',
   minimapNav: '导航缩略图',
+  thumbnailsNav: '缩略图导航',
+  thumbStripItem: (index, total) => `第 ${index} 张，共 ${total} 张`,
 
   tipFitToViewport: '让整张图完整显示在窗口里，可能会缩小一些以免裁切边缘。',
   tipActualSize: '按真实像素 1:1 查看。图可能比窗口大，可拖动画面查看各处。',

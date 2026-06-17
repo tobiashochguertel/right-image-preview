@@ -391,4 +391,37 @@ describe('ImagePreview component', () => {
       expect(screen.getByLabelText('Custom Zoom In')).toBeInTheDocument();
     });
   });
+
+  describe('classic thumbnails strip', () => {
+    it('does not render strip by default', () => {
+      render(<ImagePreview images={IMAGES} visible {...ZH} />);
+      expect(screen.queryByRole('navigation', { name: '缩略图导航' })).not.toBeInTheDocument();
+    });
+
+    it('renders strip when thumbnails=classic and multiple images', () => {
+      render(<ImagePreview images={IMAGES} visible thumbnails="classic" {...ZH} />);
+      expect(screen.getByRole('navigation', { name: '缩略图导航' })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: /第 \d+ 张/ })).toHaveLength(3);
+    });
+
+    it('hides strip for single image even when thumbnails=classic', () => {
+      render(<ImagePreview src={SINGLE_SRC} visible thumbnails="classic" {...ZH} />);
+      expect(screen.queryByRole('navigation', { name: '缩略图导航' })).not.toBeInTheDocument();
+    });
+
+    it('navigates when a strip tile is clicked', async () => {
+      const onIndexChange = vi.fn();
+      render(
+        <ImagePreview
+          images={IMAGES}
+          visible
+          thumbnails="classic"
+          onIndexChange={onIndexChange}
+          {...ZH}
+        />,
+      );
+      await userEvent.click(screen.getByRole('button', { name: '第 3 张，共 3 张' }));
+      expect(onIndexChange).toHaveBeenCalledWith(2);
+    });
+  });
 });

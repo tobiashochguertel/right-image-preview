@@ -241,3 +241,16 @@
 - [x] `CONTRIBUTING.md` (English) + `CONTRIBUTING.zh-CN.md` (Chinese)
 - [x] `.github/ISSUE_TEMPLATE/` — bug report and feature request templates
 - [x] `package.json` filled with description, keywords, license, repository, etc.
+
+---
+
+## Phase 14 — Classic Bottom Thumbnail Strip
+
+### Requirements
+- [x] New `thumbnails?: 'none' | 'classic'` (default `'none'`)
+- [x] `'classic'`: horizontal scrollable strip at the bottom of the overlay; active tile has a bright border
+- [x] Thumbnail URL prefers {@link ImageItem.minimapSrc}, falls back to `src`
+- [x] Auto-hidden when ≤ 1 navigable image (single image or current group has one item)
+- [x] With `groupedImages`, strip lists **current group** only; click jumps to flat index
+- [x] Toolbar and minimap shift up when the strip is visible
+- [x] Strip participates in auto-fade controls (same as toolbar)

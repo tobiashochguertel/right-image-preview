@@ -31,6 +31,10 @@ export interface LocaleStrings {
   loadingImage: string;
   /** Minimap landmark (aria). */
   minimapNav: string;
+  /** Classic thumbnail strip landmark (aria). */
+  thumbnailsNav: string;
+  /** Per-tile label in the classic strip — 1-based index within the visible set. */
+  thumbStripItem(index: number, total: number): string;
 
   // Longer hover tooltips for non-expert users
   tipFitToViewport: string;

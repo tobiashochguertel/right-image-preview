@@ -90,6 +90,17 @@ export type WheelStrategy =
 export type ArrowsConfig = 'both' | 'side' | 'toolbar' | 'none';
 
 /**
+ * Bottom thumbnail navigation strip inside the preview overlay.
+ *
+ * - `'none'` (default) — no strip; use side arrows / keyboard only.
+ * - `'classic'` — horizontal scrollable strip; active tile has a bright border.
+ *
+ * Hidden automatically when the navigable set has at most one image (flat list or current group).
+ * With {@link groupedImages}, the strip lists **only the current group**.
+ */
+export type ThumbnailsConfig = 'none' | 'classic';
+
+/**
  * Stages for the optional progressive main-image pipeline (`minimapSrc` thumbnail
  * underlay until the full `src` has loaded in the DOM). Used by {@link ImagePreviewProps.onMainImageLoadStageChange}.
  */
@@ -228,6 +239,12 @@ export interface ImagePreviewProps {
    * dragging inside the frame pans the main image.
    */
   showMinimap?: boolean;
+
+  /**
+   * In-overlay thumbnail navigation strip. Default: `'none'`.
+   * See {@link ThumbnailsConfig}.
+   */
+  thumbnails?: ThumbnailsConfig;
 
   /**
    * When true (default) and the current item has {@link ImageItem.minimapSrc} and no custom

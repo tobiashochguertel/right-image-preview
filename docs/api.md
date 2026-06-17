@@ -52,6 +52,7 @@
 | `arrows` | `'both' \| 'side' \| 'toolbar' \| 'none'` | `'both'` | **Side** arrows only; see table (non-empty `groupedImages` forces toolbar prev/next on) |
 | `showFlip` | `boolean` | `false` | Show horizontal/vertical flip buttons in the toolbar |
 | `showMinimap` | `boolean` | `true` | When the image overflows the viewport, show the bottom-right navigation minimap (drag the frame to pan) |
+| `thumbnails` | `'none' \| 'classic'` | `'none'` | In-overlay thumbnail strip; `'classic'` = bottom horizontal scroll list (current group only when grouped); hidden when ≤ 1 image |
 | `language` | `string` | `'en'` | UI locale: built-in `en` and `zh` (primary subtag match, e.g. `zh-CN` → `zh`) |
 
 #### `arrows` values

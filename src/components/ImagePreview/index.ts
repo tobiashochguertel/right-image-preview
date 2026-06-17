@@ -17,6 +17,7 @@ export type {
   ImagePreviewProps,
   ImagePreviewRef,
   NativePercent,
+  ThumbnailsConfig,
   WheelStrategy,
   ZoomInAtMaxBehaviour,
   ZoomMode,

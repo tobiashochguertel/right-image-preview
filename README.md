@@ -25,6 +25,7 @@ Open the interactive demo in your browser (toggle **EN / 中文** in the top-rig
 | **Smart side arrows** | Hidden when no navigation is possible; replaced by a group-jump button (double chevron) at group boundaries |
 | **Auto-fade controls** | All controls fade to ~10 % opacity after 3 s of inactivity; any activity instantly restores them |
 | **Navigation minimap** | Corner thumbnail + draggable viewport frame when the image overflows; optional via `showMinimap` |
+| **Classic thumbnail strip** | `thumbnails="classic"` shows a bottom horizontal thumb nav inside the overlay (off by default; current group only when grouped) |
 | **Minimap source per item** | Each **`ImageItem`** (and single-**`src`** mode) can set **`minimapSrc`** / **`minimap`** so the map uses a lighter tile or custom node; defaults to the main **`src`** |
 | **Touch pinch-to-zoom** | Two-finger pinch/spread for continuous zoom; anchor follows the midpoint between fingers; disable with **`pinchEnabled`** |
 | **Localized toolbar** | **`language`** prop with built-in **English** and **Simplified Chinese** (`en`, `zh`, `zh-CN`, …); override individual strings with **`strings`** |

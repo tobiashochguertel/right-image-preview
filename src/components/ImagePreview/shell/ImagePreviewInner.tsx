@@ -7,14 +7,16 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Minimap } from '../Minimap';
+import { Minimap, MINIMAP_BOTTOM } from '../Minimap';
 import { ImagePreviewCloseButton } from '../parts/ImagePreviewCloseButton';
+import { ThumbnailsStrip } from '../parts/ThumbnailsStrip';
 import { ImagePreviewNavArrow } from '../parts/ImagePreviewNavArrow';
 import { Toolbar } from '../Toolbar';
 import {
   IMAGE_DECODE_TIMEOUT_MS,
   MIN_PROGRESSIVE_THUMB_VISIBLE_MS,
   PROGRESSIVE_MAIN_DEFAULT_FADE_MS,
+  thumbnailStripTotalHeightPx,
   toolbarZoomDropdownWidthPx,
   toolbarZoomLabelSlotPx,
 } from '../imagePreviewTuning';
@@ -59,6 +61,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       arrows = 'both',
       initialZoomLocked = false,
       showMinimap = true,
+      thumbnails = 'none',
       progressiveMain = true,
       progressivePlaceholderMinMs = MIN_PROGRESSIVE_THUMB_VISIBLE_MS,
       progressiveFadeMs = PROGRESSIVE_MAIN_DEFAULT_FADE_MS,
@@ -412,6 +415,20 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
           }
         : {};
 
+    const showClassicThumbnails = thumbnails === 'classic';
+    const stripStart = currentGroup?.start ?? 0;
+    const stripEnd = currentGroup?.end ?? images.length - 1;
+    const stripEntries = useMemo(() => {
+      if (!showClassicThumbnails || images.length <= 1) return [];
+      if (stripEnd - stripStart < 1) return [];
+      const out: { flatIndex: number; item: (typeof images)[number] }[] = [];
+      for (let i = stripStart; i <= stripEnd; i++) {
+        out.push({ flatIndex: i, item: images[i] });
+      }
+      return out;
+    }, [showClassicThumbnails, images, stripStart, stripEnd]);
+    const stripLiftPx = thumbnailStripTotalHeightPx(stripEntries.length);
+
     return (
       <div
         ref={overlayRef}
@@ -609,6 +626,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
             flipH={transform.flipH}
             flipV={transform.flipV}
             controlsVisible={controlsVisible}
+            bottomPx={MINIMAP_BOTTOM + stripLiftPx}
             onPanByDelta={panByDelta}
             onJumpToNatural={panJumpToNatural}
             onUserActivity={resetHideTimer}
@@ -666,8 +684,21 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
           );
         })()}
 
+        {stripEntries.length > 0 && (
+          <ThumbnailsStrip
+            entries={stripEntries}
+            activeFlatIndex={currentIndex}
+            controlsVisible={controlsVisible}
+            ariaLabel={t.thumbnailsNav}
+            thumbAria={t.thumbStripItem}
+            onSelect={goTo}
+            onUserActivity={resetHideTimer}
+          />
+        )}
+
         <Toolbar
           controlsVisible={controlsVisible}
+          bottomPx={20 + stripLiftPx}
           mode={mode}
           nativePercent={nativePercent}
           fitEquivalentNativePercent={fitEquivalentNativePercent}

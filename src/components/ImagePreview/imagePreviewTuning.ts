@@ -110,6 +110,32 @@ export const ZOOM_DROPDOWN_MAX_WIDTH_PX = 160;
 /** Min width for the `current / total` counter between prev/next (tabular digits). */
 export const TOOLBAR_NAV_COUNTER_MIN_WIDTH_PX = 52;
 
+// ── Classic thumbnail strip (`ThumbnailsStrip`) ─────────────────────────────
+
+/** Thumbnail tile height inside the bottom strip (px). */
+export const THUMBNAIL_STRIP_HEIGHT_PX = 56;
+
+/** Horizontal gap between thumbnail tiles (px). */
+export const THUMBNAIL_STRIP_GAP_PX = 6;
+
+/** Strip outer horizontal padding (px). */
+export const THUMBNAIL_STRIP_PADDING_X_PX = 16;
+
+/** Strip vertical padding above/below tiles (px). */
+export const THUMBNAIL_STRIP_PADDING_Y_PX = 8;
+
+/** Active tile border width (px). */
+export const THUMBNAIL_STRIP_ACTIVE_BORDER_PX = 2;
+
+/** Opacity for non-active tiles in the strip. */
+export const THUMBNAIL_STRIP_INACTIVE_OPACITY = 0.55;
+
+/** Total vertical space occupied by the strip (for lifting the toolbar). */
+export function thumbnailStripTotalHeightPx(entryCount: number): number {
+  if (entryCount <= 1) return 0;
+  return THUMBNAIL_STRIP_PADDING_Y_PX * 2 + THUMBNAIL_STRIP_HEIGHT_PX;
+}
+
 // ── Minimap pointer ↔ pan Jacobian (`minimapMath`) ───────────────────────────
 
 /** Step (container px) for ∂m/∂tx, ∂m/∂ty finite differences. */
