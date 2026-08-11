@@ -15,13 +15,12 @@ describe('useNeighborPreload', () => {
 
   beforeEach(() => {
     created.length = 0;
-    // @ts-expect-error test stub
     globalThis.Image = class extends OriginalImage {
       constructor() {
         super();
         created.push(this);
       }
-    };
+    } as unknown as typeof Image;
   });
 
   afterEach(() => {
