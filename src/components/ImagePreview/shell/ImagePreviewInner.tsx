@@ -15,8 +15,10 @@ import { ImagePreviewNavArrow } from '../parts/ImagePreviewNavArrow';
 import { Toolbar } from '../Toolbar';
 import {
   IMAGE_DECODE_TIMEOUT_MS,
+  KEYBOARD_PAN_STEP_VIEWPORT_FRACTION,
   MIN_PROGRESSIVE_THUMB_VISIBLE_MS,
   PROGRESSIVE_MAIN_DEFAULT_FADE_MS,
+  THUMBNAIL_STRIP_TOOLBAR_GAP_PX,
   thumbnailStripTotalHeightPx,
   toolbarZoomDropdownWidthPx,
   toolbarZoomLabelSlotPx,
@@ -32,6 +34,7 @@ import { mergeStrings, resolveStrings } from '../locale';
 import type { ImagePreviewProps, ImagePreviewRef, NativePercent } from '../types';
 import { useImagePreviewKeyboard } from '../useImagePreviewKeyboard';
 import { useImageTransform } from '../useImageTransform';
+import { useNeighborPreload } from '../useNeighborPreload';
 import { useProgressiveMainImage } from '../useProgressiveMainImage';
 import { usePinchZoom } from '../usePinchZoom';
 import { useWheelZoom } from '../useWheelZoom';
@@ -65,7 +68,14 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       arrows = 'both',
       initialZoomLocked = false,
       showMinimap = true,
-      thumbnails = 'none',
+      showThumbnails = false,
+      thumbnailsScope = 'group',
+      presentation = 'overlay',
+      preloadRadius = 0,
+      onPreloadIndexesChange,
+      onPreloadStatusChange,
+      showThumbnailPreloadStatus = false,
+      chrome = 'default',
       progressiveMain = true,
       progressivePlaceholderMinMs = MIN_PROGRESSIVE_THUMB_VISIBLE_MS,
       progressiveFadeMs = PROGRESSIVE_MAIN_DEFAULT_FADE_MS,
@@ -75,6 +85,8 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       overlayStyle,
       language,
       strings: stringOverrides,
+      index: controlledIndex,
+      toolbarExtra,
       onClose,
       onZoomChange,
       onIndexChange,
@@ -83,6 +95,11 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       errorFallback,
       onDeleteImage,
     } = props;
+
+    const isContained = presentation === 'contained';
+    const isIndexControlled = controlledIndex !== undefined;
+    const idleOpacity = chrome === 'minimal' ? 0 : 0.1;
+    const minimapIdleOpacity = chrome === 'minimal' ? 0 : 0.12;
 
     // Resolve locale strings once; re-resolves when `language` or overrides change.
     const t = useMemo(
@@ -109,8 +126,16 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       if (hasGroups && props.defaultGroupedSelection && props.groupedImages?.length) {
         return resolveDefaultGroupedFlatIndex(props.groupedImages, props.defaultGroupedSelection);
       }
+      if (controlledIndex !== undefined) return controlledIndex;
       return defaultIndex;
     });
+
+    // Controlled flat index: host is the source of truth.
+    useEffect(() => {
+      if (controlledIndex === undefined) return;
+      setCurrentIndex(controlledIndex);
+    }, [controlledIndex]);
+
     const [zoomLocked, setZoomLocked] = useState(initialZoomLocked);
     const [exifOpen, setExifOpen] = useState(initialExifOpen && showExif);
     const [minimapDragging, setMinimapDragging] = useState(false);
@@ -195,15 +220,27 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     // ── Navigation ──────────────────────────────────────────────────────────
     const goTo = useCallback(
       (idx: number) => {
-        setCurrentIndex(idx);
+        if (images.length === 0) return;
+        const clamped = Math.max(0, Math.min(images.length - 1, idx));
+        if (!isIndexControlled) setCurrentIndex(clamped);
         setImageLoadError(false);
-        onIndexChange?.(idx);
+        onIndexChange?.(clamped);
         // Reset zoom only when not locked (and when switchImageResetZoom allows it).
         if (switchImageResetZoom && !zoomLocked) reset();
         resetPan();
         if (switchImageResetTransform) resetOrientation();
       },
-      [onIndexChange, reset, resetPan, resetOrientation, switchImageResetZoom, switchImageResetTransform, zoomLocked],
+      [
+        images.length,
+        isIndexControlled,
+        onIndexChange,
+        reset,
+        resetPan,
+        resetOrientation,
+        switchImageResetZoom,
+        switchImageResetTransform,
+        zoomLocked,
+      ],
     );
 
     // Within-group (or global when flat) prev / next
@@ -231,10 +268,18 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       if (images.length === 0) return;
       if (currentIndex > images.length - 1) {
         const nextIdx = images.length - 1;
-        setCurrentIndex(nextIdx);
+        if (!isIndexControlled) setCurrentIndex(nextIdx);
         onIndexChange?.(nextIdx);
       }
-    }, [images.length, currentIndex, onIndexChange]);
+    }, [images.length, currentIndex, onIndexChange, isIndexControlled]);
+
+    const { status: neighborPreloadStatus, markSrcReady } = useNeighborPreload({
+      images,
+      currentIndex,
+      radius: preloadRadius,
+      onPreloadIndexesChange,
+      onPreloadStatusChange,
+    });
 
     const deleteCurrentImage = useCallback(() => {
       const item = images[currentIndex];
@@ -254,10 +299,16 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
         return;
       }
 
+      // Deleting the last item: move focus back before/while the host updates props.
       if (nextIdx != null && nextIdx !== currentIndex) {
         goTo(nextIdx);
       }
     }, [images, currentIndex, onDeleteImage, onClose, goTo]);
+
+    const keyboardPanStepPx = useMemo(() => {
+      if (!containerSize) return 0;
+      return Math.min(containerSize.width, containerSize.height) * KEYBOARD_PAN_STEP_VIEWPORT_FRACTION;
+    }, [containerSize]);
 
     // ── Auto-fade overlay controls (inactivity-based) ───────────────────────
     // After 3 s of no mouse movement, clicks, or key presses, all controls
@@ -308,6 +359,51 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       zoomAnchorTranslate,
     });
 
+    const [keyboardActive, setKeyboardActive] = useState(!isContained);
+    const [isFs, setIsFs] = useState(false);
+
+    const syncFullscreenState = useCallback(() => {
+      const root = overlayRef.current;
+      setIsFs(!!root && document.fullscreenElement === root);
+    }, []);
+
+    useEffect(() => {
+      document.addEventListener('fullscreenchange', syncFullscreenState);
+      return () => document.removeEventListener('fullscreenchange', syncFullscreenState);
+    }, [syncFullscreenState]);
+
+    const isFullscreen = useCallback(() => {
+      const root = overlayRef.current;
+      return !!root && document.fullscreenElement === root;
+    }, []);
+
+    const requestFullscreen = useCallback(async (): Promise<boolean> => {
+      const root = overlayRef.current;
+      if (!root || typeof root.requestFullscreen !== 'function') return false;
+      try {
+        await root.requestFullscreen();
+        syncFullscreenState();
+        return true;
+      } catch {
+        return false;
+      }
+    }, [syncFullscreenState]);
+
+    const exitFullscreen = useCallback(async (): Promise<void> => {
+      if (!document.fullscreenElement || typeof document.exitFullscreen !== 'function') return;
+      try {
+        await document.exitFullscreen();
+      } catch {
+        /* quiet degrade */
+      }
+      syncFullscreenState();
+    }, [syncFullscreenState]);
+
+    const toggleFullscreen = useCallback(() => {
+      if (isFullscreen()) void exitFullscreen();
+      else void requestFullscreen();
+    }, [isFullscreen, exitFullscreen, requestFullscreen]);
+
     useImagePreviewKeyboard({
       resetHideTimer,
       onClose,
@@ -322,6 +418,8 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       nextGroup,
       rotateCW,
       rotateCCW,
+      panByDelta,
+      keyboardPanStepPx,
       fitEquivalentNativePercent,
       currentIndex,
       currentGroup,
@@ -329,6 +427,9 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       groupSlices,
       imagesLength: images.length,
       onDeleteImage: showDelete ? deleteCurrentImage : undefined,
+      keyboardActive: isContained ? keyboardActive : true,
+      isFullscreen,
+      exitFullscreen,
     });
 
     // ── Double-click ────────────────────────────────────────────────────────
@@ -339,9 +440,33 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     }, [doubleClickEnabled, mode, fit, setNative]);
 
     // ── Focus ───────────────────────────────────────────────────────────────
-    // Outer `ImagePreview` unmounts the inner dialog when `visible` is false, so each open
-    // remounts — one focus on mount is enough for the trap.
-    useEffect(() => { overlayRef.current?.focus(); }, []);
+    // Overlay: focus on mount (modal). Contained: do not steal focus; activate keys when focused.
+    useEffect(() => {
+      if (isContained) return;
+      overlayRef.current?.focus();
+    }, [isContained]);
+
+    useEffect(() => {
+      if (!isContained) {
+        setKeyboardActive(true);
+        return;
+      }
+      const root = overlayRef.current;
+      if (!root) return;
+      const onFocusIn = () => setKeyboardActive(true);
+      const onFocusOut = (e: FocusEvent) => {
+        const next = e.relatedTarget as Node | null;
+        if (next && root.contains(next)) return;
+        setKeyboardActive(false);
+      };
+      root.addEventListener('focusin', onFocusIn);
+      root.addEventListener('focusout', onFocusOut);
+      setKeyboardActive(root.contains(document.activeElement));
+      return () => {
+        root.removeEventListener('focusin', onFocusIn);
+        root.removeEventListener('focusout', onFocusOut);
+      };
+    }, [isContained]);
 
     // ── Imperative ref ──────────────────────────────────────────────────────
     useImperativeHandle(ref, () => ({
@@ -357,9 +482,16 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       prev,
       nextGroup,
       prevGroup,
+      goTo,
+      requestFullscreen,
+      exitFullscreen,
+      isFullscreen,
       getState: () => zoomState.getState(fitEquivalentNativePercent),
-    }), [zoomIn, zoomOut, fit, setNative, rotateCW, rotateCCW, flipHorizontal, flipVertical,
-        next, prev, nextGroup, prevGroup, zoomState, fitEquivalentNativePercent]);
+    }), [
+      zoomIn, zoomOut, fit, setNative, rotateCW, rotateCCW, flipHorizontal, flipVertical,
+      next, prev, nextGroup, prevGroup, goTo, requestFullscreen, exitFullscreen, isFullscreen,
+      zoomState, fitEquivalentNativePercent,
+    ]);
 
     // ── Derived ─────────────────────────────────────────────────────────────
     const atMinStop = mode === 'native' && nativePercent <= sortedStops[0];
@@ -379,6 +511,23 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       const id = requestAnimationFrame(() => setImageShowReady(true));
       return () => cancelAnimationFrame(id);
     }, [ready]);
+
+    // Current main image counts as ready once the full src is usable.
+    useEffect(() => {
+      const src = currentImage?.src;
+      if (!src) return;
+      if (progressive.pipelineActive) {
+        if (progressive.fullDecoded) markSrcReady(src);
+        return;
+      }
+      if (imageShowReady) markSrcReady(src);
+    }, [
+      currentImage?.src,
+      progressive.pipelineActive,
+      progressive.fullDecoded,
+      imageShowReady,
+      markSrcReady,
+    ]);
 
     // ── Loading indicator ────────────────────────────────────────────────────
     // Only show the spinner if loading takes longer than LOADER_DELAY_MS.
@@ -455,32 +604,36 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
           }
         : {};
 
-    const showClassicThumbnails = thumbnails === 'classic';
-    const stripStart = currentGroup?.start ?? 0;
-    const stripEnd = currentGroup?.end ?? images.length - 1;
+    const showStrip = showThumbnails;
+    const stripStart =
+      thumbnailsScope === 'flat' ? 0 : (currentGroup?.start ?? 0);
+    const stripEnd =
+      thumbnailsScope === 'flat'
+        ? images.length - 1
+        : (currentGroup?.end ?? images.length - 1);
     const stripEntries = useMemo(() => {
-      if (!showClassicThumbnails || images.length <= 1) return [];
+      if (!showStrip || images.length <= 1) return [];
       if (stripEnd - stripStart < 1) return [];
       const out: { flatIndex: number; item: (typeof images)[number] }[] = [];
       for (let i = stripStart; i <= stripEnd; i++) {
         out.push({ flatIndex: i, item: images[i] });
       }
       return out;
-    }, [showClassicThumbnails, images, stripStart, stripEnd]);
+    }, [showStrip, images, stripStart, stripEnd]);
     const stripLiftPx = thumbnailStripTotalHeightPx(stripEntries.length);
 
     return (
       <div
         ref={overlayRef}
-        role="dialog"
-        aria-modal="true"
+        role={isContained ? 'region' : 'dialog'}
+        aria-modal={isContained ? undefined : 'true'}
         aria-label={t.imagePreview}
         tabIndex={-1}
         className={overlayClassName}
         style={{
-          position: 'fixed',
+          position: isContained ? 'absolute' : 'fixed',
           inset: 0,
-          zIndex: 9999,
+          zIndex: isContained ? 1 : 9999,
           /* macOS-style frosted glass: semi-transparent + blur */
           background: 'rgba(10, 12, 20, 0.70)',
           backdropFilter: 'blur(24px) saturate(160%)',
@@ -493,12 +646,19 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
         }}
         onClick={(e) => { if (closeOnMaskClick && e.target === e.currentTarget) onClose?.(); }}
         onMouseMove={resetHideTimer}
-        onMouseDown={resetHideTimer}
+        onMouseDown={(e) => {
+          resetHideTimer();
+          if (isContained) {
+            // Activate keyboard boundary when the user interacts with the preview.
+            (e.currentTarget as HTMLDivElement).focus({ preventScroll: true });
+          }
+        }}
       >
         {/* ── Close button — top-right corner ── */}
         <ImagePreviewCloseButton
           onClick={() => onClose?.()}
           visible={controlsVisible}
+          idleOpacity={idleOpacity}
           label={t.close}
           tip={t.tipClose}
         />
@@ -537,6 +697,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                     : 'transform 0.3s ease, opacity 0.15s ease',
               opacity: imageShowReady ? 1 : 0,
               cursor:     mode === 'native' ? 'grab' : 'zoom-in',
+              willChange: 'transform',
               userSelect: 'none',
               touchAction: 'none',
             }}
@@ -666,6 +827,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
             flipH={transform.flipH}
             flipV={transform.flipV}
             controlsVisible={controlsVisible}
+            idleOpacity={minimapIdleOpacity}
             bottomPx={MINIMAP_BOTTOM + stripLiftPx}
             onPanByDelta={panByDelta}
             onJumpToNatural={panJumpToNatural}
@@ -708,6 +870,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                   label={leftIsGroup ? t.prevGroup : t.prev}
                   tip={leftIsGroup ? t.tipPrevGroup : t.tipPrev}
                   visible={controlsVisible}
+                  idleOpacity={idleOpacity}
                 />
               )}
               {showRight && (
@@ -718,6 +881,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                   label={rightIsGroup ? t.nextGroup : t.next}
                   tip={rightIsGroup ? t.tipNextGroup : t.tipNext}
                   visible={controlsVisible}
+                  idleOpacity={idleOpacity}
                 />
               )}
             </>
@@ -729,6 +893,8 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
             entries={stripEntries}
             activeFlatIndex={currentIndex}
             controlsVisible={controlsVisible}
+            idleOpacity={idleOpacity}
+            preloadStatus={showThumbnailPreloadStatus ? neighborPreloadStatus : undefined}
             ariaLabel={t.thumbnailsNav}
             thumbAria={t.thumbStripItem}
             onSelect={goTo}
@@ -746,7 +912,8 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
 
         <Toolbar
           controlsVisible={controlsVisible}
-          bottomPx={20 + stripLiftPx}
+          idleOpacity={idleOpacity}
+          bottomPx={stripLiftPx + THUMBNAIL_STRIP_TOOLBAR_GAP_PX}
           mode={mode}
           nativePercent={nativePercent}
           fitEquivalentNativePercent={fitEquivalentNativePercent}
@@ -760,6 +927,9 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
           showExif={showExif}
           exifOpen={exifOpen}
           showDelete={showDelete}
+          showFullscreen
+          isFullscreen={isFs}
+          toolbarExtra={toolbarExtra}
           showToolbarArrows={showToolbarArrows}
           zoomLocked={zoomLocked}
           strings={t}
@@ -768,6 +938,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
           onToggleLock={() => setZoomLocked((v) => !v)}
           onToggleExif={() => setExifOpen((v) => !v)}
           onDeleteImage={deleteCurrentImage}
+          onToggleFullscreen={toggleFullscreen}
           onZoomIn={() => zoomIn(fitEquivalentNativePercent)}
           onZoomOut={() => zoomOut(fitEquivalentNativePercent)}
           onFit={fit}

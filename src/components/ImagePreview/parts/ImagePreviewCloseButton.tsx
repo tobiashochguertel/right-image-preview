@@ -4,11 +4,14 @@ import { DelayedTooltip } from '../DelayedTooltip';
 export function ImagePreviewCloseButton({
   onClick,
   visible,
+  idleOpacity = 0.1,
   label,
   tip,
 }: {
   onClick(): void;
   visible: boolean;
+  /** Opacity when `visible` is false. */
+  idleOpacity?: number;
   label: string;
   tip: string;
 }) {
@@ -39,10 +42,11 @@ export function ImagePreviewCloseButton({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          opacity: visible ? 1 : 0.1,
+          opacity: visible ? 1 : idleOpacity,
           transition: visible
             ? 'opacity 0.12s ease, background 0.15s'
             : 'opacity 1.6s ease, background 0.15s',
+          pointerEvents: visible || idleOpacity > 0 ? 'auto' : 'none',
           flexShrink: 0,
         }}
       >

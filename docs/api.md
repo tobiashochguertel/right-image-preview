@@ -55,7 +55,16 @@
 | `initialExifOpen` | `boolean` | `false` | When `showExif` is true, open the EXIF panel on first mount |
 | `showDelete` | `boolean` | `false` | Show the delete control (host must update the list in `onDeleteImage`) |
 | `showMinimap` | `boolean` | `true` | When the image overflows the viewport, show the bottom-right navigation minimap (drag the frame to pan) |
-| `thumbnails` | `'none' \| 'classic'` | `'none'` | In-overlay thumbnail strip; `'classic'` = bottom horizontal scroll list (current group only when grouped); hidden when ≤ 1 image |
+| `showThumbnails` | `boolean` | `false` | Bottom horizontal thumbnail strip inside the overlay; hidden when ≤ 1 navigable image |
+| `thumbnailsScope` | `'group' \| 'flat'` | `'group'` | Which images appear in the strip when `showThumbnails` is true; see table below |
+| `presentation` | `'overlay' \| 'contained'` | `'overlay'` | `overlay` fullscreen dialog; `contained` fills a positioned host |
+| `preloadRadius` | `number` | `0` | Neighbor full-`src` preload radius; `0` = off |
+| `onPreloadIndexesChange` | `(indexes: number[]) => void` | — | Optional debug hook for planned preload indexes |
+| `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | Optional status map for host UI / debug (`loading`/`ready`/`warm`/`error`) |
+| `showThumbnailPreloadStatus` | `boolean` | `false` | When true (with `showThumbnails`), tiles show light/dark green bottom edges for warm vs ready preload status |
+| `chrome` | `'default' \| 'minimal'` | `'default'` | `minimal` fades idle chrome to 0% |
+| `index` | `number` | — | Controlled flat index |
+| `toolbarExtra` | `ReactNode` | — | Extra content at the end of the toolbar |
 | `language` | `string` | `'en'` | UI locale: built-in `en` and `zh` (primary subtag match, e.g. `zh-CN` → `zh`) |
 
 #### `arrows` values
@@ -68,6 +77,22 @@
 | `'none'` | No side arrows; keyboard ← → always works; flat lists still get toolbar prev/next + index |
 
 When non-empty **`groupedImages`** is provided, **toolbar prev/next are always shown**; only **side** arrows follow this table.
+
+#### `showThumbnails` / `thumbnailsScope`
+
+| `thumbnailsScope` | Effect |
+|-------------------|--------|
+| `'group'` (default) | Lists images in the **current group** when using `groupedImages`; flat lists show the whole list. Jumping groups replaces the strip. |
+| `'flat'` | Lists the **full flattened** navigation sequence (same order as ←/→ / `onIndexChange`). Window-virtualized when `entryCount > visibleCapacity × 3` (`visibleCapacity = max(1, floor(viewportWidth / tileStride))`). |
+
+Tile image: `ImageItem.minimapSrc` if set, otherwise `src`. Layout: few tiles → centred frosted pill; many tiles → full-width bottom bar with horizontal scroll.
+
+#### `presentation` notes
+
+| Value | Behaviour |
+|-------|-----------|
+| `'overlay'` (default) | `fixed` fullscreen, `dialog` + `aria-modal`, focus on open, window keyboard |
+| `'contained'` | `absolute; inset: 0`; host must be positioned with size; `region`; keyboard only while focused inside; `overlayClassName` / `overlayStyle` still apply to the root |
 
 #### Smart side-arrow behaviour
 
@@ -145,6 +170,12 @@ interface ImagePreviewRef {
   prev(): void;            // previous image within group
   nextGroup(): void;       // jump to first image of the next group
   prevGroup(): void;       // jump to first image of the previous group
+  goTo(index: number): void; // jump to flat index (clamped)
+
+  // browser fullscreen
+  requestFullscreen(): Promise<boolean>;
+  exitFullscreen(): Promise<void>;
+  isFullscreen(): boolean;
 
   // state inspection
   getState(): ZoomState;

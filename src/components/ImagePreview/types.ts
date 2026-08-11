@@ -1,5 +1,3 @@
-import type React from 'react';
-
 export type ZoomMode = 'fit' | 'native';
 
 /** Native zoom percentage: 100 means 1 CSS pixel = 1 image pixel. */
@@ -167,15 +165,49 @@ export type WheelStrategy =
 export type ArrowsConfig = 'both' | 'side' | 'toolbar' | 'none';
 
 /**
- * Bottom thumbnail navigation strip inside the preview overlay.
+ * Which images appear in the bottom thumbnail strip when {@link ImagePreviewProps.showThumbnails} is true.
  *
- * - `'none'` (default) — no strip; use side arrows / keyboard only.
- * - `'classic'` — horizontal scrollable strip; active tile has a bright border.
- *
- * Hidden automatically when the navigable set has at most one image (flat list or current group).
- * With {@link groupedImages}, the strip lists **only the current group**.
+ * - `'group'` (default) — with {@link groupedImages}, only the current group; flat lists = whole list.
+ * - `'flat'` — full flattened navigation sequence (same order as ←/→ / `onIndexChange`).
  */
-export type ThumbnailsConfig = 'none' | 'classic';
+export type ThumbnailsScope = 'group' | 'flat';
+
+/**
+ * How the preview is mounted in the page.
+ *
+ * - `'overlay'` (default) — fixed fullscreen dialog (`aria-modal`), focus on open, window keyboard.
+ * - `'contained'` — fills a positioned host container; not page-modal; keyboard only while focused.
+ */
+export type PresentationMode = 'overlay' | 'contained';
+
+/**
+ * Chrome density for chrome controls (toolbar, side arrows, close, strip).
+ *
+ * - `'default'` — existing auto-fade to ~10% opacity after idle.
+ * - `'minimal'` — same idle timer, but idle chrome fades to fully hidden (0%) for a cleaner view.
+ */
+export type ChromeDensity = 'default' | 'minimal';
+
+/** Neighbor preload / session-warm phase for thumbnail strip indicators. */
+export type NeighborPreloadPhase = 'loading' | 'ready' | 'warm' | 'error';
+
+export interface NeighborPreloadEntry {
+  phase: NeighborPreloadPhase;
+  /**
+   * 0–1 fill when byte progress is known (`loading` / `ready` only).
+   * Omitted while loading without % → UI shows a ⅓ green fill until `ready`.
+   */
+  progress?: number;
+}
+
+/**
+ * Flat-index → status for the thumbnail strip.
+ * - `loading` / `ready`: current main image, or inside the active neighbor-preload window
+ *   (strip: dark green).
+ * - `warm`: full `src` succeeded earlier this session, but not current / not in the window
+ *   (strip: light green; browser HTTP cache is likely, not guaranteed).
+ */
+export type NeighborPreloadStatusMap = Readonly<Record<number, NeighborPreloadEntry>>;
 
 /**
  * Stages for the optional progressive main-image pipeline (`minimapSrc` thumbnail
@@ -344,10 +376,69 @@ export interface ImagePreviewProps {
   showMinimap?: boolean;
 
   /**
-   * In-overlay thumbnail navigation strip. Default: `'none'`.
-   * See {@link ThumbnailsConfig}.
+   * Show the bottom horizontal thumbnail strip. Default: `false`.
+   * Hidden automatically when the navigable set has at most one image.
    */
-  thumbnails?: ThumbnailsConfig;
+  showThumbnails?: boolean;
+
+  /**
+   * Which images appear in the strip when {@link showThumbnails} is true.
+   * Default: `'group'`. See {@link ThumbnailsScope}.
+   */
+  thumbnailsScope?: ThumbnailsScope;
+
+  /**
+   * Mount mode. Default: `'overlay'` (fullscreen modal dialog).
+   * Use `'contained'` to fill a positioned host container without page-modal semantics.
+   * See {@link PresentationMode}.
+   */
+  presentation?: PresentationMode;
+
+  /**
+   * Preload full `src` for neighbors within this flat-index radius of the current image.
+   * `0` (default) disables neighbor preload. Recommended for gallery apps: `1` or `2`.
+   * Compatible with {@link progressiveMain} / `minimapSrc` on the current item.
+   */
+  preloadRadius?: number;
+
+  /**
+   * Optional hook listing flat indexes currently targeted by neighbor preload (for tests / debug).
+   * Does not include the current index.
+   */
+  onPreloadIndexesChange?: (indexes: number[]) => void;
+
+  /**
+   * Optional hook for neighbor preload phase / progress.
+   * Useful for custom host UI; the built-in strip bars require
+   * {@link showThumbnailPreloadStatus} as well.
+   * `Image()` preload typically has no byte % — then `progress` is omitted while `phase === 'loading'`.
+   */
+  onPreloadStatusChange?: (status: NeighborPreloadStatusMap) => void;
+
+  /**
+   * When true, thumbnail tiles show a light/dark green bottom edge indicating
+   * session-warm vs active-window preload status. Default: `false` (keeps the strip clean).
+   * Requires {@link showThumbnails}; pairs with {@link preloadRadius} / main-image ready marks.
+   */
+  showThumbnailPreloadStatus?: boolean;
+
+  /**
+   * Control chrome density. Default: `'default'`. See {@link ChromeDensity}.
+   */
+  chrome?: ChromeDensity;
+
+  /**
+   * Controlled flat index. When set, the preview mirrors this value; navigation calls
+   * {@link onIndexChange} and the host must update `index`. Omit for uncontrolled
+   * (`defaultIndex` / `defaultGroupedSelection`) behaviour.
+   */
+  index?: number;
+
+  /**
+   * Extra content rendered at the end of the toolbar (after built-in actions).
+   * Useful for host actions such as “Reveal in Finder”.
+   */
+  toolbarExtra?: React.ReactNode;
 
   /**
    * When true (default) and the current item has {@link ImageItem.minimapSrc} and no custom
@@ -492,5 +583,19 @@ export interface ImagePreviewRef {
   nextGroup(): void;
   /** Navigate to the first image of the previous group (requires `groupedImages`). */
   prevGroup(): void;
+  /**
+   * Jump to a flat list index (clamped). In controlled `index` mode, fires {@link ImagePreviewProps.onIndexChange}
+   * so the host can update `index`.
+   */
+  goTo(index: number): void;
+  /**
+   * Request browser fullscreen on the preview root. Resolves `true` on success, `false` on
+   * denial / unsupported (quiet degrade — never throws).
+   */
+  requestFullscreen(): Promise<boolean>;
+  /** Exit browser fullscreen if this preview owns it. */
+  exitFullscreen(): Promise<void>;
+  /** Whether the preview root is the current fullscreen element. */
+  isFullscreen(): boolean;
   getState(): ZoomState;
 }

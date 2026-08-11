@@ -244,13 +244,24 @@
 
 ---
 
-## 阶段 14 — Classic 底部缩略图条
+## 阶段 14 — 底部缩略图条
 
 ### 需求
-- [x] 新增 `thumbnails?: 'none' | 'classic'`（默认 `'none'`）
-- [x] `'classic'` 时在预览层底部显示横向可滚动缩略图条；激活项高亮边框
-- [x] 缩略图 URL 优先使用 {@link ImageItem.minimapSrc}，否则回退 `src`
-- [x] 可导航图片 ≤ 1 张时自动隐藏（含单图、当前组仅一张）
-- [x] `groupedImages` 模式下条带仅展示 **当前组** 内图片；点击跳转 flat index
-- [x] 条带显示时工具栏与小地图整体上移，避免重叠
-- [x] 条带参与控件自动渐隐（与工具栏一致）
+- [x] `showThumbnails?: boolean`（默认 `false`）
+- [x] `thumbnailsScope?: 'group' | 'flat'`（默认 `'group'`）
+- [x] 开启时在预览层底部显示横向可滚动缩略图条；激活项高亮边框
+- [x] `thumbnailsScope="flat"` 展示整段扁平导航序列（Media Lens）；`group` 时分组仅当前组
+- [x] 虚拟化：测量条带视口宽度；`visibleCapacity = max(1, floor(viewportWidth / tileStride))`；当 `entryCount > visibleCapacity × 3` 时窗口虚拟化，否则全量渲染
+- [x] 缩略图 URL 优先 `minimapSrc`，否则 `src`
+- [x] 可导航图片 ≤ 1 时自动隐藏
+- [x] 条带显示时工具栏与小地图上移；参与控件自动渐隐
+
+## 阶段 15 — Media Lens P0
+
+- [x] `presentation?: 'overlay' | 'contained'`
+- [x] `preloadRadius` + `onPreloadIndexesChange`
+- [x] `showThumbnailPreloadStatus`（默认 `false`；开启后缩略图底边浅绿/深绿指示）
+- [x] `chrome?: 'default' | 'minimal'`
+- [x] 工具栏浏览器全屏 + ref `requestFullscreen` / `exitFullscreen` / `isFullscreen`；Esc 先退全屏
+- [x] 受控 `index` + `toolbarExtra` + ref `goTo`
+- [x] Demo 5：`showThumbnails` + `thumbnailsScope="flat"`

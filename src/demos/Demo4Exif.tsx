@@ -138,7 +138,7 @@ export function Demo4Exif({
         closeOnMaskClick
         wheelEnabled
         doubleClickEnabled
-        thumbnails="classic"
+        showThumbnails
         language={previewLanguage}
         onClose={() => setVisible(false)}
       />

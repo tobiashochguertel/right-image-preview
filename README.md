@@ -25,7 +25,12 @@ Open the interactive demo in your browser (toggle **EN / 中文** in the top-rig
 | **Smart side arrows** | Hidden when no navigation is possible; replaced by a group-jump button (double chevron) at group boundaries |
 | **Auto-fade controls** | All controls fade to ~10 % opacity after 3 s of inactivity; any activity instantly restores them |
 | **Navigation minimap** | Corner thumbnail + draggable viewport frame when the image overflows; optional via `showMinimap` |
-| **Classic thumbnail strip** | `thumbnails="classic"` shows a bottom horizontal thumb nav inside the overlay (off by default; current group only when grouped) |
+| **Thumbnail strip** | `showThumbnails` shows a bottom horizontal thumb nav (off by default). `thumbnailsScope="group"` (default) lists the current group when grouped; `"flat"` lists the full flat sequence (window-virtualized when long) |
+| **Contained / embedded mode** | `presentation="contained"` fills a host pane; keyboard only while focused |
+| **Neighbor preload** | `preloadRadius` prefetches adjacent full `src` URLs; optional `showThumbnailPreloadStatus` draws light/dark green strip edges (off by default) |
+| **Chrome density** | `chrome="minimal"` fades idle controls to fully hidden |
+| **Browser fullscreen** | Toolbar toggle + ref `requestFullscreen` / `exitFullscreen`; Esc exits FS first |
+| **Controlled index** | `index` + `onIndexChange`; ref `goTo(index)` |
 | **Minimap source per item** | Each **`ImageItem`** (and single-**`src`** mode) can set **`minimapSrc`** / **`minimap`** so the map uses a lighter tile or custom node; defaults to the main **`src`** |
 | **Touch pinch-to-zoom** | Two-finger pinch/spread for continuous zoom; anchor follows the midpoint between fingers; disable with **`pinchEnabled`** |
 | **Localized toolbar** | **`language`** prop with built-in **English** and **Simplified Chinese** (`en`, `zh`, `zh-CN`, …); override individual strings with **`strings`** |

@@ -4,6 +4,7 @@ import { Demo1SingleGallery } from './demos/Demo1SingleGallery';
 import { Demo2FolderGroups } from './demos/Demo2FolderGroups';
 import { Demo3HighRes } from './demos/Demo3HighRes';
 import { Demo4Exif } from './demos/Demo4Exif';
+import { Demo5ContainedWorkspace } from './demos/Demo5ContainedWorkspace';
 import {
   DEMO_LANG_STORAGE_KEY,
   DEMO_REPO_URL,
@@ -329,6 +330,11 @@ export default function App() {
 
       {/* Demo 4: host-provided ImageItem.exif + toolbar toggle panel */}
       <Demo4Exif t={t} previewLanguage={previewLanguage} />
+
+      <hr style={dividerStyle} />
+
+      {/* Demo 5: contained workspace + flat strip + neighbor preload */}
+      <Demo5ContainedWorkspace t={t} previewLanguage={previewLanguage} />
     </div>
   );
 }

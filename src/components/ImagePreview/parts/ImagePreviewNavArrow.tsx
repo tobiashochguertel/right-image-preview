@@ -17,6 +17,8 @@ export interface ImagePreviewNavArrowProps {
   label: string;
   tip: string;
   visible: boolean;
+  /** Opacity when `visible` is false. */
+  idleOpacity?: number;
 }
 
 export function ImagePreviewNavArrow({
@@ -26,6 +28,7 @@ export function ImagePreviewNavArrow({
   label,
   tip,
   visible,
+  idleOpacity = 0.1,
 }: ImagePreviewNavArrowProps) {
   const [hover, setHover] = useState(false);
 
@@ -56,7 +59,8 @@ export function ImagePreviewNavArrow({
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 10,
-          opacity: visible ? 1 : 0.1,
+          opacity: visible ? 1 : idleOpacity,
+          pointerEvents: visible || idleOpacity > 0 ? 'auto' : 'none',
           transition: visible
             ? 'opacity 0.12s ease, background 0.15s, box-shadow 0.15s'
             : 'opacity 1.6s ease, background 0.15s, box-shadow 0.15s',

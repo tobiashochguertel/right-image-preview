@@ -16,6 +16,8 @@ export interface UseImagePreviewKeyboardParams {
   nextGroup(): void;
   rotateCW(): void;
   rotateCCW(): void;
+  panByDelta(dx: number, dy: number): void;
+  keyboardPanStepPx: number;
   fitEquivalentNativePercent: number | undefined;
   currentIndex: number;
   currentGroup: FlattenedGroupSlice | null;
@@ -24,6 +26,16 @@ export interface UseImagePreviewKeyboardParams {
   imagesLength: number;
   /** When set, Delete / Backspace removes the current image. */
   onDeleteImage?: () => void;
+  /**
+   * When false, ignore all keys (e.g. `presentation="contained"` while focus is outside).
+   * Default true.
+   */
+  keyboardActive?: boolean;
+  /**
+   * When true (browser fullscreen owned by the preview), Esc exits fullscreen instead of closing.
+   */
+  isFullscreen?: () => boolean;
+  exitFullscreen?: () => void | Promise<void>;
 }
 
 /**
@@ -45,6 +57,8 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
     nextGroup,
     rotateCW,
     rotateCCW,
+    panByDelta,
+    keyboardPanStepPx,
     fitEquivalentNativePercent,
     currentIndex,
     currentGroup,
@@ -52,10 +66,15 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
     groupSlices,
     imagesLength,
     onDeleteImage,
+    keyboardActive = true,
+    isFullscreen,
+    exitFullscreen,
   } = p;
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (!keyboardActive) return;
+
       resetHideTimer();
 
       const target = e.target as HTMLElement;
@@ -65,6 +84,11 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
 
       switch (e.key) {
         case 'Escape':
+          if (isFullscreen?.()) {
+            e.preventDefault();
+            void exitFullscreen?.();
+            break;
+          }
           onClose?.();
           break;
 
@@ -78,14 +102,24 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
 
         case '+':
         case '=':
+        case 'Add':
         case 'ArrowUp':
           e.preventDefault();
+          if (e.shiftKey && !mod) {
+            panByDelta(0, keyboardPanStepPx);
+            break;
+          }
           zoomIn(fitEquivalentNativePercent);
           break;
 
         case '-':
+        case 'Subtract':
         case 'ArrowDown':
           e.preventDefault();
+          if (e.shiftKey && !mod) {
+            panByDelta(0, -keyboardPanStepPx);
+            break;
+          }
           zoomOut(fitEquivalentNativePercent);
           break;
 
@@ -104,6 +138,10 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
 
         case 'ArrowLeft':
           e.preventDefault();
+          if (e.shiftKey && !mod) {
+            panByDelta(keyboardPanStepPx, 0);
+            break;
+          }
           if (mod) {
             rotateCCW();
           } else {
@@ -114,6 +152,10 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
           break;
         case 'ArrowRight':
           e.preventDefault();
+          if (e.shiftKey && !mod) {
+            panByDelta(-keyboardPanStepPx, 0);
+            break;
+          }
           if (mod) {
             rotateCW();
           } else {
@@ -151,6 +193,8 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
     nextGroup,
     rotateCW,
     rotateCCW,
+    panByDelta,
+    keyboardPanStepPx,
     fitEquivalentNativePercent,
     currentIndex,
     currentGroup,
@@ -158,5 +202,8 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
     groupSlices,
     imagesLength,
     onDeleteImage,
+    keyboardActive,
+    isFullscreen,
+    exitFullscreen,
   ]);
 }

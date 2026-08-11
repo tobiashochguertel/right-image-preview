@@ -29,6 +29,26 @@ const IMAGES = [
   { src: 'https://example.com/c.jpg', alt: '图C' },
 ];
 
+const GROUPED_IMAGES = [
+  {
+    name: '组A',
+    images: [
+      { src: 'https://example.com/a1.jpg' },
+      { src: 'https://example.com/a2.jpg' },
+      { src: 'https://example.com/a3.jpg' },
+    ],
+  },
+  {
+    name: '组B',
+    images: [
+      { src: 'https://example.com/b1.jpg' },
+      { src: 'https://example.com/b2.jpg' },
+      { src: 'https://example.com/b3.jpg' },
+      { src: 'https://example.com/b4.jpg' },
+    ],
+  },
+];
+
 /** Tests assert Chinese copy; `resolveStrings(undefined)` is English. */
 const ZH = { language: 'zh' as const } satisfies Pick<ComponentProps<typeof ImagePreview>, 'language'>;
 
@@ -392,21 +412,204 @@ describe('ImagePreview component', () => {
     });
   });
 
-  describe('classic thumbnails strip', () => {
+  describe('presentation contained', () => {
+    it('uses region without aria-modal', () => {
+      render(
+        <div style={{ position: 'relative', width: 400, height: 300 }}>
+          <ImagePreview src={SINGLE_SRC} visible presentation="contained" {...ZH} />
+        </div>,
+      );
+      const region = screen.getByRole('region', { name: '图片预览' });
+      expect(region).not.toHaveAttribute('aria-modal');
+      expect(region).toHaveStyle({ position: 'absolute' });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('ignores arrow keys while focus is outside the preview', async () => {
+      const onIndexChange = vi.fn();
+      render(
+        <div>
+          <button type="button">侧栏</button>
+          <div style={{ position: 'relative', width: 400, height: 300 }}>
+            <ImagePreview
+              images={IMAGES}
+              visible
+              presentation="contained"
+              onIndexChange={onIndexChange}
+              {...ZH}
+            />
+          </div>
+        </div>,
+      );
+      screen.getByRole('button', { name: '侧栏' }).focus();
+      await userEvent.keyboard('{ArrowRight}');
+      expect(onIndexChange).not.toHaveBeenCalled();
+    });
+
+    it('handles arrow keys after focusing the preview', async () => {
+      const onIndexChange = vi.fn();
+      render(
+        <div style={{ position: 'relative', width: 400, height: 300 }}>
+          <ImagePreview
+            images={IMAGES}
+            visible
+            presentation="contained"
+            onIndexChange={onIndexChange}
+            {...ZH}
+          />
+        </div>,
+      );
+      const region = screen.getByRole('region', { name: '图片预览' });
+      region.focus();
+      await userEvent.keyboard('{ArrowRight}');
+      expect(onIndexChange).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('flat thumbnails scope', () => {
+    it('lists the full flat sequence across groups', () => {
+      render(
+        <ImagePreview
+          groupedImages={GROUPED_IMAGES}
+          visible
+          showThumbnails
+          thumbnailsScope="flat"
+          defaultGroupedSelection={{ defaultGroupIndex: 0, defaultIndexInGroup: 0 }}
+          {...ZH}
+        />,
+      );
+      expect(screen.getAllByRole('button', { name: /第 \d+ 张，共 7 张/ })).toHaveLength(7);
+    });
+  });
+
+  describe('controlled index and goTo', () => {
+    it('mirrors controlled index from the host', async () => {
+      function Host() {
+        const [index, setIndex] = useState(0);
+        return (
+          <>
+            <button type="button" onClick={() => setIndex(2)}>跳到 2</button>
+            <ImagePreview
+              images={IMAGES}
+              visible
+              index={index}
+              onIndexChange={setIndex}
+              {...ZH}
+            />
+          </>
+        );
+      }
+      render(<Host />);
+      expect(screen.getByRole('toolbar').textContent).toMatch(/1\s*\/\s*3/);
+      await userEvent.click(screen.getByRole('button', { name: '跳到 2' }));
+      expect(screen.getByRole('toolbar').textContent).toMatch(/3\s*\/\s*3/);
+    });
+
+    it('exposes goTo on the ref', async () => {
+      const ref = createRef<ImagePreviewRef>();
+      const onIndexChange = vi.fn();
+      render(
+        <ImagePreview
+          ref={ref}
+          images={IMAGES}
+          visible
+          onIndexChange={onIndexChange}
+          {...ZH}
+        />,
+      );
+      act(() => {
+        ref.current?.goTo(2);
+      });
+      expect(onIndexChange).toHaveBeenCalledWith(2);
+    });
+  });
+
+  describe('neighbor preload', () => {
+    it('reports neighbor indexes when preloadRadius > 0', async () => {
+      const onPreloadIndexesChange = vi.fn();
+      render(
+        <ImagePreview
+          images={IMAGES}
+          visible
+          defaultIndex={1}
+          preloadRadius={1}
+          onPreloadIndexesChange={onPreloadIndexesChange}
+          {...ZH}
+        />,
+      );
+      await waitFor(() => {
+        expect(onPreloadIndexesChange).toHaveBeenCalledWith([0, 2]);
+      });
+    });
+
+    it('does not preload when radius is 0', () => {
+      const onPreloadIndexesChange = vi.fn();
+      render(
+        <ImagePreview
+          images={IMAGES}
+          visible
+          preloadRadius={0}
+          onPreloadIndexesChange={onPreloadIndexesChange}
+          {...ZH}
+        />,
+      );
+      expect(onPreloadIndexesChange).toHaveBeenCalledWith([]);
+    });
+  });
+
+  describe('fullscreen chrome', () => {
+    it('shows a fullscreen toolbar button', () => {
+      render(<ImagePreview src={SINGLE_SRC} visible {...ZH} />);
+      expect(screen.getByLabelText('进入全屏')).toBeInTheDocument();
+    });
+  });
+
+  describe('thumbnail strip', () => {
     it('does not render strip by default', () => {
       render(<ImagePreview images={IMAGES} visible {...ZH} />);
       expect(screen.queryByRole('navigation', { name: '缩略图导航' })).not.toBeInTheDocument();
     });
 
-    it('renders strip when thumbnails=classic and multiple images', () => {
-      render(<ImagePreview images={IMAGES} visible thumbnails="classic" {...ZH} />);
+    it('renders strip when showThumbnails and multiple images', () => {
+      render(<ImagePreview images={IMAGES} visible showThumbnails {...ZH} />);
       expect(screen.getByRole('navigation', { name: '缩略图导航' })).toBeInTheDocument();
       expect(screen.getAllByRole('button', { name: /第 \d+ 张/ })).toHaveLength(3);
     });
 
-    it('hides strip for single image even when thumbnails=classic', () => {
-      render(<ImagePreview src={SINGLE_SRC} visible thumbnails="classic" {...ZH} />);
+    it('hides strip for single image even when showThumbnails', () => {
+      render(<ImagePreview src={SINGLE_SRC} visible showThumbnails {...ZH} />);
       expect(screen.queryByRole('navigation', { name: '缩略图导航' })).not.toBeInTheDocument();
+    });
+
+    it('hides preload bars by default even with preloadRadius', () => {
+      render(
+        <ImagePreview
+          images={IMAGES}
+          visible
+          showThumbnails
+          preloadRadius={1}
+          defaultIndex={1}
+          {...ZH}
+        />,
+      );
+      expect(document.querySelector('[data-preload-bar]')).toBeNull();
+    });
+
+    it('shows preload bars when showThumbnailPreloadStatus', async () => {
+      render(
+        <ImagePreview
+          images={IMAGES}
+          visible
+          showThumbnails
+          showThumbnailPreloadStatus
+          preloadRadius={1}
+          defaultIndex={1}
+          {...ZH}
+        />,
+      );
+      await waitFor(() => {
+        expect(document.querySelector('[data-preload-bar]')).not.toBeNull();
+      });
     });
 
     it('navigates when a strip tile is clicked', async () => {
@@ -415,13 +618,42 @@ describe('ImagePreview component', () => {
         <ImagePreview
           images={IMAGES}
           visible
-          thumbnails="classic"
+          showThumbnails
           onIndexChange={onIndexChange}
           {...ZH}
         />,
       );
       await userEvent.click(screen.getByRole('button', { name: '第 3 张，共 3 张' }));
       expect(onIndexChange).toHaveBeenCalledWith(2);
+    });
+
+    it('lists only the current group in groupedImages mode (default scope)', () => {
+      render(
+        <ImagePreview
+          groupedImages={GROUPED_IMAGES}
+          visible
+          showThumbnails
+          defaultGroupedSelection={{ defaultGroupIndex: 0, defaultIndexInGroup: 0 }}
+          {...ZH}
+        />,
+      );
+      expect(screen.getAllByRole('button', { name: /第 \d+ 张，共 3 张/ })).toHaveLength(3);
+      expect(screen.queryByRole('button', { name: /共 4 张/ })).not.toBeInTheDocument();
+    });
+
+    it('swaps strip tiles when jumping to the next group', async () => {
+      render(
+        <ImagePreview
+          groupedImages={GROUPED_IMAGES}
+          visible
+          showThumbnails
+          defaultGroupedSelection={{ defaultGroupIndex: 0, defaultIndexInGroup: 0 }}
+          {...ZH}
+        />,
+      );
+      await userEvent.click(screen.getByLabelText('下一组'));
+      expect(screen.getAllByRole('button', { name: /第 \d+ 张，共 4 张/ })).toHaveLength(4);
+      expect(screen.queryByRole('button', { name: /共 3 张/ })).not.toBeInTheDocument();
     });
   });
 

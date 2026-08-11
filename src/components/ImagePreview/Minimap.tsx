@@ -92,6 +92,8 @@ export interface MinimapProps {
   flipH: boolean;
   flipV: boolean;
   controlsVisible: boolean;
+  /** Idle opacity when controls are hidden. */
+  idleOpacity?: number;
   /** Distance from overlay bottom (px). Raised when a thumbnail strip is shown. */
   bottomPx?: number;
   onPanByDelta: (dx: number, dy: number) => void;
@@ -132,6 +134,7 @@ export function Minimap({
   flipH,
   flipV,
   controlsVisible,
+  idleOpacity = 0.12,
   bottomPx = MINIMAP_BOTTOM,
   onPanByDelta,
   onJumpToNatural,
@@ -377,8 +380,9 @@ export function Minimap({
         border: '2px solid rgba(255,255,255,0.92)',
         borderRadius: 4,
         boxShadow: '0 4px 18px rgba(0,0,0,0.55)',
-        opacity: controlsVisible ? 1 : 0.12,
+        opacity: controlsVisible ? 1 : idleOpacity,
         transition: controlsVisible ? 'opacity 0.12s ease' : 'opacity 1.6s ease',
+        pointerEvents: controlsVisible || idleOpacity > 0 ? 'auto' : 'none',
         userSelect: 'none',
         touchAction: 'none',
         cursor: viewportDragging ? 'grabbing' : onJumpToNatural ? 'default' : undefined,

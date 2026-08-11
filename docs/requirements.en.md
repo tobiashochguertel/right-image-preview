@@ -244,13 +244,24 @@
 
 ---
 
-## Phase 14 — Classic Bottom Thumbnail Strip
+## Phase 14 — Bottom Thumbnail Strip
 
 ### Requirements
-- [x] New `thumbnails?: 'none' | 'classic'` (default `'none'`)
-- [x] `'classic'`: horizontal scrollable strip at the bottom of the overlay; active tile has a bright border
-- [x] Thumbnail URL prefers {@link ImageItem.minimapSrc}, falls back to `src`
-- [x] Auto-hidden when ≤ 1 navigable image (single image or current group has one item)
-- [x] With `groupedImages`, strip lists **current group** only; click jumps to flat index
-- [x] Toolbar and minimap shift up when the strip is visible
-- [x] Strip participates in auto-fade controls (same as toolbar)
+- [x] `showThumbnails?: boolean` (default `false`)
+- [x] `thumbnailsScope?: 'group' | 'flat'` (default `'group'`)
+- [x] When on: horizontal scrollable strip at the bottom of the overlay; active tile has a bright border
+- [x] `thumbnailsScope="flat"` lists the full flat navigation sequence (Media Lens); `group` = current group only when grouped
+- [x] Virtualization: measure strip viewport width; `visibleCapacity = max(1, floor(viewportWidth / tileStride))`; window virtualization when `entryCount > visibleCapacity × 3`, else render all tiles
+- [x] Thumbnail URL prefers `minimapSrc`, falls back to `src`
+- [x] Auto-hidden when ≤ 1 navigable image
+- [x] Toolbar and minimap shift up when the strip is visible; strip participates in auto-fade
+
+## Phase 15 — Media Lens P0
+
+- [x] `presentation?: 'overlay' | 'contained'`
+- [x] `preloadRadius` + `onPreloadIndexesChange`
+- [x] `showThumbnailPreloadStatus` (default `false`; light/dark green strip edges when on)
+- [x] `chrome?: 'default' | 'minimal'`
+- [x] Toolbar browser fullscreen + ref `requestFullscreen` / `exitFullscreen` / `isFullscreen`; Esc exits FS first
+- [x] Controlled `index` + `toolbarExtra` + ref `goTo`
+- [x] Demo 5: `showThumbnails` + `thumbnailsScope="flat"`

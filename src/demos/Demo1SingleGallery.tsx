@@ -75,7 +75,7 @@ export function Demo1SingleGallery({
         wheelEnabled
         doubleClickEnabled
         switchImageResetTransform
-        thumbnails="classic"
+        showThumbnails
         language={previewLanguage}
         onClose={() => setVisible(false)}
       />

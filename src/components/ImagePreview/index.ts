@@ -9,6 +9,7 @@ export type { LocaleStrings } from './locale';
 export type { FlattenedGroupSlice } from './flattenGroupedImages';
 export type {
   ArrowsConfig,
+  ChromeDensity,
   DefaultGroupedSelection,
   ExifGroupId,
   ExifValue,
@@ -21,7 +22,11 @@ export type {
   ImagePreviewProps,
   ImagePreviewRef,
   NativePercent,
-  ThumbnailsConfig,
+  NeighborPreloadEntry,
+  NeighborPreloadPhase,
+  NeighborPreloadStatusMap,
+  PresentationMode,
+  ThumbnailsScope,
   WheelStrategy,
   ZoomInAtMaxBehaviour,
   ZoomMode,

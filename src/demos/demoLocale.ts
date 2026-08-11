@@ -67,6 +67,13 @@ export interface DemoStrings {
   demo3Desc: string;
   demo4Title: string;
   demo4Desc: string;
+  demo5Title: string;
+  demo5Desc: string;
+  demo5SidebarTitle: string;
+  demo5ShowPreview: string;
+  demo5HidePreview: string;
+  demo5EmptyWorkspace: string;
+  demo5PreloadHint: string;
   photosBadge: (n: number) => string;
   thumbAria: (label: string) => string;
 }
@@ -147,16 +154,24 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo0Button: 'Open preview',
     demo1Title: 'Demo 1 · One set of photos',
     demo1Desc:
-      'Five photos: wide ones, tall ones, mixed sizes. The counter shows where you are (like 2 of 5). No folders in this demo.',
+      'Five photos: wide ones, tall ones, mixed sizes. The counter shows where you are (like 2 of 5). A thumbnail strip at the bottom lets you jump across the full flat sequence (`showThumbnails`). No folders in this demo.',
     demo2Title: 'Demo 2 · Photos in folders',
     demo2Desc:
-      'Ten photos in three folders, like a trip album. The badge’s second line starts with which folder you are in (e.g. (1/3)), then the folder name; the style of (1/3) matches the in-folder counter between the arrows. The counter between the arrows is only your place inside that folder (e.g. 2/3). Use the double-chevron buttons to jump folders.',
+      'Ten photos in three folders, like a trip album. The bottom thumbnail strip lists **only the current folder** (default `thumbnailsScope="group"`) — when you jump to another folder (double-chevron or PageUp/Down), the strip swaps to that group’s images. For a cross-folder strip use `thumbnailsScope="flat"` (see Demo 5). The badge’s second line starts with which folder you are in (e.g. (1/3)), then the folder name. The counter between the arrows is only your place inside that folder (e.g. 2/3).',
     demo3Title: 'Demo 3 · Thumbnail first, full image after',
     demo3Desc:
-      'Each item uses a small low-res preview (`minimapSrc`) so you see a stretched image right away instead of a long empty wait. When the full file is ready, the viewer holds briefly, then crossfades to the sharp picture. Approximate file size is in each label.',
+      'Each item uses a small low-res preview (`minimapSrc`) so you see a stretched image right away instead of a long empty wait. When the full file is ready, the viewer holds briefly, then crossfades to the sharp picture. Approximate file size is in each label. Neighbor preload is off by default; Demo 5 turns on `preloadRadius`.',
     demo4Title: 'Demo 4 · EXIF + delete (host-owned list)',
     demo4Desc:
       'Toolbar “i” toggles EXIF; the trash button (or Delete / Backspace) removes the current image. Metadata is on `ImageItem.exif`. Deleting calls `onDeleteImage(index, item)` — this demo filters by `item.id`, so the count drops and focus moves to the next (or previous) photo. Empty fields are hidden; the third photo starts with no EXIF.',
+    demo5Title: 'Demo 5 · Contained workspace + flat strip + preload',
+    demo5Desc:
+      'Embedded preview (`presentation="contained"`) fills the centre pane while a fake sidebar stays usable. Uses controlled `index`, `showThumbnails` + `thumbnailsScope="flat"`, `preloadRadius={1}`, `showThumbnailPreloadStatus`, and `chrome="minimal"`. With indicators on: dark green = current or active preload window; light green = loaded earlier this session outside the window. Click the preview to focus it before using arrow keys.',
+    demo5SidebarTitle: 'Sidebar',
+    demo5ShowPreview: 'Show preview',
+    demo5HidePreview: 'Hide preview',
+    demo5EmptyWorkspace: 'Preview hidden — sidebar still works.',
+    demo5PreloadHint: 'Neighbor preload indexes',
     photosBadge: (n) => `${n} photos`,
     thumbAria: (label) => `Open photo: ${label}`,
   },
@@ -229,16 +244,24 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo0Button: '打开预览',
     demo1Title: 'Demo 1 · 单组图片',
     demo1Desc:
-      '适合相册、作品集等场景。5 张图片，比例各不相同（含竖图）。工具栏仅显示全局序号（2/5 这样），无文件夹信息。',
+      '适合相册、作品集等场景。5 张图片，比例各不相同（含竖图）。工具栏显示全局序号（如 2/5）；底部缩略图条（`showThumbnails`）可快速跳转整段扁平序列。无文件夹信息。',
     demo2Title: 'Demo 2 · 多文件夹图片',
     demo2Desc:
-      '旅行相册场景，共 3 个文件夹 · 10 张图片。信息条第二行先显示当前第几组、共几组（如 (1/3)），样式与工具栏组内序号一致，与组名略有区分，中间留一点间距；再跟文件夹名称。工具栏中间的序号只表示当前文件夹内第几张（如 2/3）。切换到其他文件夹请用两侧的双箭头按钮。',
+      '旅行相册场景，共 3 个文件夹 · 10 张图片。底部缩略图条（默认 `thumbnailsScope="group"`）**只展示当前文件夹**内的图片；跳转到下一组（双箭头或 PageUp/Down）后，条带会换成该组的缩略图。跨组全序列请用 `thumbnailsScope="flat"`（见 Demo 5）。信息条第二行先显示当前第几组、共几组（如 (1/3)），再跟文件夹名称。工具栏中间的序号只表示当前文件夹内第几张（如 2/3）。',
     demo3Title: 'Demo 3 · 先缩略占位，再切高清',
     demo3Desc:
-      '每张图先用较小的低清预览（`minimapSrc`）铺满画面，减少长时间黑屏等待。全尺寸就绪后短暂停留，再淡入清晰画面。标签中标注约略文件大小。',
+      '每张图先用较小的低清预览（`minimapSrc`）铺满画面，减少长时间黑屏等待。全尺寸就绪后短暂停留，再淡入清晰画面。标签中标注约略文件大小。相邻预加载默认关闭；Demo 5 开启了 `preloadRadius`。',
     demo4Title: 'Demo 4 · EXIF + 删除（宿主维护列表）',
     demo4Desc:
       '工具栏「i」开关 EXIF；垃圾桶（或 Delete / Backspace）删除当前图。元数据在 `ImageItem.exif`。删除回调为 `onDeleteImage(index, item)` — 本 Demo 按 `item.id` 更新列表，张数减一并跳到下一张（若已是最后一张则上一张）。空字段不显示；第三张默认无 EXIF。',
+    demo5Title: 'Demo 5 · 嵌入工作区 + 扁平缩略图条 + 预加载',
+    demo5Desc:
+      '嵌入式预览（`presentation="contained"`）填满中央工作区，假侧栏仍可操作。使用受控 `index`、`showThumbnails` + `thumbnailsScope="flat"`、`preloadRadius={1}`、`showThumbnailPreloadStatus` 与 `chrome="minimal"`。开启指示后：深绿 = 当前图或预加载窗口；浅绿 = 本会话曾加载但已离开窗口。请先点击预览再按方向键。',
+    demo5SidebarTitle: '侧栏',
+    demo5ShowPreview: '显示预览',
+    demo5HidePreview: '隐藏预览',
+    demo5EmptyWorkspace: '预览已隐藏 — 侧栏仍可用。',
+    demo5PreloadHint: '相邻预加载下标',
     photosBadge: (n) => `${n} 张`,
     thumbAria: (label) => `预览图片：${label}`,
   },

@@ -55,7 +55,16 @@
 | `initialExifOpen` | `boolean` | `false` | 开启 `showExif` 时是否默认展开 EXIF 面板 |
 | `showDelete` | `boolean` | `false` | 是否显示删除按钮；宿主须在 `onDeleteImage` 中更新列表 |
 | `showMinimap` | `boolean` | `true` | 主图超出视口时是否显示右下角导航小地图（拖动虚线框平移） |
-| `thumbnails` | `'none' \| 'classic'` | `'none'` | 预览层内缩略图条；`'classic'` = 底部横向列表（分组时仅当前组）；可导航图片 ≤ 1 时自动隐藏 |
+| `showThumbnails` | `boolean` | `false` | 预览层内底部横向缩略图条；可导航图片 ≤ 1 时自动隐藏 |
+| `thumbnailsScope` | `'group' \| 'flat'` | `'group'` | `showThumbnails` 为 true 时条带展示范围；见下表 |
+| `presentation` | `'overlay' \| 'contained'` | `'overlay'` | `overlay` 全屏对话框；`contained` 填满已定位宿主 |
+| `preloadRadius` | `number` | `0` | 相邻主图预加载半径；`0` 关闭 |
+| `onPreloadIndexesChange` | `(indexes: number[]) => void` | — | 可选：当前计划预加载的扁平下标 |
+| `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | 可选状态回调（宿主自绘 / 调试）：`loading`/`ready`/`warm`/`error` |
+| `showThumbnailPreloadStatus` | `boolean` | `false` | 为 true 且开启缩略图条时，瓦片底边显示浅绿/深绿预加载指示 |
+| `chrome` | `'default' \| 'minimal'` | `'default'` | `minimal` 空闲时控件完全隐藏 |
+| `index` | `number` | — | 受控扁平下标 |
+| `toolbarExtra` | `ReactNode` | — | 工具栏末尾自定义内容 |
 | `language` | `string` | `'en'` | 界面语言：内置 `en`、`zh`（按主语言子标签匹配，如 `zh-CN` → `zh`） |
 
 #### `arrows` 取值说明
@@ -68,6 +77,22 @@
 | `'none'` | 无两侧箭头；键盘 ← → 仍可用；扁平列表时工具栏仍有上一张/下一张与序号 |
 
 当提供了非空 **`groupedImages`** 时，**工具栏上一张/下一张始终显示**；`arrows` 只控制**两侧**箭头。
+
+#### `showThumbnails` / `thumbnailsScope`
+
+| `thumbnailsScope` | 效果 |
+|-------------------|------|
+| `'group'`（默认） | 分组时仅**当前组**；扁平列表为整表。跳组后条带随之切换。 |
+| `'flat'` | **整段扁平导航序列**（与 ←/→ / `onIndexChange` 一致）。当 `entryCount > visibleCapacity × 3` 时窗口虚拟化（`visibleCapacity = max(1, floor(viewportWidth / tileStride))`）。 |
+
+瓦片图：`ImageItem.minimapSrc` 优先，否则 `src`。少量瓦片居中胶囊；较多时全宽底栏横向滚动。
+
+#### `presentation` 说明
+
+| 值 | 行为 |
+|----|------|
+| `'overlay'`（默认） | `fixed` 全屏、`dialog` + `aria-modal`、打开时聚焦、窗口级键盘 |
+| `'contained'` | `absolute; inset: 0`；宿主须定位并设尺寸；`region`；仅聚焦在预览内时响应键盘 |
 
 #### 侧边箭头智能行为
 
@@ -145,6 +170,12 @@ interface ImagePreviewRef {
   prev(): void;            // 组内上一张
   nextGroup(): void;       // 跳到下一组第一张
   prevGroup(): void;       // 跳到上一组第一张
+  goTo(index: number): void; // 跳到扁平下标（截断）
+
+  // 浏览器全屏
+  requestFullscreen(): Promise<boolean>;
+  exitFullscreen(): Promise<void>;
+  isFullscreen(): boolean;
 
   // 状态读取
   getState(): ZoomState;

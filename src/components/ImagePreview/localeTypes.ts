@@ -71,6 +71,10 @@ export interface LocaleStrings {
   exifBoolNo: string;
   deleteImage: string;
   tipDeleteImage: string;
+  enterFullscreen: string;
+  exitFullscreen: string;
+  tipEnterFullscreen: string;
+  tipExitFullscreen: string;
   exifGroupFile: string;
   exifGroupCamera: string;
   exifGroupExposure: string;

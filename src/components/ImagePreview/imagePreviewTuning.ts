@@ -45,6 +45,12 @@ export const MINIMAP_PAN_MIN_VIEWPORT_COVERAGE =
 /** Toolbar / wheel zoom translate correction: same as main-image drag. */
 export const ZOOM_CLAMP_MIN_VIEWPORT_COVERAGE = MAIN_DRAG_MIN_VIEWPORT_COVERAGE;
 
+/**
+ * Keyboard pan step in native mode: each `Shift + Arrow` moves by this fraction of the
+ * current viewport's shorter side (width/height).
+ */
+export const KEYBOARD_PAN_STEP_VIEWPORT_FRACTION = 0.08;
+
 // ── Wheel zoom (`ImagePreview` overlay) ──────────────────────────────────────
 
 /**
@@ -121,8 +127,17 @@ export const THUMBNAIL_STRIP_GAP_PX = 6;
 /** Strip outer horizontal padding (px). */
 export const THUMBNAIL_STRIP_PADDING_X_PX = 16;
 
-/** Strip vertical padding above/below tiles (px). */
+/** Strip vertical padding above/below tiles inside the glass pill (px). */
 export const THUMBNAIL_STRIP_PADDING_Y_PX = 8;
+
+/** Distance from the viewport bottom to the compact (pill) strip (px). */
+export const THUMBNAIL_STRIP_BOTTOM_INSET_PX = 12;
+
+/** Gap between the thumbnail strip and the toolbar — matches toolbar badge gap (5px). */
+export const THUMBNAIL_STRIP_TOOLBAR_GAP_PX = 5;
+
+/** Corner radius for the compact pill; full-width mode uses top corners only. */
+export const THUMBNAIL_STRIP_RADIUS_PX = 10;
 
 /** Active tile border width (px). */
 export const THUMBNAIL_STRIP_ACTIVE_BORDER_PX = 2;
@@ -130,10 +145,40 @@ export const THUMBNAIL_STRIP_ACTIVE_BORDER_PX = 2;
 /** Opacity for non-active tiles in the strip. */
 export const THUMBNAIL_STRIP_INACTIVE_OPACITY = 0.55;
 
-/** Total vertical space occupied by the strip (for lifting the toolbar). */
+/**
+ * Windowed virtualization kicks in when `entryCount > visibleCapacity * multiplier`.
+ * `visibleCapacity = max(1, floor(viewportWidth / tileStride))` where tileStride includes
+ * tile + gap + border.
+ */
+export const THUMBNAIL_STRIP_VIRTUALIZE_VIEWPORT_MULTIPLIER = 3;
+
+/** Extra tiles rendered on each side of the visible window. */
+export const THUMBNAIL_STRIP_VIRTUAL_OVERSCAN = 8;
+
+/** Stride (px) per thumbnail tile including gap and border. */
+export function thumbnailStripTileStridePx(): number {
+  return THUMBNAIL_STRIP_HEIGHT_PX + THUMBNAIL_STRIP_ACTIVE_BORDER_PX * 2 + THUMBNAIL_STRIP_GAP_PX;
+}
+
+/**
+ * Whether the strip should use windowed virtualization for the given entry count and viewport.
+ * Returns false until viewport width is known (0) so short lists render all tiles for real.
+ */
+export function shouldVirtualizeThumbnailStrip(entryCount: number, viewportWidthPx: number): boolean {
+  if (entryCount <= 1 || viewportWidthPx <= 0) return false;
+  const stride = thumbnailStripTileStridePx();
+  const visibleCapacity = Math.max(1, Math.floor(viewportWidthPx / stride));
+  return entryCount > visibleCapacity * THUMBNAIL_STRIP_VIRTUALIZE_VIEWPORT_MULTIPLIER;
+}
+
+/** Total vertical space reserved at the bottom for the strip (toolbar / minimap lift). */
 export function thumbnailStripTotalHeightPx(entryCount: number): number {
   if (entryCount <= 1) return 0;
-  return THUMBNAIL_STRIP_PADDING_Y_PX * 2 + THUMBNAIL_STRIP_HEIGHT_PX;
+  return (
+    THUMBNAIL_STRIP_BOTTOM_INSET_PX
+    + THUMBNAIL_STRIP_PADDING_Y_PX * 2
+    + THUMBNAIL_STRIP_HEIGHT_PX
+  );
 }
 
 // ── Minimap pointer ↔ pan Jacobian (`minimapMath`) ───────────────────────────

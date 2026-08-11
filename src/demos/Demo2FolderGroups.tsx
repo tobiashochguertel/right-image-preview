@@ -116,6 +116,7 @@ export function Demo2FolderGroups({ t, locale, previewLanguage }: { t: DemoStrin
         doubleClickEnabled
         switchImageResetTransform
         showFlip
+        showThumbnails
         language={previewLanguage}
         onClose={() => setVisible(false)}
       />

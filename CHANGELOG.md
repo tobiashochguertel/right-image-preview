@@ -7,13 +7,24 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ---
 
+## [0.3.0] — 2026-08-12
+
+### Added
+
+- **Media Lens P0** — `presentation` (`overlay` | `contained`), `preloadRadius` + `onPreloadIndexesChange` / `onPreloadStatusChange`, optional `showThumbnailPreloadStatus` (off by default) for strip light/dark green edges, `chrome` (`default` | `minimal`), browser fullscreen toolbar + ref methods, controlled `index`, `toolbarExtra`, ref `goTo`.
+- **Thumbnail strip API** — `showThumbnails` + `thumbnailsScope` (`group` | `flat`). Window virtualization when `entryCount > visibleCapacity × 3`.
+- **Demo 5** — contained workspace + flat strip + neighbor preload + minimal chrome.
+- **EXIF / metadata panel** — host-provided data via `ImageItem.exif` (or top-level `exif` in single-`src` mode). Enable with `showExif`; optional `initialExifOpen`.
+- **Delete current image** — `showDelete` + `onDeleteImage(index, item)`.
+
+### Changed
+
+- Removed unreleased `thumbnails` / `filmstrip` enum in favour of `showThumbnails` + `thumbnailsScope`.
+
 ## [Unreleased]
 
 ### Added
 
-- **EXIF / metadata panel** — host-provided data via `ImageItem.exif` (or top-level `exif` in single-`src` mode). Enable with `showExif`; optional `initialExifOpen`. Toolbar toggle opens an edge-snapped draggable panel; empty fields are hidden. The library does not parse image bytes.
-- **Delete current image** — `showDelete` + `onDeleteImage(index, item)`. Host must update `images` / `groupedImages`; viewer focuses next (or previous if last) and closes when empty. Keyboard: Delete / Backspace when enabled.
-- **Demo 4** — EXIF + delete demo on the demo site.
 - **`pinchEnabled` prop** (`boolean`, default `true`) — two-finger pinch-to-zoom using Pointer Events; works on touch screens and multi-touch trackpads. The zoom anchor is the midpoint between the two fingers; entering a pinch from Fit mode uses `fitEquivalentNativePercent` as the base scale for a seamless transition.
 - **`onImageError` prop** (`(index: number, src: string) => void`) — fires when the current `<img>` raises an error event, giving callers the flat image index and failing URL.
 - **`errorFallback` prop** (`(index: number, src: string) => React.ReactNode`) — render custom placeholder content centred over the image viewport on load failure; navigating away resets the error state so adjacent images display normally.

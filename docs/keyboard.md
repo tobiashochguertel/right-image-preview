@@ -6,6 +6,8 @@
 
 When the preview is open, focus is automatically trapped in the overlay and the following shortcuts take effect immediately.
 
+With **`presentation="contained"`**, shortcuts are handled only while focus is inside the preview root (click the preview to activate); sidebar interactions will not swallow arrow keys / Esc.
+
 > When the zoom input field is being edited, arrow keys and Space are handled by the input itself and do not trigger global shortcuts.
 
 ## Zoom
