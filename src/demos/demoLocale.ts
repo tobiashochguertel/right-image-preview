@@ -65,6 +65,8 @@ export interface DemoStrings {
   demo2Desc: string;
   demo3Title: string;
   demo3Desc: string;
+  demo4Title: string;
+  demo4Desc: string;
   photosBadge: (n: number) => string;
   thumbAria: (label: string) => string;
 }
@@ -152,6 +154,9 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo3Title: 'Demo 3 · Thumbnail first, full image after',
     demo3Desc:
       'Each item uses a small low-res preview (`minimapSrc`) so you see a stretched image right away instead of a long empty wait. When the full file is ready, the viewer holds briefly, then crossfades to the sharp picture. Approximate file size is in each label.',
+    demo4Title: 'Demo 4 · EXIF + delete (host-owned list)',
+    demo4Desc:
+      'Toolbar “i” toggles EXIF; the trash button (or Delete / Backspace) removes the current image. Metadata is on `ImageItem.exif`. Deleting calls `onDeleteImage(index, item)` — this demo filters by `item.id`, so the count drops and focus moves to the next (or previous) photo. Empty fields are hidden; the third photo starts with no EXIF.',
     photosBadge: (n) => `${n} photos`,
     thumbAria: (label) => `Open photo: ${label}`,
   },
@@ -231,6 +236,9 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo3Title: 'Demo 3 · 先缩略占位，再切高清',
     demo3Desc:
       '每张图先用较小的低清预览（`minimapSrc`）铺满画面，减少长时间黑屏等待。全尺寸就绪后短暂停留，再淡入清晰画面。标签中标注约略文件大小。',
+    demo4Title: 'Demo 4 · EXIF + 删除（宿主维护列表）',
+    demo4Desc:
+      '工具栏「i」开关 EXIF；垃圾桶（或 Delete / Backspace）删除当前图。元数据在 `ImageItem.exif`。删除回调为 `onDeleteImage(index, item)` — 本 Demo 按 `item.id` 更新列表，张数减一并跳到下一张（若已是最后一张则上一张）。空字段不显示；第三张默认无 EXIF。',
     photosBadge: (n) => `${n} 张`,
     thumbAria: (label) => `预览图片：${label}`,
   },

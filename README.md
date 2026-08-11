@@ -58,6 +58,7 @@ Open `http://localhost:5173` for the demo page (**EN / 中文** toggle in the to
 - **Demo 1** — single gallery, close-on-mask-click, no flip buttons
 - **Demo 2** — folder groups, side arrows, flip buttons
 - **Demo 3** — thumbnail-first progressive loading (small `minimapSrc` preview, then full image; wheel / pan stress test; assets from demo CDN)
+- **Demo 4** — host-provided EXIF + delete
 
 ---
 
@@ -141,6 +142,9 @@ import { ImagePreview } from 'right-image-preview';
 | `switchImageResetTransform` | `boolean` | `true` | Reset flip/rotation when switching images |
 | `fitResetPan` | `boolean` | `true` | Reset pan offset when switching to Fit mode |
 | `showFlip` | `boolean` | `false` | Show horizontal/vertical flip buttons |
+| `showExif` | `boolean` | `false` | Show EXIF / metadata toggle in the toolbar |
+| `initialExifOpen` | `boolean` | `false` | Open the EXIF panel on first mount when `showExif` is true |
+| `showDelete` | `boolean` | `false` | Show delete control; host updates list in `onDeleteImage` |
 | `arrows` | `'both' \| 'side' \| 'toolbar' \| 'none'` | `'both'` | **Side** arrows only; with non-empty `groupedImages`, toolbar prev/next always on |
 | `initialZoomLocked` | `boolean` | `false` | Start with zoom lock enabled |
 | `closeOnMaskClick` | `boolean` | `false` | Close when clicking outside the image/toolbar |

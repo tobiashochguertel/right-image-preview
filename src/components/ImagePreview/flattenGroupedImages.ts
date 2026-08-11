@@ -84,6 +84,7 @@ export function resolvePreviewImages(props: ImagePreviewProps): {
           alt: props.alt,
           minimapSrc: props.minimapSrc,
           minimap: props.minimap,
+          exif: props.exif,
         },
       ],
       groupSlices: undefined,

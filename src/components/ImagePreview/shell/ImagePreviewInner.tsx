@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { Minimap, MINIMAP_BOTTOM } from '../Minimap';
 import { ImagePreviewCloseButton } from '../parts/ImagePreviewCloseButton';
+import { ExifInfoPanel } from '../parts/ExifInfoPanel';
 import { ThumbnailsStrip } from '../parts/ThumbnailsStrip';
 import { ImagePreviewNavArrow } from '../parts/ImagePreviewNavArrow';
 import { Toolbar } from '../Toolbar';
@@ -58,6 +59,9 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       fitResetPan = true,
       defaultIndex = 0,
       showFlip = false,
+      showExif = false,
+      initialExifOpen = false,
+      showDelete = false,
       arrows = 'both',
       initialZoomLocked = false,
       showMinimap = true,
@@ -77,6 +81,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       onMaxStopReached,
       onImageError,
       errorFallback,
+      onDeleteImage,
     } = props;
 
     // Resolve locale strings once; re-resolves when `language` or overrides change.
@@ -90,8 +95,8 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     const { images, groupSlices } = useMemo(
       () => resolvePreviewImages(props),
       // Intentionally omit other props — only data fields affect the resolved list.
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- groupedImages, images, src, alt, minimap*
-      [props.groupedImages, props.images, props.src, props.alt, props.minimapSrc, props.minimap],
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- groupedImages, images, src, alt, minimap*, exif
+      [props.groupedImages, props.images, props.src, props.alt, props.minimapSrc, props.minimap, props.exif],
     );
 
     const hasGroups = Array.isArray(groupSlices) && groupSlices.length > 0;
@@ -107,6 +112,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       return defaultIndex;
     });
     const [zoomLocked, setZoomLocked] = useState(initialZoomLocked);
+    const [exifOpen, setExifOpen] = useState(initialExifOpen && showExif);
     const [minimapDragging, setMinimapDragging] = useState(false);
     const [imageLoadError, setImageLoadError] = useState(false);
     const overlayRef = useRef<HTMLDivElement>(null);
@@ -220,6 +226,39 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       if (groupSlices && currentGroupIdx < groupSlices.length - 1) goTo(groupSlices[currentGroupIdx + 1].start);
     }, [groupSlices, currentGroupIdx, goTo]);
 
+    // Keep currentIndex in range when the host removes images (e.g. after onDeleteImage).
+    useEffect(() => {
+      if (images.length === 0) return;
+      if (currentIndex > images.length - 1) {
+        const nextIdx = images.length - 1;
+        setCurrentIndex(nextIdx);
+        onIndexChange?.(nextIdx);
+      }
+    }, [images.length, currentIndex, onIndexChange]);
+
+    const deleteCurrentImage = useCallback(() => {
+      const item = images[currentIndex];
+      if (!item) return;
+
+      const willBeEmpty = images.length <= 1;
+      const nextIdx = willBeEmpty
+        ? null
+        : currentIndex < images.length - 1
+          ? currentIndex
+          : currentIndex - 1;
+
+      onDeleteImage?.(currentIndex, item);
+
+      if (willBeEmpty) {
+        onClose?.();
+        return;
+      }
+
+      if (nextIdx != null && nextIdx !== currentIndex) {
+        goTo(nextIdx);
+      }
+    }, [images, currentIndex, onDeleteImage, onClose, goTo]);
+
     // ── Auto-fade overlay controls (inactivity-based) ───────────────────────
     // After 3 s of no mouse movement, clicks, or key presses, all controls
     // fade to a ghost opacity (10%) over 1.6 s. Any activity instantly
@@ -269,7 +308,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       zoomAnchorTranslate,
     });
 
-        useImagePreviewKeyboard({
+    useImagePreviewKeyboard({
       resetHideTimer,
       onClose,
       zoomIn,
@@ -289,6 +328,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       currentGroupIdx,
       groupSlices,
       imagesLength: images.length,
+      onDeleteImage: showDelete ? deleteCurrentImage : undefined,
     });
 
     // ── Double-click ────────────────────────────────────────────────────────
@@ -696,6 +736,14 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
           />
         )}
 
+        {showExif && exifOpen && (
+          <ExifInfoPanel
+            exif={currentImage.exif}
+            strings={t}
+            onUserActivity={resetHideTimer}
+          />
+        )}
+
         <Toolbar
           controlsVisible={controlsVisible}
           bottomPx={20 + stripLiftPx}
@@ -709,12 +757,17 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
           currentIndex={currentIndex}
           imageName={currentImage.name}
           showFlip={showFlip}
+          showExif={showExif}
+          exifOpen={exifOpen}
+          showDelete={showDelete}
           showToolbarArrows={showToolbarArrows}
           zoomLocked={zoomLocked}
           strings={t}
           zoomLabelSlotPx={zoomLabelSlotPx}
           zoomDropdownWidthPx={zoomDropdownWidthPx}
           onToggleLock={() => setZoomLocked((v) => !v)}
+          onToggleExif={() => setExifOpen((v) => !v)}
+          onDeleteImage={deleteCurrentImage}
           onZoomIn={() => zoomIn(fitEquivalentNativePercent)}
           onZoomOut={() => zoomOut(fitEquivalentNativePercent)}
           onFit={fit}

@@ -58,6 +58,7 @@ npm run build     # 演示站的 Vite 生产构建
 - **Demo 1**：单组相册，点击遮罩关闭，无翻转按钮
 - **Demo 2**：多文件夹分组，侧边箭头，含翻转按钮
 - **Demo 3**：先小图占位、再载入全图（渐进加载；滚轮/平移；演示资源走 CDN）
+- **Demo 4**：宿主 EXIF + 删除
 
 ---
 
@@ -141,6 +142,9 @@ import { ImagePreview } from 'right-image-preview';
 | `switchImageResetTransform` | `boolean` | `true` | 切图时是否重置翻转/旋转 |
 | `fitResetPan` | `boolean` | `true` | 切回 Fit 时是否归零平移 |
 | `showFlip` | `boolean` | `false` | 是否显示翻转按钮 |
+| `showExif` | `boolean` | `false` | 是否在工具栏显示 EXIF / 元数据开关 |
+| `initialExifOpen` | `boolean` | `false` | 开启 `showExif` 时是否默认展开 EXIF 面板 |
+| `showDelete` | `boolean` | `false` | 是否显示删除按钮；宿主在 `onDeleteImage` 中更新列表 |
 | `arrows` | `'both' \| 'side' \| 'toolbar' \| 'none'` | `'both'` | 仅控制**两侧**箭头；非空 `groupedImages` 时工具栏上一张/下一张始终显示 |
 | `initialZoomLocked` | `boolean` | `false` | 初始是否锁定缩放 |
 | `closeOnMaskClick` | `boolean` | `false` | 点击遮罩区域是否关闭预览 |

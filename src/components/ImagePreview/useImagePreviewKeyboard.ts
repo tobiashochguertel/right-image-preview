@@ -22,6 +22,8 @@ export interface UseImagePreviewKeyboardParams {
   currentGroupIdx: number;
   groupSlices: FlattenedGroupSlice[] | undefined;
   imagesLength: number;
+  /** When set, Delete / Backspace removes the current image. */
+  onDeleteImage?: () => void;
 }
 
 /**
@@ -49,6 +51,7 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
     currentGroupIdx,
     groupSlices,
     imagesLength,
+    onDeleteImage,
   } = p;
 
   useEffect(() => {
@@ -63,6 +66,14 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
       switch (e.key) {
         case 'Escape':
           onClose?.();
+          break;
+
+        case 'Delete':
+        case 'Backspace':
+          if (onDeleteImage) {
+            e.preventDefault();
+            onDeleteImage();
+          }
           break;
 
         case '+':
@@ -146,5 +157,6 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
     currentGroupIdx,
     groupSlices,
     imagesLength,
+    onDeleteImage,
   ]);
 }

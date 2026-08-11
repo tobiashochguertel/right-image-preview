@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createRef, type ComponentProps } from 'react';
+import { createRef, useState, type ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { ImagePreview } from '../src/components/ImagePreview';
 import type { ImagePreviewRef } from '../src/components/ImagePreview/types';
@@ -422,6 +422,157 @@ describe('ImagePreview component', () => {
       );
       await userEvent.click(screen.getByRole('button', { name: '第 3 张，共 3 张' }));
       expect(onIndexChange).toHaveBeenCalledWith(2);
+    });
+  });
+
+  describe('EXIF panel', () => {
+    it('hides the EXIF toggle by default', () => {
+      render(<ImagePreview src={SINGLE_SRC} visible {...ZH} />);
+      expect(screen.queryByLabelText('显示 EXIF 信息')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('隐藏 EXIF 信息')).not.toBeInTheDocument();
+    });
+
+    it('opens the panel with host-provided exif and filters empty fields', async () => {
+      render(
+        <ImagePreview
+          images={[
+            {
+              src: 'https://example.com/a.jpg',
+              name: 'a.jpg',
+              exif: {
+                make: 'FUJIFILM',
+                model: 'X-T5',
+                iso: 200,
+                exposureTime: '',
+                fileName: 'a.jpg',
+              },
+            },
+          ]}
+          visible
+          showExif
+          initialExifOpen
+          {...ZH}
+        />,
+      );
+      expect(screen.getByLabelText('隐藏 EXIF 信息')).toBeInTheDocument();
+      expect(screen.getByRole('complementary', { name: '图片 EXIF 信息' })).toBeInTheDocument();
+      expect(screen.getByText('FUJIFILM')).toBeInTheDocument();
+      expect(screen.getByText('X-T5')).toBeInTheDocument();
+      expect(screen.getByText('200')).toBeInTheDocument();
+      expect(screen.queryByText('快门')).not.toBeInTheDocument();
+    });
+
+    it('toggles the panel from the toolbar button', async () => {
+      render(
+        <ImagePreview
+          src={SINGLE_SRC}
+          exif={{ make: 'Canon' }}
+          visible
+          showExif
+          {...ZH}
+        />,
+      );
+      expect(screen.queryByRole('complementary', { name: '图片 EXIF 信息' })).not.toBeInTheDocument();
+      await userEvent.click(screen.getByLabelText('显示 EXIF 信息'));
+      expect(screen.getByRole('complementary', { name: '图片 EXIF 信息' })).toBeInTheDocument();
+      expect(screen.getByText('Canon')).toBeInTheDocument();
+      await userEvent.click(screen.getByLabelText('隐藏 EXIF 信息'));
+      expect(screen.queryByRole('complementary', { name: '图片 EXIF 信息' })).not.toBeInTheDocument();
+    });
+
+    it('shows empty state when no exif is attached', () => {
+      render(
+        <ImagePreview src={SINGLE_SRC} visible showExif initialExifOpen {...ZH} />,
+      );
+      expect(screen.getByText('当前图片没有 EXIF 信息。')).toBeInTheDocument();
+    });
+  });
+
+  describe('delete image', () => {
+    it('hides the delete button by default', () => {
+      render(<ImagePreview images={IMAGES} visible {...ZH} />);
+      expect(screen.queryByLabelText('删除图片')).not.toBeInTheDocument();
+    });
+
+    it('calls onDeleteImage with index and item; host list update moves focus', async () => {
+      const onDeleteImage = vi.fn();
+      function Host() {
+        const [list, setList] = useState([
+          { id: 'a', src: 'https://example.com/a.jpg', name: 'a.jpg' },
+          { id: 'b', src: 'https://example.com/b.jpg', name: 'b.jpg' },
+          { id: 'c', src: 'https://example.com/c.jpg', name: 'c.jpg' },
+        ]);
+        return (
+          <ImagePreview
+            images={list}
+            visible
+            showDelete
+            defaultIndex={1}
+            onDeleteImage={(index, item) => {
+              onDeleteImage(index, item);
+              setList((prev) => prev.filter((img) => img.id !== item.id));
+            }}
+            {...ZH}
+          />
+        );
+      }
+      render(<Host />);
+      expect(screen.getByRole('toolbar').textContent).toMatch(/2\s*\/\s*3/);
+      await userEvent.click(screen.getByLabelText('删除图片'));
+      expect(onDeleteImage).toHaveBeenCalledTimes(1);
+      expect(onDeleteImage).toHaveBeenCalledWith(1, expect.objectContaining({ id: 'b', name: 'b.jpg' }));
+      await waitFor(() => {
+        expect(screen.getByRole('toolbar').textContent).toMatch(/2\s*\/\s*2/);
+      });
+      expect(screen.getByRole('dialog').textContent).toContain('c.jpg');
+    });
+
+    it('moves to the previous image when deleting the last one', async () => {
+      function Host() {
+        const [list, setList] = useState([
+          { id: 'a', src: 'https://example.com/a.jpg', name: 'a.jpg' },
+          { id: 'b', src: 'https://example.com/b.jpg', name: 'b.jpg' },
+        ]);
+        return (
+          <ImagePreview
+            images={list}
+            visible
+            showDelete
+            defaultIndex={1}
+            onDeleteImage={(_index, item) => {
+              setList((prev) => prev.filter((img) => img.id !== item.id));
+            }}
+            {...ZH}
+          />
+        );
+      }
+      render(<Host />);
+      await userEvent.click(screen.getByLabelText('删除图片'));
+      await waitFor(() => {
+        expect(screen.getByRole('dialog').textContent).toContain('a.jpg');
+      });
+      expect(screen.queryByRole('toolbar')!.textContent).not.toMatch(/\d+\s*\/\s*\d+/);
+    });
+
+    it('closes when the last remaining image is deleted', async () => {
+      const onClose = vi.fn();
+      const onDeleteImage = vi.fn();
+      render(
+        <ImagePreview
+          images={[{ id: 'only', src: 'https://example.com/a.jpg', name: 'only.jpg' }]}
+          visible
+          showDelete
+          onClose={onClose}
+          onDeleteImage={onDeleteImage}
+          {...ZH}
+        />,
+      );
+      await userEvent.click(screen.getByLabelText('删除图片'));
+      expect(onDeleteImage).toHaveBeenCalledWith(
+        0,
+        expect.objectContaining({ id: 'only', name: 'only.jpg' }),
+      );
+      expect(onClose).toHaveBeenCalled();
     });
   });
 });

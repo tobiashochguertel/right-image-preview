@@ -13,6 +13,78 @@ export interface ZoomState {
   fitEquivalentNativePercent?: number;
 }
 
+/**
+ * EXIF group ids used by the info panel tabs and field ordering.
+ * Upstream may assign {@link ImageExifExtraEntry.group}; unknown groups fall into `'other'`.
+ */
+export type ExifGroupId = 'file' | 'camera' | 'exposure' | 'gps' | 'other';
+
+/** Scalar value for a single EXIF field. Empty / nullish values are hidden in the panel. */
+export type ExifValue = string | number | boolean | null | undefined;
+
+/**
+ * Optional custom EXIF row from upstream (Node / Python / Rust, etc.).
+ * Prefer well-known {@link ImageExif} keys when possible so labels and order stay consistent.
+ */
+export interface ImageExifExtraEntry {
+  /** Machine key (also used as fallback label when {@link label} is omitted). */
+  key: string;
+  /** Display label; when omitted the panel shows {@link key}. */
+  label?: string;
+  value: ExifValue;
+  /** Target group; defaults to `'other'`. */
+  group?: ExifGroupId;
+}
+
+/**
+ * Host-provided EXIF / image metadata for one picture.
+ * The library does **not** parse image bytes; fill this from your desktop/backend pipeline.
+ * Empty fields are omitted from the panel; known keys use a fixed order within each group.
+ */
+export interface ImageExif {
+  // ── File / image ──────────────────────────────────────────────────────────
+  fileName?: ExifValue;
+  /** Prefer a pre-formatted string (e.g. `"2.4 MB"`). */
+  fileSize?: ExifValue;
+  mimeType?: ExifValue;
+  width?: ExifValue;
+  height?: ExifValue;
+  colorSpace?: ExifValue;
+  orientation?: ExifValue;
+
+  // ── Camera ────────────────────────────────────────────────────────────────
+  make?: ExifValue;
+  model?: ExifValue;
+  lens?: ExifValue;
+  software?: ExifValue;
+  dateTimeOriginal?: ExifValue;
+  dateTimeDigitized?: ExifValue;
+  createDate?: ExifValue;
+
+  // ── Exposure ──────────────────────────────────────────────────────────────
+  /** e.g. `"1/250"`. */
+  exposureTime?: ExifValue;
+  /** e.g. `"f/2.8"`. */
+  fNumber?: ExifValue;
+  iso?: ExifValue;
+  /** e.g. `"50 mm"`. */
+  focalLength?: ExifValue;
+  focalLength35mm?: ExifValue;
+  exposureProgram?: ExifValue;
+  meteringMode?: ExifValue;
+  flash?: ExifValue;
+  whiteBalance?: ExifValue;
+  exposureBias?: ExifValue;
+
+  // ── GPS ───────────────────────────────────────────────────────────────────
+  gpsLatitude?: ExifValue;
+  gpsLongitude?: ExifValue;
+  gpsAltitude?: ExifValue;
+
+  /** Extra rows that do not map to the well-known keys above. */
+  extra?: ImageExifExtraEntry[];
+}
+
 export interface ImageItem {
   /**
    * Stable unique key for the item (e.g. file path). Prefer this over {@link name} for identity:
@@ -33,6 +105,11 @@ export interface ImageItem {
    * layout still follows the main image’s natural aspect ratio, rotation, and flips. Overrides {@link minimapSrc}.
    */
   minimap?: React.ReactNode;
+  /**
+   * Optional host-parsed EXIF / metadata for this image.
+   * Shown in the EXIF panel when {@link ImagePreviewProps.showExif} is enabled.
+   */
+  exif?: ImageExif;
 }
 
 /**
@@ -137,6 +214,10 @@ export interface ImagePreviewProps {
    */
   minimap?: React.ReactNode;
   /**
+   * Single-image EXIF / metadata (only when using `src`). Same as {@link ImageItem.exif}.
+   */
+  exif?: ImageExif;
+  /**
    * Flat list of images. Ignored when `src` is not used if {@link groupedImages} is non-empty.
    * Ignored when `groupedImages` is provided (see priority there).
    */
@@ -218,6 +299,28 @@ export interface ImagePreviewProps {
    * Default: false (flip is available but hidden by default to keep the toolbar compact).
    */
   showFlip?: boolean;
+
+  /**
+   * Show the EXIF / metadata toggle in the toolbar.
+   * When on, the user can open a draggable edge-snapped panel fed by {@link ImageItem.exif}
+   * (or the top-level {@link ImagePreviewProps.exif} in single-`src` mode).
+   * Default: `false`.
+   */
+  showExif?: boolean;
+
+  /**
+   * When {@link showExif} is true, open the EXIF panel on first mount.
+   * Default: `false`.
+   */
+  initialExifOpen?: boolean;
+
+  /**
+   * Show a delete control in the toolbar (useful for desktop / host apps that own the file list).
+   * Default: `false`. Deleting does **not** mutate props — the host must remove the item from
+   * {@link images} / {@link groupedImages} in {@link onDeleteImage}. The viewer then moves focus
+   * to the next image (or previous when deleting the last), and closes when none remain.
+   */
+  showDelete?: boolean;
 
   /**
    * Which **side** arrow buttons to render. Toolbar prev/next in multi-group mode (`groupedImages`) are always on.
@@ -357,6 +460,13 @@ export interface ImagePreviewProps {
    * Receives the zero-based flat index and the `src` URL of the failing image.
    */
   onImageError?: (index: number, src: string) => void;
+  /**
+   * Fired when the user deletes the current image (`showDelete`).
+   * Same shape spirit as {@link onImageError}: flat `index` plus the item snapshot.
+   * Prefer `item.id` for durable deletes when set; otherwise splice by `index`.
+   * Host must update {@link images} / {@link groupedImages} — the viewer does not mutate props.
+   */
+  onDeleteImage?: (index: number, item: ImageItem) => void;
 }
 
 export interface ImagePreviewRef {

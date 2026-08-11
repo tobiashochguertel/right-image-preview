@@ -3,6 +3,7 @@ import { Demo0TriggerMode } from './demos/Demo0TriggerMode';
 import { Demo1SingleGallery } from './demos/Demo1SingleGallery';
 import { Demo2FolderGroups } from './demos/Demo2FolderGroups';
 import { Demo3HighRes } from './demos/Demo3HighRes';
+import { Demo4Exif } from './demos/Demo4Exif';
 import {
   DEMO_LANG_STORAGE_KEY,
   DEMO_REPO_URL,
@@ -316,13 +317,18 @@ export default function App() {
 
       <div id="more-demos" style={{ scrollMarginTop: 24 }} />
 
-      {/* Demo 2: `groupedImages` folders, `defaultGroupedSelection` opens a chosen thumb; side arrows, etc. */}
+      {/* Demo 2: `groupedImages` folders, classic strip (current group only), side arrows, flip, etc. */}
       <Demo2FolderGroups t={t} locale={locale} previewLanguage={previewLanguage} />
 
       <hr style={dividerStyle} />
 
       {/* Demo 3: full `src` + `minimapSrc` from COS; progressive load */}
       <Demo3HighRes t={t} locale={locale} previewLanguage={previewLanguage} />
+
+      <hr style={dividerStyle} />
+
+      {/* Demo 4: host-provided ImageItem.exif + toolbar toggle panel */}
+      <Demo4Exif t={t} previewLanguage={previewLanguage} />
     </div>
   );
 }

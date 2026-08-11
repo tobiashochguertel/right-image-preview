@@ -10,7 +10,11 @@ export type { FlattenedGroupSlice } from './flattenGroupedImages';
 export type {
   ArrowsConfig,
   DefaultGroupedSelection,
+  ExifGroupId,
+  ExifValue,
   FirstZoomInStrategy,
+  ImageExif,
+  ImageExifExtraEntry,
   ImageGroup,
   ImageItem,
   MainImageLoadStage,

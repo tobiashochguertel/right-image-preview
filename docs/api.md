@@ -51,6 +51,9 @@
 |------|------|---------|-------------|
 | `arrows` | `'both' \| 'side' \| 'toolbar' \| 'none'` | `'both'` | **Side** arrows only; see table (non-empty `groupedImages` forces toolbar prev/next on) |
 | `showFlip` | `boolean` | `false` | Show horizontal/vertical flip buttons in the toolbar |
+| `showExif` | `boolean` | `false` | Show the EXIF / metadata toggle in the toolbar |
+| `initialExifOpen` | `boolean` | `false` | When `showExif` is true, open the EXIF panel on first mount |
+| `showDelete` | `boolean` | `false` | Show the delete control (host must update the list in `onDeleteImage`) |
 | `showMinimap` | `boolean` | `true` | When the image overflows the viewport, show the bottom-right navigation minimap (drag the frame to pan) |
 | `thumbnails` | `'none' \| 'classic'` | `'none'` | In-overlay thumbnail strip; `'classic'` = bottom horizontal scroll list (current group only when grouped); hidden when ≤ 1 image |
 | `language` | `string` | `'en'` | UI locale: built-in `en` and `zh` (primary subtag match, e.g. `zh-CN` → `zh`) |
@@ -79,6 +82,7 @@ When non-empty **`groupedImages`** is provided, **toolbar prev/next are always s
 | `onZoomChange` | `(state: ZoomState) => void` | Fired whenever zoom state changes |
 | `onIndexChange` | `(index: number) => void` | Fired when the active image index changes |
 | `onMaxStopReached` | `() => void` | Fired when zooming in at the max stop (requires `zoomInAtMaxBehaviour='notify'`) |
+| `onDeleteImage` | `(index: number, item: ImageItem) => void` | Fired when the user deletes the current image (`showDelete`). Host must update the list. |
 
 ---
 

@@ -53,6 +53,12 @@ interface ToolbarProps {
 
   // ── Feature flags ─────────────────────────────────────────────────────────
   showFlip?: boolean;
+  /** When true, show the EXIF toggle button. */
+  showExif?: boolean;
+  /** Whether the EXIF panel is currently open (controls active state). */
+  exifOpen?: boolean;
+  /** When true, show the delete button. */
+  showDelete?: boolean;
   zoomLocked: boolean;
   /** When false the toolbar fades to ghost opacity (driven by CSS transition). */
   controlsVisible?: boolean;
@@ -72,6 +78,8 @@ interface ToolbarProps {
   onPrev(): void;
   onNext(): void;
   onToggleLock(): void;
+  onToggleExif?(): void;
+  onDeleteImage?(): void;
   /** Resolved locale strings — pass the result of `resolveStrings(language)`. */
   strings: LocaleStrings;
   /** Fixed width of the zoom % control between [−] and [+] — use `toolbarZoomLabelSlotPx(language)`. */
@@ -144,6 +152,26 @@ const IconLockClosed = () => (
     strokeLinecap="round" strokeLinejoin="round" width={16} height={16} aria-hidden="true">
     <rect x="3" y="11" width="18" height="11" rx="2"/>
     <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  </svg>
+);
+
+const IconExif = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+    strokeLinecap="round" strokeLinejoin="round" width={17} height={17} aria-hidden="true">
+    <circle cx="12" cy="12" r="9"/>
+    <line x1="12" y1="10" x2="12" y2="16"/>
+    <circle cx="12" cy="7" r="0.9" fill="currentColor" stroke="none"/>
+  </svg>
+);
+
+const IconDelete = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+    strokeLinecap="round" strokeLinejoin="round" width={17} height={17} aria-hidden="true">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+    <path d="M10 11v6"/>
+    <path d="M14 11v6"/>
+    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
   </svg>
 );
 
@@ -515,13 +543,16 @@ export function Toolbar({
   showToolbarArrows = true,
   imageName, groupName, groupOrdinal, groupCount,
   showFlip = false,
+  showExif = false,
+  exifOpen = false,
+  showDelete = false,
   zoomLocked,
   controlsVisible = true,
   bottomPx = 20,
   stops,
   onZoomIn, onZoomOut, onFit, onOneToOne, onSetNative,
   onRotateCW, onRotateCCW, onFlipH, onFlipV,
-  onPrev, onNext, onToggleLock,
+  onPrev, onNext, onToggleLock, onToggleExif, onDeleteImage,
   strings,
   zoomLabelSlotPx,
   zoomDropdownWidthPx,
@@ -774,6 +805,33 @@ export function Toolbar({
         >
           {zoomLocked ? <IconLockClosed /> : <IconLockOpen />}
         </TBtn>
+
+        {showExif && (
+          <>
+            <Divider />
+            <TBtn
+              label={exifOpen ? strings.hideExif : strings.showExif}
+              tip={exifOpen ? strings.tipHideExif : strings.tipShowExif}
+              active={exifOpen}
+              onClick={onToggleExif}
+            >
+              <IconExif />
+            </TBtn>
+          </>
+        )}
+
+        {showDelete && (
+          <>
+            <Divider />
+            <TBtn
+              label={strings.deleteImage}
+              tip={strings.tipDeleteImage}
+              onClick={onDeleteImage}
+            >
+              <IconDelete />
+            </TBtn>
+          </>
+        )}
       </div>
     </div>
   );
