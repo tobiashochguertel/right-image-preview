@@ -269,6 +269,6 @@
 ## 阶段 16 — Display-ready 邻居预热
 
 - [x] `preloadDisplaySlots` / `preloadMemoryBudgetBytes` / `estimateDecodedBytes` / `preloadDisplayMode`
-- [x] `display-ready` 确切判定（load + `decode`）；命中则跳过渐进占位与 loading
+- [x] `display-ready` 确切判定（load + `decode`）；命中则快开（无 dwell/转圈；占位保留到视口可绘制）
 - [x] 默认 `'slot'`（离屏层）；`'decode'` 为 B 降级
 - [x] 文档：字节 `ready` ≠ 可秒切；槽位/内存由宿主决定

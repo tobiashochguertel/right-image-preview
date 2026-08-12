@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Local large-JPG fixtures for Demo 6 — private; never commit
+test-images/
+**/test-images/**
+
 # Temporary / local dev files
 icon-candidates.html
 

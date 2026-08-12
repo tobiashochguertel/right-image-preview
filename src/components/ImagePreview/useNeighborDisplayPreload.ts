@@ -32,7 +32,7 @@ export interface UseNeighborDisplayPreloadResult {
   displayReadyIndexes: ReadonlySet<number>;
   isSrcDisplayReady(src: string): boolean;
   getMeta(src: string): DisplaySlotMeta | undefined;
-  /** Record that the main view finished decoding this `src` (feeds skip-progressive later). */
+  /** Record that the main view finished decoding this `src` (feeds fast-reveal later). */
   markSrcDisplayReady(src: string, meta?: DisplaySlotMeta): void;
   /** Offscreen entries for `'slot'` mode. */
   slotRenderEntries: { index: number; src: string }[];
@@ -218,14 +218,13 @@ export function useNeighborDisplayPreload(
     (index: number, el: HTMLImageElement) => {
       const src = images[index]?.src;
       if (!src || mode !== 'slot') return;
-      if (!idleOk) return;
       scheduleRevealAfterDecode(
         el,
         () => markIndexReady(index, src, el),
         IMAGE_DECODE_TIMEOUT_MS,
       );
     },
-    [mode, idleOk, images, markIndexReady],
+    [mode, images, markIndexReady],
   );
 
   // When idle resumes, finish decode for already-complete slot imgs.

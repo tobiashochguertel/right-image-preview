@@ -195,7 +195,7 @@ export type NeighborPreloadPhase =
   | 'warm'
   /**
    * Full `src` loaded **and** `decode()` settled in a display preload slot —
-   * safe to skip progressive placeholder when navigating here.
+   * navigating here uses fast reveal (no dwell/spinner; underlay until viewport drawable).
    */
   | 'display-ready'
   | 'error';
@@ -212,7 +212,9 @@ export interface NeighborPreloadEntry {
 /**
  * Flat-index → status for the thumbnail strip / host debug.
  * - `loading` / `ready`: byte-level neighbor preload (HTTP cache likely for `ready`).
- * - `display-ready`: decoded for instant main-view reveal (skip progressive when navigating here).
+ * - `display-ready`: neighbor load+decode settled — navigating here uses fast reveal
+ *   (no artificial placeholder dwell / spinner; minimap underlay stays until the viewport
+ *   main `<img>` is drawable — offscreen decode alone is not enough in WKWebView).
  * - `warm`: bytes succeeded earlier this session, outside the window (not display-ready).
  */
 export type NeighborPreloadStatusMap = Readonly<Record<number, NeighborPreloadEntry>>;
@@ -453,7 +455,8 @@ export interface ImagePreviewProps {
 
   /**
    * Optional hook for neighbor preload phase / progress (byte + display-ready).
-   * `display-ready` means decode settled — navigating there skips progressive placeholder.
+   * `display-ready` means decode settled — navigating there uses fast reveal (underlay until
+   * the viewport main image is drawable; not a blank stage).
    * Built-in strip bars also need {@link showThumbnailPreloadStatus}.
    */
   onPreloadStatusChange?: (status: NeighborPreloadStatusMap) => void;

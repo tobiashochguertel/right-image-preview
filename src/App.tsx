@@ -5,6 +5,7 @@ import { Demo2FolderGroups } from './demos/Demo2FolderGroups';
 import { Demo3HighRes } from './demos/Demo3HighRes';
 import { Demo4Exif } from './demos/Demo4Exif';
 import { Demo5ContainedWorkspace } from './demos/Demo5ContainedWorkspace';
+import { Demo6LocalLarge } from './demos/Demo6LocalLarge';
 import {
   DEMO_LANG_STORAGE_KEY,
   DEMO_REPO_URL,
@@ -335,6 +336,14 @@ export default function App() {
 
       {/* Demo 5: contained workspace + flat strip + neighbor preload */}
       <Demo5ContainedWorkspace t={t} previewLanguage={previewLanguage} />
+
+      {import.meta.env.DEV && (
+        <>
+          <hr style={dividerStyle} />
+          {/* Demo 6: local 20–30MB JPGs — progressive underlay vs display-ready */}
+          <Demo6LocalLarge t={t} previewLanguage={previewLanguage} />
+        </>
+      )}
     </div>
   );
 }

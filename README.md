@@ -27,7 +27,7 @@ Open the interactive demo in your browser (toggle **EN / 中文** in the top-rig
 | **Navigation minimap** | Corner thumbnail + draggable viewport frame when the image overflows; optional via `showMinimap` |
 | **Thumbnail strip** | `showThumbnails` shows a bottom horizontal thumb nav (off by default). `thumbnailsScope="group"` (default) lists the current group when grouped; `"flat"` lists the full flat sequence (window-virtualized when long) |
 | **Contained / embedded mode** | `presentation="contained"` fills a host pane; keyboard only while focused |
-| **Neighbor preload** | `preloadRadius` byte-prefetches neighbors; `preloadDisplaySlots` keeps decode-ready offscreen layers (host-sized from memory). `display-ready` skips progressive; byte-ready alone does not |
+| **Neighbor preload** | `preloadRadius` byte-prefetches neighbors; `preloadDisplaySlots` keeps decode-ready offscreen layers (host-sized from memory). `display-ready` uses fast reveal (underlay until viewport drawable); byte-ready alone does not |
 | **Chrome density** | `chrome="minimal"` fades idle controls to fully hidden |
 | **Browser fullscreen** | Toolbar toggle + ref `requestFullscreen` / `exitFullscreen`; Esc exits FS first |
 | **Controlled index** | `index` + `onIndexChange`; ref `goTo(index)` |

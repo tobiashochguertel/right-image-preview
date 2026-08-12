@@ -49,7 +49,7 @@ function itemKey(item: ImageItem, flatIndex: number): string {
 const GLASS_BG = 'rgba(6, 10, 20, 0.55)';
 /** Byte-level ready / loading in active window. */
 const PRELOAD_BAR_DARK_GREEN = '#2db85a';
-/** Display-ready (decode settled — safe to skip progressive). */
+/** Display-ready (decode settled — fast reveal on navigate). */
 const PRELOAD_BAR_DISPLAY_READY = '#1a9f4b';
 const PRELOAD_BAR_GRAY = 'rgba(140, 150, 165, 0.55)';
 /**
@@ -213,7 +213,7 @@ export function ThumbnailsStrip({
             data-preload-bar={phase ?? 'loading'}
             title={
               isDisplayReady
-                ? 'Display-ready (skip progressive on navigate)'
+                ? 'Display-ready (fast reveal; underlay until drawable)'
                 : isWarm
                   ? 'Loaded earlier this session (cache likely, not guaranteed)'
                   : phase === 'ready'

@@ -7,6 +7,20 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ---
 
+## [0.3.2] — 2026-08-12
+
+### Fixed
+
+- **Display-ready no longer blanks the stage** — keep `minimapSrc` underlay until the viewport main image is drawable; do not blank solely on sticky `display-ready`.
+- **Progressive reveal after ←/→** — reset reveal flags synchronously on `src` change so a cached neighbor’s `onLoad` is not swallowed.
+- **Slot-mode layer retention** — keep neighbor full-`src` `<img>` nodes mounted (`key={src}`) so navigate can reuse a decoded DOM node when possible.
+- **Atomic main-image reveal** — wait for `createImageBitmap` (full decode, not first progressive JPEG scan) + double `rAF` before showing the main layer; snap opacity so a left/top strip cannot flash.
+- **Image switch transform pop** — suppress CSS `transform` easing across `src` changes.
+
+### Added
+
+- **Demo 6 (dev only)** — local gitignored `./test-images` via Vite middleware for large-JPG progressive / display-ready checks.
+
 ## [0.3.1] — 2026-08-12
 
 ### Added
@@ -27,32 +41,6 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 - Removed unreleased `thumbnails` / `filmstrip` enum in favour of `showThumbnails` + `thumbnailsScope`.
 
-## [Unreleased]
-
-### Added
-
-- **`pinchEnabled` prop** (`boolean`, default `true`) — two-finger pinch-to-zoom using Pointer Events; works on touch screens and multi-touch trackpads. The zoom anchor is the midpoint between the two fingers; entering a pinch from Fit mode uses `fitEquivalentNativePercent` as the base scale for a seamless transition.
-- **`onImageError` prop** (`(index: number, src: string) => void`) — fires when the current `<img>` raises an error event, giving callers the flat image index and failing URL.
-- **`errorFallback` prop** (`(index: number, src: string) => React.ReactNode`) — render custom placeholder content centred over the image viewport on load failure; navigating away resets the error state so adjacent images display normally.
-- **`strings` prop** (`Partial<LocaleStrings>`) — override individual UI strings without replacing the whole locale. Merged on top of the locale selected by the `language` prop. Only supply the keys you want to change.
-- **`mergeStrings(base, overrides)` export** — new public helper that merges a `Partial<LocaleStrings>` onto a base locale object; useful for building locale objects programmatically outside the component.
-
-### Changed
-
-- **CI: independent type-check step** — `npx tsc --noEmit` now runs as a dedicated step before lint, so TypeScript errors surface independently of the build.
-- **CI: bundle-size guard** — `size-limit` added with a 15 kB gzip cap on the ESM bundle; CI fails if the limit is exceeded. Run `npm run size` locally to check.
-- **CI: `npm run test:coverage`** — the CI verify job now runs coverage instead of plain `vitest run`; a 50 % lines/functions threshold is enforced.
-
-### Fixed
-
-- **Spinner `@keyframes` injection** — replaced the per-render inline `<style>` tag with a singleton `injectGlobalStyle()` utility that inserts the rule into `<head>` exactly once per browser session (Set-based guard, SSR-safe).
-
-### Internal
-
-- Extracted `useWheelZoom` hook (~175 lines) from `ImagePreviewInner`, reducing the component file from ~827 to ~680 lines and enabling isolated testing of wheel-zoom logic.
-- Added `injectGlobalStyle.ts` utility for one-shot CSS injection.
-
----
 
 ## [0.2.0] — 2025
 

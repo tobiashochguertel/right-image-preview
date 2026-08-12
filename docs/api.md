@@ -64,7 +64,7 @@
 | `estimateDecodedBytes` | `(item) => number` | EXIF w×h×4 or 12MP guess | Size estimate for budget |
 | `preloadDisplayMode` | `'slot' \| 'decode'` | `'slot'` | `'slot'` = offscreen imgs (C); `'decode'` = decode-only fallback (B) |
 | `onPreloadIndexesChange` | `(indexes: number[]) => void` | — | Optional debug hook for planned preload indexes |
-| `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | Phases include `display-ready` (exact: decode settled — navigate skips progressive). Byte `ready` ≠ instant reveal |
+| `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | Phases include `display-ready` (exact: decode settled — fast reveal; underlay until viewport drawable). Byte `ready` ≠ instant reveal |
 | `showThumbnailPreloadStatus` | `boolean` | `false` | Strip edges: brightest = `display-ready`; dark = byte ready; light = warm |
 | `chrome` | `'default' \| 'minimal'` | `'default'` | `minimal` fades idle chrome to 0% |
 | `index` | `number` | — | Controlled flat index |
@@ -94,7 +94,7 @@ Tile image: `ImageItem.minimapSrc` if set, otherwise `src`. Layout: few tiles �
 #### Neighbor preload notes
 
 - **Byte preload** (`preloadRadius`): `Image()` fetch only. Strip phase `ready` / `warm` means bytes likely cached — **not** enough to skip {@link progressiveMain}.
-- **Display-ready** (`preloadDisplaySlots` > 0): load + `decode()` (and offscreen `<img>` when `preloadDisplayMode="slot"`). Phase `display-ready` is exact; navigating there skips progressive placeholder and centre spinner.
+- **Display-ready** (`preloadDisplaySlots` > 0): load + `decode()` (and offscreen `<img>` when `preloadDisplayMode="slot"`). Phase `display-ready` is exact; navigating there uses fast reveal (no artificial dwell / centre spinner) while **keeping** the `minimapSrc` underlay until the viewport main image is drawable.
 - **Memory**: the library does not read device RAM. Hosts (e.g. Tauri) should pass `preloadMemoryBudgetBytes` (see `suggestPreloadMemoryBudgetBytes`) and ideally width/height estimates. **Media Lens checklist:** [`media-lens-integration.md`](./media-lens-integration.md).
 - **Fallback**: `preloadDisplayMode="decode"` keeps the same short-circuit contract without retaining compositor layers.
 

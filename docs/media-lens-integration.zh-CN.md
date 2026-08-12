@@ -17,7 +17,7 @@
 | 本地大图 ←/→ 更快 | `preloadRadius` + **display-ready 预算**（不是只看字节绿条） |
 | 内存策略由宿主决定 | Tauri 传入 `preloadMemoryBudgetBytes`；组件按邻图估算决定预热几张 |
 
-**不要**把条带上的 `ready` / 浅绿 `warm` 当成「可秒开清晰」。只有 **`display-ready`**（或已对该 `src` 完成 decode）才会跳过渐进占位和转圈。
+**不要**把条带上的 `ready` / 浅绿 `warm` 当成「可秒开清晰」。只有 **`display-ready`**（slot 模式离屏层已 decode）切过去才会**直接显示已解码的同一 DOM 图**（不新建主图再解一遍）。请使用默认 `preloadDisplayMode="slot"`；`"decode"` 只能缩短准备，切图时仍可能再解。
 
 ---
 
@@ -97,7 +97,7 @@ const budget = suggestPreloadMemoryBudgetBytes(available);
 |------------|---------------------|
 | 可用/总内存、产品激进程度 | 在 `preloadRadius` 内按预算挑选邻居 |
 | 提供宽高（EXIF 或索引） | load + `decode()` → 确切 `display-ready` |
-| 文件夹树、磁盘缓存、星级等 | 切到 display-ready 时跳过渐进 |
+| 文件夹树、磁盘缓存、星级等 | 切到 display-ready：快开（无 dwell/转圈），占位保留到视口可绘制 |
 
 预算只覆盖**邻居池**，不含当前主图。请按「可用内存」留余量（12% 只是起点）。
 
@@ -120,7 +120,7 @@ const budget = suggestPreloadMemoryBudgetBytes(available);
 | 相位 | 含义 |
 |------|------|
 | `loading` / `ready` | 字节预热。**不会**跳过渐进 |
-| `display-ready` | decode 完成。切过去 → 无长模糊占位 / 等待转圈 |
+| `display-ready` | decode 完成。切过去 → 无人工模糊停留 / 等待转圈；**仍显示** `minimapSrc` 直到视口主图可绘制 |
 | `warm` | 本会话曾加载、已离开窗口。不是 display-ready |
 
 ---
@@ -130,16 +130,18 @@ const budget = suggestPreloadMemoryBudgetBytes(available);
 - [ ] `presentation="contained"`，侧栏可操作
 - [ ] `preloadRadius` + 来自 Tauri 的 `preloadMemoryBudgetBytes`
 - [ ] 尽量带上宽高估算
-- [ ] 切到已 `display-ready` 的邻居 → **没有**长时间缩略图模糊 + 转圈
-- [ ] 跳到窗口外远处 → 仍走渐进亦可
-- [ ] 内存压力大：`preloadDisplayMode="decode"` 或减小预算 / slots
+- [ ] 切到已 `display-ready` 的邻居 → **接近瞬时清晰**（Demo / 侧栏 sharp 应远小于冷启动的 ~1s）；有 `minimapSrc` 时冷切仍先占位
+- [ ] `preloadDisplayMode="slot"`（默认）保留；不要用 `"decode"` 指望秒开
+- [ ] 跳到窗口外远处 → 仍走渐进（缩略占位）亦可
+- [ ] 大 JPG（~20–30MB）务必提供磁盘缩略 `minimapSrc`（冷切）
+- [ ] 内存压力大：减小预算 / slots；仅在无法撑住合成层时降级 `"decode"`
 
 ---
 
 ## 8. 安装
 
 ```bash
-npm install right-image-preview@^0.3.1
+npm install right-image-preview@^0.3.2
 ```
 
-请使用已导出 `suggestPreloadMemoryBudgetBytes` 的 **0.3.1+**。
+请使用 **0.3.2+**（含 display-ready 占位与整图原子揭开修复；已导出 `suggestPreloadMemoryBudgetBytes`）。

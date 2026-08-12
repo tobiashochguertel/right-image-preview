@@ -11,7 +11,8 @@ import {
 import { Minimap, MINIMAP_BOTTOM } from '../Minimap';
 import { ImagePreviewCloseButton } from '../parts/ImagePreviewCloseButton';
 import { ExifInfoPanel } from '../parts/ExifInfoPanel';
-import { NeighborDisplaySlotPool } from '../parts/NeighborDisplaySlotPool';
+import { DisplayStageLayers } from '../parts/DisplayStageLayers';
+import type { DisplayLayerEntry } from '../parts/DisplayStageLayers';
 import { ThumbnailsStrip } from '../parts/ThumbnailsStrip';
 import { ImagePreviewNavArrow } from '../parts/ImagePreviewNavArrow';
 import { Toolbar } from '../Toolbar';
@@ -214,58 +215,96 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       interactionBusy: isPanning || minimapDragging,
     });
 
-    const skipProgressive =
-      progressiveMain && isSrcDisplayReady(currentImage.src);
+    /**
+     * Live stage `<img>` nodes by src. Sticky display-ready alone must not blank the underlay.
+     */
+    const layerElBySrcRef = useRef(new Map<string, HTMLImageElement>());
+
+    /**
+     * Keep progressive underlay whenever we have `minimapSrc` — never blank the stage.
+     * Display-ready only skips artificial dwell.
+     */
+    const preferFastReveal = progressiveMain && isSrcDisplayReady(currentImage.src);
+    const knownDisplayMeta = preferFastReveal ? getMeta(currentImage.src) ?? null : null;
+
+    const displayLayers: DisplayLayerEntry[] = useMemo(() => {
+      const bySrc = new Map<string, number>();
+      for (const e of slotRenderEntries) bySrc.set(e.src, e.index);
+      bySrc.set(currentImage.src, currentIndex);
+      return [...bySrc.entries()].map(([src, index]) => ({
+        src,
+        index,
+        isCurrent: src === currentImage.src,
+      }));
+    }, [slotRenderEntries, currentImage.src, currentIndex]);
 
     const prevSrcRef = useRef(currentImage.src);
-    useEffect(() => {
-      if (prevSrcRef.current !== currentImage.src) {
-        resetImageDims();
-        prevSrcRef.current = currentImage.src;
-      }
-    }, [currentImage.src, resetImageDims]);
+    /** Suppress CSS transform easing across image switches (avoids ~0.3s zoom pop). */
+    const [suppressTransformForSrcSwitch, setSuppressTransformForSrcSwitch] = useState(false);
+    const [imageShowReady, setImageShowReady] = useState(false);
 
-    // Seed layout immediately when navigating to a display-ready src (skip blank flash).
     useLayoutEffect(() => {
-      if (!skipProgressive) return;
+      if (prevSrcRef.current === currentImage.src) return;
+      prevSrcRef.current = currentImage.src;
+      setSuppressTransformForSrcSwitch(true);
+
+      const el = layerElBySrcRef.current.get(currentImage.src);
       const meta = getMeta(currentImage.src);
-      if (meta) onImageLoad(meta);
-    }, [skipProgressive, currentImage.src, getMeta, onImageLoad]);
+      const paintable = !!(el && el.complete && el.naturalWidth > 0);
+      if (paintable) {
+        onImageLoad({
+          naturalWidth: el!.naturalWidth,
+          naturalHeight: el!.naturalHeight,
+        });
+      } else if (meta) {
+        // Keep stage sized so minimap underlay can show (avoid opacity-0 black wrapper).
+        onImageLoad(meta);
+      } else {
+        setImageShowReady(false);
+        resetImageDims();
+      }
+    }, [currentImage.src, getMeta, onImageLoad, resetImageDims]);
 
     const progressive = useProgressiveMainImage({
       mainSrc: currentImage.src,
       minimapSrc: currentImage.minimapSrc,
       minimapCustom: !!currentImage.minimap,
-      enabled: progressiveMain && !skipProgressive,
+      enabled: progressiveMain,
       placeholderMinVisibleMs: progressivePlaceholderMinMs,
+      preferFastReveal,
+      knownDimensions: knownDisplayMeta,
       onImageLayout: onImageLoad,
       onStageChange: onMainImageLoadStageChange,
     });
 
     const { onMainImgDecoded } = progressive;
 
-    const imgRefCallback = useCallback(
-      (el: HTMLImageElement | null) => {
-        if (el && el.complete && el.naturalWidth > 0) {
+    // Retained layer already decoded → reveal ASAP (underlay still covers until fullDecoded).
+    useLayoutEffect(() => {
+      const el = layerElBySrcRef.current.get(currentImage.src);
+      if (!el || !el.complete || el.naturalWidth <= 0) return;
+      onImageLoad({ naturalWidth: el.naturalWidth, naturalHeight: el.naturalHeight });
+      scheduleRevealAfterDecode(el, onMainImgDecoded, IMAGE_DECODE_TIMEOUT_MS);
+    }, [currentImage.src, onImageLoad, onMainImgDecoded]);
+
+    const bindLayerRef = useCallback(
+      (src: string, isCurrent: boolean) => (el: HTMLImageElement | null) => {
+        if (el) layerElBySrcRef.current.set(src, el);
+        else layerElBySrcRef.current.delete(src);
+        if (isCurrent && el && el.complete && el.naturalWidth > 0) {
           onImageLoad({ naturalWidth: el.naturalWidth, naturalHeight: el.naturalHeight });
-          if (skipProgressive) {
-            onMainImgDecoded();
-            markSrcDisplayReady(currentImage.src, {
-              naturalWidth: el.naturalWidth,
-              naturalHeight: el.naturalHeight,
-            });
-            return;
-          }
           scheduleRevealAfterDecode(el, onMainImgDecoded, IMAGE_DECODE_TIMEOUT_MS);
         }
       },
-      [
-        onImageLoad,
-        onMainImgDecoded,
-        skipProgressive,
-        markSrcDisplayReady,
-        currentImage.src,
-      ],
+      [onImageLoad, onMainImgDecoded],
+    );
+
+    const onCurrentLayerLoad = useCallback(
+      (img: HTMLImageElement) => {
+        onImageLoad({ naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight });
+        scheduleRevealAfterDecode(img, onMainImgDecoded, IMAGE_DECODE_TIMEOUT_MS);
+      },
+      [onImageLoad, onMainImgDecoded],
     );
 
     // ── Group info ──────────────────────────────────────────────────────────
@@ -574,10 +613,15 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     // "zoom-out" animation.  Instead we keep opacity:0 for one animation frame
     // (so the browser paints the correct transform while the image is still
     // invisible), then set imageShowReady→true so only the opacity transitions.
-    const [imageShowReady, setImageShowReady] = useState(false);
     useEffect(() => {
-      if (!ready) { setImageShowReady(false); return; }
-      const id = requestAnimationFrame(() => setImageShowReady(true));
+      if (!ready) {
+        setImageShowReady(false);
+        return;
+      }
+      const id = requestAnimationFrame(() => {
+        setImageShowReady(true);
+        setSuppressTransformForSrcSwitch(false);
+      });
       return () => cancelAnimationFrame(id);
     }, [ready]);
 
@@ -649,8 +693,9 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       progressive.showMinimapUnderlay &&
       !progressive.fullDecoded;
 
-    /** Same window as thumb-on-main: no `transform` easing (avoids “huge image shrinking into fit”). */
-    const suppressTransformTransition = thumbHoldingMainArea;
+    /** Same window as thumb-on-main / image switch: no `transform` easing (avoids shrink/zoom pop). */
+    const suppressTransformTransition =
+      thumbHoldingMainArea || suppressTransformForSrcSwitch;
 
     /** Progressive: spinner stays on top of the thumbnail until the real main bitmap replaces it. */
     const progressiveWaitingFullOverThumb =
@@ -663,7 +708,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       delayedPreloadSpinner;
 
     const showCenterLoader =
-      !skipProgressive &&
+      !preferFastReveal &&
       (progressiveWaitingFullOverThumb ||
         progressivePreloadSpinnerNoThumbYet ||
         (!progressive.pipelineActive && showLoader) ||
@@ -823,45 +868,25 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                           ? 0
                           : 1,
                     transition:    opacityTransition,
+                    zIndex: 0,
                   }}
                 />
               )}
             {progressive.preloadStage !== 'thumb-only' && (
-              <img
-                key={currentImage.src}
-                src={currentImage.src}
-                alt={currentImage.alt ?? ''}
-                draggable={false}
-                ref={imgRefCallback}
-                onLoad={(e) => {
-                  const img = e.currentTarget;
-                  onImageLoad({ naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight });
-                  if (skipProgressive) {
-                    onMainImgDecoded();
-                    markSrcDisplayReady(currentImage.src, {
-                      naturalWidth: img.naturalWidth,
-                      naturalHeight: img.naturalHeight,
-                    });
-                    return;
-                  }
-                  scheduleRevealAfterDecode(img, onMainImgDecoded, IMAGE_DECODE_TIMEOUT_MS);
-                }}
-                onError={() => {
+              <DisplayStageLayers
+                layers={displayLayers}
+                currentAlt={currentImage.alt ?? ''}
+                imageDims={imageDims}
+                hideCurrentUntilDecoded={hideMainUntilDecoded}
+                opacityTransition={opacityTransition}
+                bindLayerRef={bindLayerRef}
+                onCurrentLoad={onCurrentLayerLoad}
+                onCurrentError={() => {
                   onMainImgDecoded();
                   setImageLoadError(true);
                   onImageError?.(currentIndex, currentImage.src);
                 }}
-                style={{
-                  position:      'relative',
-                  display:       'block',
-                  width:         imageDims ? imageDims.naturalWidth : 'auto',
-                  height:        imageDims ? imageDims.naturalHeight : 'auto',
-                  maxWidth:      imageDims ? 'none' : '100%',
-                  maxHeight:     imageDims ? 'none' : '100%',
-                  pointerEvents: 'none',
-                  opacity:       hideMainUntilDecoded ? 0 : 1,
-                  transition:    opacityTransition,
-                }}
+                onNeighborLoad={onSlotImgLoad}
               />
             )}
           </div>
@@ -1002,10 +1027,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
           />
         )}
 
-        <NeighborDisplaySlotPool
-          entries={slotRenderEntries}
-          onSlotImgLoad={onSlotImgLoad}
-        />
+        {/* Neighbor decode layers live in DisplayStageLayers (slot mode). decode-mode uses detached Image(). */}
 
         {showExif && exifOpen && (
           <ExifInfoPanel

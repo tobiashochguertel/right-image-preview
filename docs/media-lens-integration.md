@@ -17,7 +17,7 @@ Canonical API tables: [`api.md`](./api.md). This doc is the product-facing check
 | Faster ←/→ on large local files | `preloadRadius` + **display-ready** budget (not byte-green alone) |
 | Host owns device memory policy | Pass `preloadMemoryBudgetBytes` from Tauri; viewer picks how many neighbors fit |
 
-**Do not** treat strip `ready` / light-green “warm” as “instant sharp.” Only phase **`display-ready`** (or navigating to a `src` the viewer already decoded) skips progressive placeholder + spinner.
+**Do not** treat strip `ready` / light-green “warm” as “instant sharp.” Only phase **`display-ready`** with default `preloadDisplayMode="slot"` promotes the **same already-decoded DOM `<img>`** into view (no second ~1s decode). Mode `"decode"` warms bytes/decode caches but often still re-decodes on navigate.
 
 ---
 
@@ -102,7 +102,7 @@ Refresh on startup and optionally when the main window is focused after long idl
 |------------|---------------------|
 | Available / total RAM, product aggressiveness | Which neighbors within `preloadRadius` fit the budget |
 | Provide `exif.width` / `height` (or custom `estimateDecodedBytes`) | `load` + `decode()` → exact `display-ready` |
-| Folder tree, disk cache, stars | Skip progressive when navigating to display-ready `src` |
+| Folder tree, disk cache, stars | Fast reveal on display-ready (no dwell/spinner); underlay until viewport drawable |
 
 Budget applies to the **neighbor pool only**. The current main image is extra RAM on top — size the fraction accordingly (12% of *available* is a starting point).
 
@@ -125,7 +125,7 @@ With current + two neighbors of ~9K: on the order of **0.5 GiB+** decoded before
 | Phase | Meaning |
 |-------|---------|
 | `loading` / `ready` | Byte preload (`Image()`). **Does not** skip progressive. |
-| `display-ready` | `decode()` settled in a slot. Navigate → no blur placeholder / no wait spinner. |
+| `display-ready` | `decode()` settled in a slot. Navigate → no artificial dwell / spinner; **keep** `minimapSrc` until viewport main is drawable |
 | `warm` | Bytes seen earlier this session, outside window. Not display-ready. |
 
 ---
@@ -135,8 +135,9 @@ With current + two neighbors of ~9K: on the order of **0.5 GiB+** decoded before
 - [ ] `presentation="contained"` — sidebar usable; no full-page modal a11y
 - [ ] `preloadRadius={1|2}` + `preloadMemoryBudgetBytes` from Tauri
 - [ ] Items carry width/height for estimates when possible
-- [ ] Navigate to a neighbor that reached `display-ready` → **no** long minimap blur + spinner
-- [ ] Navigate far outside the window → progressive path still OK
+- [ ] Navigate to a neighbor that reached `display-ready` → **no** black wait; with `minimapSrc`, brief underlay then sharp; no long spinner
+- [ ] Navigate far outside the window → progressive underlay still OK
+- [ ] Large JPGs (~20–30MB) need disk `minimapSrc`; otherwise cold and fast paths both blank while decoding
 - [ ] If memory spikes: `preloadDisplayMode="decode"` or lower budget / slots
 
 ---
@@ -144,7 +145,7 @@ With current + two neighbors of ~9K: on the order of **0.5 GiB+** decoded before
 ## 8. npm
 
 ```bash
-npm install right-image-preview@^0.3.1
+npm install right-image-preview@^0.3.2
 ```
 
-Use **0.3.1+** (exports `suggestPreloadMemoryBudgetBytes`).
+Use **0.3.2+** (display-ready underlay + atomic reveal fixes; exports `suggestPreloadMemoryBudgetBytes`).

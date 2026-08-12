@@ -74,6 +74,16 @@ export interface DemoStrings {
   demo5HidePreview: string;
   demo5EmptyWorkspace: string;
   demo5PreloadHint: string;
+  demo6Title: string;
+  demo6Desc: string;
+  demo6SidebarTitle: string;
+  demo6HowTo: string;
+  demo6Missing: string;
+  demo6SlotsToggle: string;
+  demo6MeterTitle: string;
+  demo6MeterIdle: string;
+  demo6MeterHint: string;
+  demo6HistoryTitle: string;
   photosBadge: (n: number) => string;
   thumbAria: (label: string) => string;
 }
@@ -166,12 +176,26 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
       'Toolbar “i” toggles EXIF; the trash button (or Delete / Backspace) removes the current image. Metadata is on `ImageItem.exif`. Deleting calls `onDeleteImage(index, item)` — this demo filters by `item.id`, so the count drops and focus moves to the next (or previous) photo. Empty fields are hidden; the third photo starts with no EXIF.',
     demo5Title: 'Demo 5 · Contained workspace + flat strip + preload',
     demo5Desc:
-      'Embedded preview (`presentation="contained"`) fills the centre pane while a fake sidebar stays usable. Uses controlled `index`, `showThumbnails` + `thumbnailsScope="flat"`, `preloadRadius={1}`, `preloadDisplaySlots={2}` (display-ready decode; skips progressive when navigating to a ready neighbor), `showThumbnailPreloadStatus`, and `chrome="minimal"`. Brightest green = display-ready; darker = byte-ready; light = session-warm. Click the preview to focus it before using arrow keys.',
+      'Embedded preview (`presentation="contained"`) fills the centre pane while a fake sidebar stays usable. Uses controlled `index`, `showThumbnails` + `thumbnailsScope="flat"`, `preloadRadius={1}`, `preloadDisplaySlots={2}` (display-ready decode; fast reveal keeps minimap underlay until the viewport main image is drawable), `showThumbnailPreloadStatus`, and `chrome="minimal"`. Brightest green = display-ready; darker = byte-ready; light = session-warm. Click the preview to focus it before using arrow keys.',
     demo5SidebarTitle: 'Sidebar',
     demo5ShowPreview: 'Show preview',
     demo5HidePreview: 'Hide preview',
     demo5EmptyWorkspace: 'Preview hidden — sidebar still works.',
     demo5PreloadHint: 'Neighbor preload indexes',
+    demo6Title: 'Demo 6 · Local large JPGs (dev only, gitignored)',
+    demo6Desc:
+      'Reads gitignored `./test-images` + thumbs via Vite middleware. After the black-screen fix, green (display-ready) no longer means “instant sharp” — both paths show a thumb underlay while the viewport re-decodes ~20–30MB. Use the sidebar meter: path + underlay/sharp ms. Toggle slots off to force every nav to cold.',
+    demo6SidebarTitle: 'Local large files',
+    demo6HowTo:
+      'Wait for brightest green on ± neighbors, then ←/→. Compare path=fast-reveal vs cold. Sharp ms are often similar (decode-bound); cold also holds the blur ~800ms after decode.',
+    demo6Missing:
+      'No usable `./test-images` (need originals + matching files under thumbs/). Local only — never commit that folder.',
+    demo6SlotsToggle: 'preloadDisplaySlots on (display-ready pool)',
+    demo6MeterTitle: 'Last navigation',
+    demo6MeterIdle: 'Switch images to measure…',
+    demo6MeterHint:
+      'fast-reveal + sharp≪200ms means the retained layer promoted (what you want). cold ≈1s sharp is decode. Wait for green on neighbors before ←/→.',
+    demo6HistoryTitle: 'Recent',
     photosBadge: (n) => `${n} photos`,
     thumbAria: (label) => `Open photo: ${label}`,
   },
@@ -256,12 +280,26 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
       '工具栏「i」开关 EXIF；垃圾桶（或 Delete / Backspace）删除当前图。元数据在 `ImageItem.exif`。删除回调为 `onDeleteImage(index, item)` — 本 Demo 按 `item.id` 更新列表，张数减一并跳到下一张（若已是最后一张则上一张）。空字段不显示；第三张默认无 EXIF。',
     demo5Title: 'Demo 5 · 嵌入工作区 + 扁平缩略图条 + 预加载',
     demo5Desc:
-      '嵌入式预览（`presentation="contained"`）填满中央工作区，假侧栏仍可操作。使用受控 `index`、`showThumbnails` + `thumbnailsScope="flat"`、`preloadRadius={1}`、`preloadDisplaySlots={2}`（display-ready 解码；切到已就绪邻居时跳过渐进占位）、`showThumbnailPreloadStatus` 与 `chrome="minimal"`。最深绿 = display-ready；深绿 = 字节就绪；浅绿 = 会话曾加载。请先点击预览再按方向键。',
+      '嵌入式预览（`presentation="contained"`）填满中央工作区，假侧栏仍可操作。使用受控 `index`、`showThumbnails` + `thumbnailsScope="flat"`、`preloadRadius={1}`、`preloadDisplaySlots={2}`（display-ready 解码；快开仍保留 minimap 占位直到视口主图可绘制）、`showThumbnailPreloadStatus` 与 `chrome="minimal"`。最深绿 = display-ready；深绿 = 字节就绪；浅绿 = 会话曾加载。请先点击预览再按方向键。',
     demo5SidebarTitle: '侧栏',
     demo5ShowPreview: '显示预览',
     demo5HidePreview: '隐藏预览',
     demo5EmptyWorkspace: '预览已隐藏 — 侧栏仍可用。',
     demo5PreloadHint: '相邻预加载下标',
+    demo6Title: 'Demo 6 · 本地大图 JPG（仅开发，已 gitignore）',
+    demo6Desc:
+      '通过中间件读取已忽略的 `./test-images`。修黑屏后，绿条（display-ready）不再等于「秒开清晰」——两边都会在视口重解码 ~20–30MB 时先显示缩略占位。请看侧栏：path + underlay/sharp 毫秒。关掉 slots 可强制每次都走 cold。',
+    demo6SidebarTitle: '本地大图',
+    demo6HowTo:
+      '等 ± 邻居最深绿后 ←/→。对比 path=fast-reveal 与 cold。sharp 往往接近（解码主导）；cold 在解码后再多停约 800ms 模糊。',
+    demo6Missing:
+      '未找到可用的 `./test-images`（需原图 + thumbs/ 下同名缩略图）。仅本机使用，切勿提交该目录。',
+    demo6SlotsToggle: '开启 preloadDisplaySlots（display-ready 池）',
+    demo6MeterTitle: '上次切图',
+    demo6MeterIdle: '切图后显示耗时…',
+    demo6MeterHint:
+      'fast-reveal 且 sharp≪200ms = 已解码层直接提升（目标效果）。cold 的 sharp≈1s 仍是解码。先等邻居最深绿再 ←/→。',
+    demo6HistoryTitle: '最近几次',
     photosBadge: (n) => `${n} 张`,
     thumbAria: (label) => `预览图片：${label}`,
   },

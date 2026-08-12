@@ -269,6 +269,6 @@
 ## Stage 16 — Display-ready neighbor preload
 
 - [x] `preloadDisplaySlots` / `preloadMemoryBudgetBytes` / `estimateDecodedBytes` / `preloadDisplayMode`
-- [x] Exact `display-ready` (load + `decode`); hit skips progressive placeholder/spinner
+- [x] Exact `display-ready` (load + `decode`); hit uses fast reveal (no dwell/spinner; underlay until viewport drawable)
 - [x] Default `'slot'` (offscreen); `'decode'` is B fallback
 - [x] Docs: byte `ready` ≠ instant reveal; slot/memory budget is host-owned

@@ -27,7 +27,7 @@
 | **导航小地图** | 主图溢出视口时右下角缩略图 + 可拖视口框；可通过 `showMinimap` 关闭 |
 | **缩略图条** | `showThumbnails` 开启底部横向缩略图（默认关）。`thumbnailsScope="group"`（默认）分组时仅当前组；`"flat"` 为整段扁平序列（过长时窗口虚拟化） |
 | **嵌入式模式** | `presentation="contained"` 填满宿主容器；仅聚焦时响应键盘 |
-| **相邻预加载** | `preloadRadius` 字节预热；`preloadDisplaySlots` 保持离屏 decode 就绪（槽位数由宿主按内存决定）。`display-ready` 切图跳过渐进；仅字节就绪不会跳过 |
+| **相邻预加载** | `preloadRadius` 字节预热；`preloadDisplaySlots` 保持离屏 decode 就绪（槽位数由宿主按内存决定）。`display-ready` 切图快开（占位保留到视口可绘制）；仅字节就绪不会快开 |
 | **控件密度** | `chrome="minimal"` 空闲时控件完全隐藏 |
 | **浏览器全屏** | 工具栏切换 + ref `requestFullscreen` / `exitFullscreen`；Esc 先退出全屏 |
 | **受控下标** | `index` + `onIndexChange`；ref `goTo(index)` |
