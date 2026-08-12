@@ -166,7 +166,7 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
       'Toolbar “i” toggles EXIF; the trash button (or Delete / Backspace) removes the current image. Metadata is on `ImageItem.exif`. Deleting calls `onDeleteImage(index, item)` — this demo filters by `item.id`, so the count drops and focus moves to the next (or previous) photo. Empty fields are hidden; the third photo starts with no EXIF.',
     demo5Title: 'Demo 5 · Contained workspace + flat strip + preload',
     demo5Desc:
-      'Embedded preview (`presentation="contained"`) fills the centre pane while a fake sidebar stays usable. Uses controlled `index`, `showThumbnails` + `thumbnailsScope="flat"`, `preloadRadius={1}`, `showThumbnailPreloadStatus`, and `chrome="minimal"`. With indicators on: dark green = current or active preload window; light green = loaded earlier this session outside the window. Click the preview to focus it before using arrow keys.',
+      'Embedded preview (`presentation="contained"`) fills the centre pane while a fake sidebar stays usable. Uses controlled `index`, `showThumbnails` + `thumbnailsScope="flat"`, `preloadRadius={1}`, `preloadDisplaySlots={2}` (display-ready decode; skips progressive when navigating to a ready neighbor), `showThumbnailPreloadStatus`, and `chrome="minimal"`. Brightest green = display-ready; darker = byte-ready; light = session-warm. Click the preview to focus it before using arrow keys.',
     demo5SidebarTitle: 'Sidebar',
     demo5ShowPreview: 'Show preview',
     demo5HidePreview: 'Hide preview',
@@ -256,7 +256,7 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
       '工具栏「i」开关 EXIF；垃圾桶（或 Delete / Backspace）删除当前图。元数据在 `ImageItem.exif`。删除回调为 `onDeleteImage(index, item)` — 本 Demo 按 `item.id` 更新列表，张数减一并跳到下一张（若已是最后一张则上一张）。空字段不显示；第三张默认无 EXIF。',
     demo5Title: 'Demo 5 · 嵌入工作区 + 扁平缩略图条 + 预加载',
     demo5Desc:
-      '嵌入式预览（`presentation="contained"`）填满中央工作区，假侧栏仍可操作。使用受控 `index`、`showThumbnails` + `thumbnailsScope="flat"`、`preloadRadius={1}`、`showThumbnailPreloadStatus` 与 `chrome="minimal"`。开启指示后：深绿 = 当前图或预加载窗口；浅绿 = 本会话曾加载但已离开窗口。请先点击预览再按方向键。',
+      '嵌入式预览（`presentation="contained"`）填满中央工作区，假侧栏仍可操作。使用受控 `index`、`showThumbnails` + `thumbnailsScope="flat"`、`preloadRadius={1}`、`preloadDisplaySlots={2}`（display-ready 解码；切到已就绪邻居时跳过渐进占位）、`showThumbnailPreloadStatus` 与 `chrome="minimal"`。最深绿 = display-ready；深绿 = 字节就绪；浅绿 = 会话曾加载。请先点击预览再按方向键。',
     demo5SidebarTitle: '侧栏',
     demo5ShowPreview: '显示预览',
     demo5HidePreview: '隐藏预览',

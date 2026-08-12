@@ -25,6 +25,7 @@ export type {
   NeighborPreloadEntry,
   NeighborPreloadPhase,
   NeighborPreloadStatusMap,
+  PreloadDisplayMode,
   PresentationMode,
   ThumbnailsScope,
   WheelStrategy,
@@ -33,4 +34,13 @@ export type {
   ZoomOutBelowMinBehaviour,
   ZoomState,
 } from './types';
+export {
+  defaultEstimateDecodedBytes,
+  rgbaDecodedBytes,
+  pickDisplaySlotIndexes,
+  resolvePreloadDisplaySlotCeiling,
+  suggestPreloadMemoryBudgetBytes,
+  DEFAULT_DISPLAY_SLOTS_WHEN_BUDGET_ONLY,
+  SUGGESTED_PRELOAD_BUDGET_FRACTION_OF_AVAILABLE,
+} from './lib/neighborDisplayPreload';
 export type { Rotation } from './useImageTransform';

@@ -27,7 +27,7 @@ Open the interactive demo in your browser (toggle **EN / 中文** in the top-rig
 | **Navigation minimap** | Corner thumbnail + draggable viewport frame when the image overflows; optional via `showMinimap` |
 | **Thumbnail strip** | `showThumbnails` shows a bottom horizontal thumb nav (off by default). `thumbnailsScope="group"` (default) lists the current group when grouped; `"flat"` lists the full flat sequence (window-virtualized when long) |
 | **Contained / embedded mode** | `presentation="contained"` fills a host pane; keyboard only while focused |
-| **Neighbor preload** | `preloadRadius` prefetches adjacent full `src` URLs; optional `showThumbnailPreloadStatus` draws light/dark green strip edges (off by default) |
+| **Neighbor preload** | `preloadRadius` byte-prefetches neighbors; `preloadDisplaySlots` keeps decode-ready offscreen layers (host-sized from memory). `display-ready` skips progressive; byte-ready alone does not |
 | **Chrome density** | `chrome="minimal"` fades idle controls to fully hidden |
 | **Browser fullscreen** | Toolbar toggle + ref `requestFullscreen` / `exitFullscreen`; Esc exits FS first |
 | **Controlled index** | `index` + `onIndexChange`; ref `goTo(index)` |
@@ -35,7 +35,7 @@ Open the interactive demo in your browser (toggle **EN / 中文** in the top-rig
 | **Touch pinch-to-zoom** | Two-finger pinch/spread for continuous zoom; anchor follows the midpoint between fingers; disable with **`pinchEnabled`** |
 | **Localized toolbar** | **`language`** prop with built-in **English** and **Simplified Chinese** (`en`, `zh`, `zh-CN`, …); override individual strings with **`strings`** |
 | **Rich keyboard shortcuts** | Esc · +/- · arrow keys · Space · PageUp/Down · Ctrl+arrow |
-| **Accessibility** | `role="dialog"` + `aria-modal`, all buttons have `aria-label`, focus is trapped |
+| **Accessibility** | Overlay: `role="dialog"` + `aria-modal` with focus management; `presentation="contained"`: `role="region"` (not page-modal), keyboard only while the preview is focused. Controls use `aria-label` |
 | **TypeScript first** | Full type exports, `forwardRef` imperative ref API |
 | **Zero production dependencies** | Only requires React |
 | **React 17+** | Peer `react` / `react-dom` ≥ 17; React 18+ still recommended (native `flushSync` for fastest multi-step wheel zoom) |
@@ -64,6 +64,7 @@ Open `http://localhost:5173` for the demo page (**EN / 中文** toggle in the to
 - **Demo 2** — folder groups, side arrows, flip buttons
 - **Demo 3** — thumbnail-first progressive loading (small `minimapSrc` preview, then full image; wheel / pan stress test; assets from demo CDN)
 - **Demo 4** — host-provided EXIF + delete
+- **Demo 5** — contained workspace + flat strip + neighbor preload + minimal chrome
 
 ---
 
@@ -122,6 +123,8 @@ import { ImagePreview } from 'right-image-preview';
 ---
 
 ## API
+
+> **Canonical reference:** [`docs/api.md`](./docs/api.md) (EN) / [`docs/api.zh-CN.md`](./docs/api.zh-CN.md) (中文). The table below is a short overview and may lag; prefer the docs when they differ.
 
 ### Props
 
@@ -283,6 +286,8 @@ src/
   demos/                       # Demo sections + demo-only copy (not published to npm)
 docs/
   api.md / api.zh-CN.md        # Full API reference
+  media-lens-integration.md    # Media Lens (Tauri) integration checklist
+  media-lens-integration.zh-CN.md
   keyboard.md / keyboard.zh-CN.md  # Keyboard shortcuts
   requirements.md              # Requirement history
 tests/
@@ -313,7 +318,6 @@ fitEquivalentNativePercent   = fitScale × 100  (used to display "Fit ≈ xx%")
 
 ## Roadmap
 
-- Image preloading strategy (N images ahead/behind)
 - Strict 1:1 constraint when rotated 90°/270° (swap width/height)
 - Spring-physics animation for zoom and pan
 

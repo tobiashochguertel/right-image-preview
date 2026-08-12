@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -10,6 +11,7 @@ import {
 import { Minimap, MINIMAP_BOTTOM } from '../Minimap';
 import { ImagePreviewCloseButton } from '../parts/ImagePreviewCloseButton';
 import { ExifInfoPanel } from '../parts/ExifInfoPanel';
+import { NeighborDisplaySlotPool } from '../parts/NeighborDisplaySlotPool';
 import { ThumbnailsStrip } from '../parts/ThumbnailsStrip';
 import { ImagePreviewNavArrow } from '../parts/ImagePreviewNavArrow';
 import { Toolbar } from '../Toolbar';
@@ -26,14 +28,21 @@ import {
 import { injectGlobalStyle } from '../injectGlobalStyle';
 import { findGroup } from '../lib/imagePreviewFindGroup';
 import { scheduleRevealAfterDecode } from '../lib/imagePreviewDecode';
+import { mergeByteAndDisplayStatus } from '../lib/neighborDisplayPreload';
 import {
   resolveDefaultGroupedFlatIndex,
   resolvePreviewImages,
 } from '../flattenGroupedImages';
 import { mergeStrings, resolveStrings } from '../locale';
-import type { ImagePreviewProps, ImagePreviewRef, NativePercent } from '../types';
+import type {
+  ImagePreviewProps,
+  ImagePreviewRef,
+  NativePercent,
+  NeighborPreloadStatusMap,
+} from '../types';
 import { useImagePreviewKeyboard } from '../useImagePreviewKeyboard';
 import { useImageTransform } from '../useImageTransform';
+import { useNeighborDisplayPreload } from '../useNeighborDisplayPreload';
 import { useNeighborPreload } from '../useNeighborPreload';
 import { useProgressiveMainImage } from '../useProgressiveMainImage';
 import { usePinchZoom } from '../usePinchZoom';
@@ -72,6 +81,10 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       thumbnailsScope = 'group',
       presentation = 'overlay',
       preloadRadius = 0,
+      preloadDisplaySlots = 0,
+      preloadMemoryBudgetBytes,
+      estimateDecodedBytes,
+      preloadDisplayMode = 'slot',
       onPreloadIndexesChange,
       onPreloadStatusChange,
       showThumbnailPreloadStatus = false,
@@ -182,6 +195,28 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     // ── Current image ───────────────────────────────────────────────────────
     const currentImage = images[currentIndex] ?? images[0];
 
+    const {
+      displayReadyIndexes,
+      isSrcDisplayReady,
+      getMeta,
+      markSrcDisplayReady,
+      slotRenderEntries,
+      onSlotImgLoad,
+      notifyInteraction,
+    } = useNeighborDisplayPreload({
+      images,
+      currentIndex,
+      radius: preloadRadius,
+      displaySlots: preloadDisplaySlots,
+      memoryBudgetBytes: preloadMemoryBudgetBytes,
+      estimateDecodedBytes,
+      mode: preloadDisplayMode,
+      interactionBusy: isPanning || minimapDragging,
+    });
+
+    const skipProgressive =
+      progressiveMain && isSrcDisplayReady(currentImage.src);
+
     const prevSrcRef = useRef(currentImage.src);
     useEffect(() => {
       if (prevSrcRef.current !== currentImage.src) {
@@ -190,11 +225,18 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       }
     }, [currentImage.src, resetImageDims]);
 
+    // Seed layout immediately when navigating to a display-ready src (skip blank flash).
+    useLayoutEffect(() => {
+      if (!skipProgressive) return;
+      const meta = getMeta(currentImage.src);
+      if (meta) onImageLoad(meta);
+    }, [skipProgressive, currentImage.src, getMeta, onImageLoad]);
+
     const progressive = useProgressiveMainImage({
       mainSrc: currentImage.src,
       minimapSrc: currentImage.minimapSrc,
       minimapCustom: !!currentImage.minimap,
-      enabled: progressiveMain,
+      enabled: progressiveMain && !skipProgressive,
       placeholderMinVisibleMs: progressivePlaceholderMinMs,
       onImageLayout: onImageLoad,
       onStageChange: onMainImageLoadStageChange,
@@ -206,10 +248,24 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       (el: HTMLImageElement | null) => {
         if (el && el.complete && el.naturalWidth > 0) {
           onImageLoad({ naturalWidth: el.naturalWidth, naturalHeight: el.naturalHeight });
+          if (skipProgressive) {
+            onMainImgDecoded();
+            markSrcDisplayReady(currentImage.src, {
+              naturalWidth: el.naturalWidth,
+              naturalHeight: el.naturalHeight,
+            });
+            return;
+          }
           scheduleRevealAfterDecode(el, onMainImgDecoded, IMAGE_DECODE_TIMEOUT_MS);
         }
       },
-      [onImageLoad, onMainImgDecoded],
+      [
+        onImageLoad,
+        onMainImgDecoded,
+        skipProgressive,
+        markSrcDisplayReady,
+        currentImage.src,
+      ],
     );
 
     // ── Group info ──────────────────────────────────────────────────────────
@@ -273,13 +329,25 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       }
     }, [images.length, currentIndex, onIndexChange, isIndexControlled]);
 
-    const { status: neighborPreloadStatus, markSrcReady } = useNeighborPreload({
+    const { status: neighborByteStatus, markSrcReady } = useNeighborPreload({
       images,
       currentIndex,
       radius: preloadRadius,
       onPreloadIndexesChange,
-      onPreloadStatusChange,
     });
+
+    const neighborPreloadStatus = useMemo(
+      () =>
+        mergeByteAndDisplayStatus(
+          neighborByteStatus,
+          displayReadyIndexes,
+        ) as NeighborPreloadStatusMap,
+      [neighborByteStatus, displayReadyIndexes],
+    );
+
+    useEffect(() => {
+      onPreloadStatusChange?.(neighborPreloadStatus);
+    }, [neighborPreloadStatus, onPreloadStatusChange]);
 
     const deleteCurrentImage = useCallback(() => {
       const item = images[currentIndex];
@@ -319,10 +387,11 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const resetHideTimer = useCallback(() => {
+      notifyInteraction();
       setControlsVisible(true);
       if (hideTimerRef.current !== null) clearTimeout(hideTimerRef.current);
       hideTimerRef.current = setTimeout(() => setControlsVisible(false), 3000);
-    }, []);
+    }, [notifyInteraction]);
 
     // Kick off the timer on mount; clean up on unmount.
     useEffect(() => {
@@ -517,16 +586,38 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       const src = currentImage?.src;
       if (!src) return;
       if (progressive.pipelineActive) {
-        if (progressive.fullDecoded) markSrcReady(src);
+        if (progressive.fullDecoded) {
+          markSrcReady(src);
+          if (imageDims) {
+            markSrcDisplayReady(src, {
+              naturalWidth: imageDims.naturalWidth,
+              naturalHeight: imageDims.naturalHeight,
+            });
+          } else {
+            markSrcDisplayReady(src);
+          }
+        }
         return;
       }
-      if (imageShowReady) markSrcReady(src);
+      if (imageShowReady) {
+        markSrcReady(src);
+        if (imageDims) {
+          markSrcDisplayReady(src, {
+            naturalWidth: imageDims.naturalWidth,
+            naturalHeight: imageDims.naturalHeight,
+          });
+        } else {
+          markSrcDisplayReady(src);
+        }
+      }
     }, [
       currentImage?.src,
       progressive.pipelineActive,
       progressive.fullDecoded,
       imageShowReady,
+      imageDims,
       markSrcReady,
+      markSrcDisplayReady,
     ]);
 
     // ── Loading indicator ────────────────────────────────────────────────────
@@ -572,10 +663,11 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       delayedPreloadSpinner;
 
     const showCenterLoader =
-      progressiveWaitingFullOverThumb ||
-      progressivePreloadSpinnerNoThumbYet ||
-      (!progressive.pipelineActive && showLoader) ||
-      (progressive.pipelineActive && progressive.preloadStage === 'error' && showLoader);
+      !skipProgressive &&
+      (progressiveWaitingFullOverThumb ||
+        progressivePreloadSpinnerNoThumbYet ||
+        (!progressive.pipelineActive && showLoader) ||
+        (progressive.pipelineActive && progressive.preloadStage === 'error' && showLoader));
 
     const hideMainUntilDecoded =
       progressive.pipelineActive &&
@@ -744,6 +836,14 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                 onLoad={(e) => {
                   const img = e.currentTarget;
                   onImageLoad({ naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight });
+                  if (skipProgressive) {
+                    onMainImgDecoded();
+                    markSrcDisplayReady(currentImage.src, {
+                      naturalWidth: img.naturalWidth,
+                      naturalHeight: img.naturalHeight,
+                    });
+                    return;
+                  }
                   scheduleRevealAfterDecode(img, onMainImgDecoded, IMAGE_DECODE_TIMEOUT_MS);
                 }}
                 onError={() => {
@@ -901,6 +1001,11 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
             onUserActivity={resetHideTimer}
           />
         )}
+
+        <NeighborDisplaySlotPool
+          entries={slotRenderEntries}
+          onSlotImgLoad={onSlotImgLoad}
+        />
 
         {showExif && exifOpen && (
           <ExifInfoPanel

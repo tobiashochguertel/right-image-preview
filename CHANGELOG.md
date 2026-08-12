@@ -7,6 +7,12 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ---
 
+## [0.3.1] — 2026-08-12
+
+### Added
+
+- **Display-ready neighbor preload** — `preloadDisplaySlots`, `preloadMemoryBudgetBytes`, `estimateDecodedBytes`, `preloadDisplayMode` (`slot` \| `decode`). Hosts pass a stable memory budget (e.g. Tauri); the viewer picks how many neighbors fit per index. Exports `suggestPreloadMemoryBudgetBytes`, `rgbaDecodedBytes`, and related helpers. Budget-only (`slots=0`) uses a ceiling of 6. Navigating to `display-ready` skips progressive placeholder/spinner; byte `ready` alone does not. See [`docs/media-lens-integration.md`](./docs/media-lens-integration.md) / [中文](./docs/media-lens-integration.zh-CN.md).
+
 ## [0.3.0] — 2026-08-12
 
 ### Added

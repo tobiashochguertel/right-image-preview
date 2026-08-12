@@ -189,7 +189,16 @@ export type PresentationMode = 'overlay' | 'contained';
 export type ChromeDensity = 'default' | 'minimal';
 
 /** Neighbor preload / session-warm phase for thumbnail strip indicators. */
-export type NeighborPreloadPhase = 'loading' | 'ready' | 'warm' | 'error';
+export type NeighborPreloadPhase =
+  | 'loading'
+  | 'ready'
+  | 'warm'
+  /**
+   * Full `src` loaded **and** `decode()` settled in a display preload slot —
+   * safe to skip progressive placeholder when navigating here.
+   */
+  | 'display-ready'
+  | 'error';
 
 export interface NeighborPreloadEntry {
   phase: NeighborPreloadPhase;
@@ -201,13 +210,19 @@ export interface NeighborPreloadEntry {
 }
 
 /**
- * Flat-index → status for the thumbnail strip.
- * - `loading` / `ready`: current main image, or inside the active neighbor-preload window
- *   (strip: dark green).
- * - `warm`: full `src` succeeded earlier this session, but not current / not in the window
- *   (strip: light green; browser HTTP cache is likely, not guaranteed).
+ * Flat-index → status for the thumbnail strip / host debug.
+ * - `loading` / `ready`: byte-level neighbor preload (HTTP cache likely for `ready`).
+ * - `display-ready`: decoded for instant main-view reveal (skip progressive when navigating here).
+ * - `warm`: bytes succeeded earlier this session, outside the window (not display-ready).
  */
 export type NeighborPreloadStatusMap = Readonly<Record<number, NeighborPreloadEntry>>;
+
+/**
+ * How neighbor **display** preload keeps decoded bitmaps.
+ * - `'slot'` (default): offscreen `<img>` in the DOM + `decode()` (approach C).
+ * - `'decode'`: `Image()` + `decode()` only, no offscreen layer (approach B fallback).
+ */
+export type PreloadDisplayMode = 'slot' | 'decode';
 
 /**
  * Stages for the optional progressive main-image pipeline (`minimapSrc` thumbnail
@@ -397,9 +412,38 @@ export interface ImagePreviewProps {
   /**
    * Preload full `src` for neighbors within this flat-index radius of the current image.
    * `0` (default) disables neighbor preload. Recommended for gallery apps: `1` or `2`.
-   * Compatible with {@link progressiveMain} / `minimapSrc` on the current item.
+   * Byte preload alone does **not** skip {@link progressiveMain}; see {@link preloadDisplaySlots}.
    */
   preloadRadius?: number;
+
+  /**
+   * Max number of **neighbor** images to keep display-ready (decoded) at once.
+   * `0` (default) — no display-ready pool **unless** {@link preloadMemoryBudgetBytes} is set
+   * (then a ceiling of 6 applies and the budget decides how many fill).
+   * `2` ≈ keep current±1 when they fall inside {@link preloadRadius}.
+   * Ignored when {@link preloadRadius} is `0`.
+   */
+  preloadDisplaySlots?: number;
+
+  /**
+   * Decoded-bitmap byte budget for **neighbor** display-ready slots (not including the current
+   * main image). With {@link estimateDecodedBytes}, the viewer picks the nearest neighbors that
+   * fit. Props can stay fixed while browsing mixed-size folders — slot count adapts per index.
+   * When set and {@link preloadDisplaySlots} is `0`, a default ceiling of 6 is used.
+   */
+  preloadMemoryBudgetBytes?: number;
+
+  /**
+   * Estimate decoded size for budget capping. Default: EXIF width×height×4 when present,
+   * else a conservative 12 MP RGBA guess.
+   */
+  estimateDecodedBytes?: (item: ImageItem) => number;
+
+  /**
+   * Display-preload strategy. Default: `'slot'` (offscreen imgs). Use `'decode'` to fall back
+   * to decode-only short-circuit without keeping compositor layers.
+   */
+  preloadDisplayMode?: PreloadDisplayMode;
 
   /**
    * Optional hook listing flat indexes currently targeted by neighbor preload (for tests / debug).
@@ -408,17 +452,15 @@ export interface ImagePreviewProps {
   onPreloadIndexesChange?: (indexes: number[]) => void;
 
   /**
-   * Optional hook for neighbor preload phase / progress.
-   * Useful for custom host UI; the built-in strip bars require
-   * {@link showThumbnailPreloadStatus} as well.
-   * `Image()` preload typically has no byte % — then `progress` is omitted while `phase === 'loading'`.
+   * Optional hook for neighbor preload phase / progress (byte + display-ready).
+   * `display-ready` means decode settled — navigating there skips progressive placeholder.
+   * Built-in strip bars also need {@link showThumbnailPreloadStatus}.
    */
   onPreloadStatusChange?: (status: NeighborPreloadStatusMap) => void;
 
   /**
-   * When true, thumbnail tiles show a light/dark green bottom edge indicating
-   * session-warm vs active-window preload status. Default: `false` (keeps the strip clean).
-   * Requires {@link showThumbnails}; pairs with {@link preloadRadius} / main-image ready marks.
+   * When true, thumbnail tiles show bottom-edge indicators for preload status. Default: `false`.
+   * Dark green = byte ready / loading; brightest = `display-ready`; light green = session-warm.
    */
   showThumbnailPreloadStatus?: boolean;
 

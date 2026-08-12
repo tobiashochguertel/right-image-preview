@@ -47,8 +47,10 @@ function itemKey(item: ImageItem, flatIndex: number): string {
 }
 
 const GLASS_BG = 'rgba(6, 10, 20, 0.55)';
-/** Current image or active preload window (reliable for this session). */
+/** Byte-level ready / loading in active window. */
 const PRELOAD_BAR_DARK_GREEN = '#2db85a';
+/** Display-ready (decode settled — safe to skip progressive). */
+const PRELOAD_BAR_DISPLAY_READY = '#1a9f4b';
 const PRELOAD_BAR_GRAY = 'rgba(140, 150, 165, 0.55)';
 /**
  * Session-warm outside the window: HTTP cache likely, not guaranteed.
@@ -63,7 +65,13 @@ function preloadFillRatio(
   entry: NeighborPreloadStatusMap[number] | undefined,
 ): number | null {
   if (!entry) return null;
-  if (entry.phase === 'ready' || entry.phase === 'warm') return 1;
+  if (
+    entry.phase === 'ready' ||
+    entry.phase === 'warm' ||
+    entry.phase === 'display-ready'
+  ) {
+    return 1;
+  }
   if (entry.phase === 'error') return null; // no bar — failed active preload
   if (typeof entry.progress === 'number' && Number.isFinite(entry.progress)) {
     return Math.max(0, Math.min(1, entry.progress));
@@ -154,6 +162,8 @@ export function ThumbnailsStrip({
     const fill = preloadFillRatio(preloadStatus?.[flatIndex]);
     const phase = preloadStatus?.[flatIndex]?.phase;
     const isWarm = phase === 'warm';
+    const isDisplayReady = phase === 'display-ready';
+    const barFillColor = isDisplayReady ? PRELOAD_BAR_DISPLAY_READY : PRELOAD_BAR_DARK_GREEN;
     return (
       <button
         key={itemKey(item, flatIndex)}
@@ -202,11 +212,13 @@ export function ThumbnailsStrip({
             aria-hidden
             data-preload-bar={phase ?? 'loading'}
             title={
-              isWarm
-                ? 'Loaded earlier this session (cache likely, not guaranteed)'
-                : phase === 'ready'
-                  ? 'Ready (current or active preload window)'
-                  : 'Preloading…'
+              isDisplayReady
+                ? 'Display-ready (skip progressive on navigate)'
+                : isWarm
+                  ? 'Loaded earlier this session (cache likely, not guaranteed)'
+                  : phase === 'ready'
+                    ? 'Byte-ready (current or active preload window)'
+                    : 'Preloading…'
             }
             style={{
               position: 'absolute',
@@ -225,7 +237,7 @@ export function ThumbnailsStrip({
                   display: 'block',
                   height: '100%',
                   width: `${fill * 100}%`,
-                  background: PRELOAD_BAR_DARK_GREEN,
+                  background: barFillColor,
                   transition: 'width 0.2s ease',
                 }}
               />

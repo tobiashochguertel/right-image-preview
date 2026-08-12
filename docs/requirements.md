@@ -265,3 +265,10 @@
 - [x] 工具栏浏览器全屏 + ref `requestFullscreen` / `exitFullscreen` / `isFullscreen`；Esc 先退全屏
 - [x] 受控 `index` + `toolbarExtra` + ref `goTo`
 - [x] Demo 5：`showThumbnails` + `thumbnailsScope="flat"`
+
+## 阶段 16 — Display-ready 邻居预热
+
+- [x] `preloadDisplaySlots` / `preloadMemoryBudgetBytes` / `estimateDecodedBytes` / `preloadDisplayMode`
+- [x] `display-ready` 确切判定（load + `decode`）；命中则跳过渐进占位与 loading
+- [x] 默认 `'slot'`（离屏层）；`'decode'` 为 B 降级
+- [x] 文档：字节 `ready` ≠ 可秒切；槽位/内存由宿主决定

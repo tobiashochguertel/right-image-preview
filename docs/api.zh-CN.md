@@ -58,10 +58,14 @@
 | `showThumbnails` | `boolean` | `false` | 预览层内底部横向缩略图条；可导航图片 ≤ 1 时自动隐藏 |
 | `thumbnailsScope` | `'group' \| 'flat'` | `'group'` | `showThumbnails` 为 true 时条带展示范围；见下表 |
 | `presentation` | `'overlay' \| 'contained'` | `'overlay'` | `overlay` 全屏对话框；`contained` 填满已定位宿主 |
-| `preloadRadius` | `number` | `0` | 相邻主图预加载半径；`0` 关闭 |
+| `preloadRadius` | `number` | `0` | 相邻主图**字节**预加载半径；`0` 关闭。单独开启不会跳过渐进占位 |
+| `preloadDisplaySlots` | `number` | `0` | display-ready 邻居上限。`0` 且提供预算时上限为 6，实际张数由预算决定 |
+| `preloadMemoryBudgetBytes` | `number` | — | **邻居**解码字节预算（不含当前主图）。推荐由 Tauri 传入；浏览中 props 可固定 |
+| `estimateDecodedBytes` | `(item) => number` | EXIF 宽×高×4 或 12MP 估算 | 预算用体积估算 |
+| `preloadDisplayMode` | `'slot' \| 'decode'` | `'slot'` | `'slot'` = 离屏 img（C）；`'decode'` = 仅 decode（B 降级） |
 | `onPreloadIndexesChange` | `(indexes: number[]) => void` | — | 可选：当前计划预加载的扁平下标 |
-| `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | 可选状态回调（宿主自绘 / 调试）：`loading`/`ready`/`warm`/`error` |
-| `showThumbnailPreloadStatus` | `boolean` | `false` | 为 true 且开启缩略图条时，瓦片底边显示浅绿/深绿预加载指示 |
+| `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | 含 `display-ready`（decode 完成，切图可跳过渐进）。字节 `ready` ≠ 可秒开 |
+| `showThumbnailPreloadStatus` | `boolean` | `false` | 底片条指示：最深绿 = display-ready；深绿 = 字节就绪；浅绿 = warm |
 | `chrome` | `'default' \| 'minimal'` | `'default'` | `minimal` 空闲时控件完全隐藏 |
 | `index` | `number` | — | 受控扁平下标 |
 | `toolbarExtra` | `ReactNode` | — | 工具栏末尾自定义内容 |
@@ -86,6 +90,13 @@
 | `'flat'` | **整段扁平导航序列**（与 ←/→ / `onIndexChange` 一致）。当 `entryCount > visibleCapacity × 3` 时窗口虚拟化（`visibleCapacity = max(1, floor(viewportWidth / tileStride))`）。 |
 
 瓦片图：`ImageItem.minimapSrc` 优先，否则 `src`。少量瓦片居中胶囊；较多时全宽底栏横向滚动。
+
+#### 相邻预加载说明
+
+- **字节预热**（`preloadRadius`）：仅 `Image()` 拉取。条带上的 `ready` / `warm` 表示字节可能已缓存——**不足以**跳过渐进主图。
+- **Display-ready**（`preloadDisplaySlots` > 0）：load + `decode()`（`preloadDisplayMode="slot"` 时还有离屏 `<img>`）。`display-ready` 为确切状态；切到该项会跳过渐进占位与中央 loading。
+- **内存**：组件不读设备内存。宿主（如 Tauri）应传入 `preloadMemoryBudgetBytes`（可用 `suggestPreloadMemoryBudgetBytes`），并尽量提供宽高。**Media Lens 接入清单：** [`media-lens-integration.zh-CN.md`](./media-lens-integration.zh-CN.md)。
+- **降级**：`preloadDisplayMode="decode"` 保持同一短路契约，但不常驻合成层。
 
 #### `presentation` 说明
 

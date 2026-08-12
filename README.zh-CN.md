@@ -27,7 +27,7 @@
 | **导航小地图** | 主图溢出视口时右下角缩略图 + 可拖视口框；可通过 `showMinimap` 关闭 |
 | **缩略图条** | `showThumbnails` 开启底部横向缩略图（默认关）。`thumbnailsScope="group"`（默认）分组时仅当前组；`"flat"` 为整段扁平序列（过长时窗口虚拟化） |
 | **嵌入式模式** | `presentation="contained"` 填满宿主容器；仅聚焦时响应键盘 |
-| **相邻预加载** | `preloadRadius` 预取相邻完整 `src`；可选 `showThumbnailPreloadStatus` 在缩略图底边显示浅绿/深绿指示（默认关） |
+| **相邻预加载** | `preloadRadius` 字节预热；`preloadDisplaySlots` 保持离屏 decode 就绪（槽位数由宿主按内存决定）。`display-ready` 切图跳过渐进；仅字节就绪不会跳过 |
 | **控件密度** | `chrome="minimal"` 空闲时控件完全隐藏 |
 | **浏览器全屏** | 工具栏切换 + ref `requestFullscreen` / `exitFullscreen`；Esc 先退出全屏 |
 | **受控下标** | `index` + `onIndexChange`；ref `goTo(index)` |
@@ -35,7 +35,7 @@
 | **触控双指捏合缩放** | 双指捏合/展开实现连续缩放；缩放锚点跟随双指中点；可用 **`pinchEnabled`** 关闭 |
 | **界面语言** | **`language`** 内置 **英文**与**简体中文**（`en`、`zh`、`zh-CN` 等）；可用 **`strings`** 覆盖任意文案 |
 | **丰富的键盘快捷键** | Esc / ±方向键 / Space / PageUp-Down / Ctrl+方向键 |
-| **可访问性** | `role="dialog"` + `aria-modal`，所有按钮带 `aria-label`，焦点管理 |
+| **可访问性** | Overlay：`role="dialog"` + `aria-modal` 与焦点管理；`presentation="contained"`：`role="region"`（非整页模态），仅预览聚焦时响应键盘。控件带 `aria-label` |
 | **TypeScript 一等类型** | 完整类型导出，`forwardRef` 支持命令式 ref API |
 | **零生产依赖** | 仅依赖 React，无任何第三方 UI 库 |
 | **兼容性：React 17+** | 兼容 `react` / `react-dom` ≥ 17，推荐 18+（滚轮多档时原生 `flushSync` 体验最佳） |
@@ -64,6 +64,7 @@ npm run build     # 演示站的 Vite 生产构建
 - **Demo 2**：多文件夹分组，侧边箭头，含翻转按钮
 - **Demo 3**：先小图占位、再载入全图（渐进加载；滚轮/平移；演示资源走 CDN）
 - **Demo 4**：宿主 EXIF + 删除
+- **Demo 5**：嵌入式工作区 + 扁平缩略图条 + 相邻预加载 + minimal chrome
 
 ---
 
@@ -122,6 +123,8 @@ import { ImagePreview } from 'right-image-preview';
 ---
 
 ## API
+
+> **完整权威说明：** [`docs/api.zh-CN.md`](./docs/api.zh-CN.md)（中文）/ [`docs/api.md`](./docs/api.md)（英文）。下表仅为速览，若有出入以 `docs/api` 为准。
 
 ### Props
 
@@ -283,6 +286,8 @@ src/
   demos/                       # 各 Demo 与演示站文案（不打进 npm 包）
 docs/
   api.md / api.zh-CN.md              # Props & Ref API 参考
+  media-lens-integration.zh-CN.md    # Media Lens（Tauri）接入清单
+  media-lens-integration.md          # English checklist
   keyboard.md / keyboard.zh-CN.md   # 键盘快捷键说明
   requirements.md                    # 需求迭代记录
 tests/
@@ -313,7 +318,6 @@ fitEquivalentNativePercent    = fitScale × 100（供 UI 显示"适应 ≈ xx%"�
 
 ## 后续迭代方向
 
-- 图片预加载策略（前后各预加载 N 张）
 - 旋转 90°/270° 时的严格 1:1 约束（宽高调换）
 - 弹簧物理动画（缩放/平移更自然的惯性）
 

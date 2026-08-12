@@ -555,6 +555,66 @@ describe('ImagePreview component', () => {
       );
       expect(onPreloadIndexesChange).toHaveBeenCalledWith([]);
     });
+
+    it('reports display-ready after decode preload', async () => {
+      const created: HTMLImageElement[] = [];
+      const OriginalImage = globalThis.Image;
+      globalThis.Image = class extends OriginalImage {
+        constructor() {
+          super();
+          created.push(this);
+          queueMicrotask(() => {
+            this.onload?.(new Event('load') as never);
+          });
+        }
+      } as unknown as typeof Image;
+
+      const onPreloadStatusChange = vi.fn();
+      const progressiveImages = [
+        {
+          src: 'https://example.com/a.jpg',
+          minimapSrc: 'https://example.com/a-mini.jpg',
+        },
+        {
+          src: 'https://example.com/b.jpg',
+          minimapSrc: 'https://example.com/b-mini.jpg',
+        },
+        {
+          src: 'https://example.com/c.jpg',
+          minimapSrc: 'https://example.com/c-mini.jpg',
+        },
+      ];
+      try {
+        render(
+          <ImagePreview
+            images={progressiveImages}
+            visible
+            defaultIndex={1}
+            preloadRadius={1}
+            preloadDisplaySlots={2}
+            preloadDisplayMode="decode"
+            progressiveMain
+            onPreloadStatusChange={onPreloadStatusChange}
+            {...ZH}
+          />,
+        );
+
+        await waitFor(
+          () => {
+            const last = onPreloadStatusChange.mock.calls.at(-1)?.[0] as Record<
+              number,
+              { phase: string }
+            >;
+            expect(
+              last?.[0]?.phase === 'display-ready' || last?.[2]?.phase === 'display-ready',
+            ).toBe(true);
+          },
+          { timeout: 3000 },
+        );
+      } finally {
+        globalThis.Image = OriginalImage;
+      }
+    });
   });
 
   describe('fullscreen chrome', () => {

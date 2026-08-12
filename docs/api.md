@@ -58,10 +58,14 @@
 | `showThumbnails` | `boolean` | `false` | Bottom horizontal thumbnail strip inside the overlay; hidden when ≤ 1 navigable image |
 | `thumbnailsScope` | `'group' \| 'flat'` | `'group'` | Which images appear in the strip when `showThumbnails` is true; see table below |
 | `presentation` | `'overlay' \| 'contained'` | `'overlay'` | `overlay` fullscreen dialog; `contained` fills a positioned host |
-| `preloadRadius` | `number` | `0` | Neighbor full-`src` preload radius; `0` = off |
+| `preloadRadius` | `number` | `0` | Neighbor full-`src` byte preload radius; `0` = off. Does **not** alone skip progressive |
+| `preloadDisplaySlots` | `number` | `0` | Max neighbors kept **display-ready**. `0` + budget → ceiling 6; budget decides fill count |
+| `preloadMemoryBudgetBytes` | `number` | — | Neighbor decoded-byte budget (excludes current main). Prefer this from Tauri; props stay fixed while browsing |
+| `estimateDecodedBytes` | `(item) => number` | EXIF w×h×4 or 12MP guess | Size estimate for budget |
+| `preloadDisplayMode` | `'slot' \| 'decode'` | `'slot'` | `'slot'` = offscreen imgs (C); `'decode'` = decode-only fallback (B) |
 | `onPreloadIndexesChange` | `(indexes: number[]) => void` | — | Optional debug hook for planned preload indexes |
-| `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | Optional status map for host UI / debug (`loading`/`ready`/`warm`/`error`) |
-| `showThumbnailPreloadStatus` | `boolean` | `false` | When true (with `showThumbnails`), tiles show light/dark green bottom edges for warm vs ready preload status |
+| `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | Phases include `display-ready` (exact: decode settled — navigate skips progressive). Byte `ready` ≠ instant reveal |
+| `showThumbnailPreloadStatus` | `boolean` | `false` | Strip edges: brightest = `display-ready`; dark = byte ready; light = warm |
 | `chrome` | `'default' \| 'minimal'` | `'default'` | `minimal` fades idle chrome to 0% |
 | `index` | `number` | — | Controlled flat index |
 | `toolbarExtra` | `ReactNode` | — | Extra content at the end of the toolbar |
@@ -86,6 +90,13 @@ When non-empty **`groupedImages`** is provided, **toolbar prev/next are always s
 | `'flat'` | Lists the **full flattened** navigation sequence (same order as ←/→ / `onIndexChange`). Window-virtualized when `entryCount > visibleCapacity × 3` (`visibleCapacity = max(1, floor(viewportWidth / tileStride))`). |
 
 Tile image: `ImageItem.minimapSrc` if set, otherwise `src`. Layout: few tiles → centred frosted pill; many tiles → full-width bottom bar with horizontal scroll.
+
+#### Neighbor preload notes
+
+- **Byte preload** (`preloadRadius`): `Image()` fetch only. Strip phase `ready` / `warm` means bytes likely cached — **not** enough to skip {@link progressiveMain}.
+- **Display-ready** (`preloadDisplaySlots` > 0): load + `decode()` (and offscreen `<img>` when `preloadDisplayMode="slot"`). Phase `display-ready` is exact; navigating there skips progressive placeholder and centre spinner.
+- **Memory**: the library does not read device RAM. Hosts (e.g. Tauri) should pass `preloadMemoryBudgetBytes` (see `suggestPreloadMemoryBudgetBytes`) and ideally width/height estimates. **Media Lens checklist:** [`media-lens-integration.md`](./media-lens-integration.md).
+- **Fallback**: `preloadDisplayMode="decode"` keeps the same short-circuit contract without retaining compositor layers.
 
 #### `presentation` notes
 
