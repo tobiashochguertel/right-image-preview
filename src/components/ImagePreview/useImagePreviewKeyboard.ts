@@ -69,7 +69,16 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
     endNavHold,
   } = p;
 
+  // Contained 失焦 / holdMinVisibleMs=0 极速翻页时，keyup 若仍要求 keyboardActive
+  // 会漏掉 endHold，表现为松手后仍一直切图。失焦与卸载必须强制结束 hold。
   useEffect(() => {
+    if (keyboardActive || !endNavHold) return;
+    endNavHold();
+  }, [keyboardActive, endNavHold]);
+
+  useEffect(() => {
+    const stopHold = () => endNavHold?.();
+
     const onKeyDown = (e: KeyboardEvent) => {
       if (!keyboardActive) return;
 
@@ -178,16 +187,22 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
-      if (!keyboardActive || !endNavHold) return;
+      // 不依赖 keyboardActive：失焦后仍要结束 hold，否则 minVisibleMs=0 会空跑连切。
+      if (!endNavHold) return;
       if (e.key === 'ArrowLeft') endNavHold('prev');
       if (e.key === 'ArrowRight') endNavHold('next');
     };
 
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', stopHold);
+    document.addEventListener('visibilitychange', stopHold);
     return () => {
+      stopHold();
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', stopHold);
+      document.removeEventListener('visibilitychange', stopHold);
     };
   }, [
     resetHideTimer,

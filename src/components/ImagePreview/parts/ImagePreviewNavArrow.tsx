@@ -17,6 +17,7 @@ export interface ImagePreviewNavArrowProps {
   onPointerDown?: (e: React.PointerEvent<HTMLButtonElement>) => void;
   onPointerUp?: (e: React.PointerEvent<HTMLButtonElement>) => void;
   onPointerCancel?: (e: React.PointerEvent<HTMLButtonElement>) => void;
+  onLostPointerCapture?: (e: React.PointerEvent<HTMLButtonElement>) => void;
   label: string;
   tip: string;
   visible: boolean;
@@ -31,6 +32,7 @@ export function ImagePreviewNavArrow({
   onPointerDown,
   onPointerUp,
   onPointerCancel,
+  onLostPointerCapture,
   label,
   tip,
   visible,
@@ -47,6 +49,7 @@ export function ImagePreviewNavArrow({
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
+        onLostPointerCapture={onLostPointerCapture}
         onPointerLeave={(e) => {
           // Release hold if pointer slides off while pressed.
           if (e.buttons !== 0) onPointerUp?.(e);

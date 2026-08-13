@@ -9,6 +9,12 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ## [Unreleased]
 
+## [0.3.6] — 2026-08-13
+
+### Fixed
+
+- **Hold ←/→ stops on release when `holdMinVisibleMs` is 0** — `keyup` / window blur / `visibilitychange` always end the paced hold (no longer gated on `keyboardActive`). Contained focus loss and effect cleanup also clear the hold so rapid flips cannot keep advancing after the key is up. Side arrows end hold on `lostpointercapture`.
+
 ## [0.3.5] — 2026-08-13
 
 ### Changed

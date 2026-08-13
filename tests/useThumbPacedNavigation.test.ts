@@ -115,4 +115,64 @@ describe('useThumbPacedNavigation', () => {
     act(() => vi.advanceTimersByTime(1000));
     expect(next).toHaveBeenCalledTimes(1);
   });
+
+  it('minVisibleMs=0: endHold before setTimeout(0) runs → no further steps (no backlog)', () => {
+    const next = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ thumbReady, currentIndex }) =>
+        useThumbPacedNavigation({
+          currentIndex,
+          thumbReady,
+          next,
+          prev: vi.fn(),
+          minVisibleMs: 0,
+        }),
+      { initialProps: { thumbReady: true, currentIndex: 0 } },
+    );
+
+    act(() => result.current.beginHold('next'));
+    expect(next).toHaveBeenCalledTimes(1);
+
+    // Land + immediately ready → arms wait=0 timer.
+    act(() => rerender({ thumbReady: true, currentIndex: 1 }));
+
+    // Release before the macrotask runs (classic holdMinVisibleMs=0 race).
+    act(() => result.current.endHold('next'));
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(next).toHaveBeenCalledTimes(1);
+
+    // Later paint flips must not resume a dead hold.
+    act(() => rerender({ thumbReady: true, currentIndex: 1 }));
+    act(() => vi.runAllTimers());
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('minVisibleMs=0 while held: continues only while holdRef is set; stops hard on endHold', () => {
+    const next = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ thumbReady, currentIndex }) =>
+        useThumbPacedNavigation({
+          currentIndex,
+          thumbReady,
+          next,
+          prev: vi.fn(),
+          minVisibleMs: 0,
+        }),
+      { initialProps: { thumbReady: true, currentIndex: 0 } },
+    );
+
+    act(() => result.current.beginHold('next'));
+    expect(next).toHaveBeenCalledTimes(1);
+
+    act(() => rerender({ thumbReady: true, currentIndex: 1 }));
+    act(() => vi.runAllTimers());
+    expect(next).toHaveBeenCalledTimes(2);
+
+    act(() => rerender({ thumbReady: true, currentIndex: 2 }));
+    act(() => result.current.endHold('next'));
+    act(() => vi.runAllTimers());
+    expect(next).toHaveBeenCalledTimes(2);
+  });
 });

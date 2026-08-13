@@ -1064,6 +1064,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                   }}
                   onPointerUp={() => endNavHold('prev')}
                   onPointerCancel={() => endNavHold('prev')}
+                  onLostPointerCapture={() => endNavHold('prev')}
                   label={t.prev}
                   tip={t.tipPrev}
                   visible={controlsVisible}
@@ -1089,6 +1090,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                   }}
                   onPointerUp={() => endNavHold('next')}
                   onPointerCancel={() => endNavHold('next')}
+                  onLostPointerCapture={() => endNavHold('next')}
                   label={t.next}
                   tip={t.tipNext}
                   visible={controlsVisible}

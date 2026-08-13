@@ -74,6 +74,8 @@ export function useThumbPacedNavigation({
   }, []);
 
   const stepNow = useCallback((dir: ThumbPaceHoldDir) => {
+    // 再读一次 hold：setTimeout(0) 可能在 keyup/endHold 之后才跑到 step。
+    if (holdRef.current !== dir) return;
     if (dir === 'next') nextRef.current();
     else prevRef.current();
   }, []);
