@@ -26,8 +26,8 @@ With **`presentation="contained"`**, shortcuts are handled only while focus is i
 
 | Key | Action |
 |-----|--------|
-| `←` | Previous image (within group; globally if no `groupedImages`) |
-| `→` | Next image (within group; globally if no `groupedImages`) |
+| `←` | Previous image in the flat list (crosses groups when using `groupedImages`) |
+| `→` | Next image in the flat list (crosses groups when using `groupedImages`) |
 | `PageUp` | Jump to first image of the previous group (requires non-empty `groupedImages`) |
 | `PageDown` | Jump to first image of the next group (requires non-empty `groupedImages`) |
 

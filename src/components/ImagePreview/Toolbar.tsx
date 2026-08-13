@@ -31,13 +31,11 @@ interface ToolbarProps {
   // ── Navigation ────────────────────────────────────────────────────────────
   totalImages: number;
   currentIndex: number;
-  /** When provided, arrows navigate within-group. */
+  /** When provided with groupTotal, shows within-group counter (e.g. `2/3`). */
   groupCurrentIndex?: number;
   groupTotal?: number;
   hasPrevGroup?: boolean;
   hasNextGroup?: boolean;
-  atGroupStart?: boolean;
-  atGroupEnd?: boolean;
   onPrevGroup?(): void;
   onNextGroup?(): void;
   /** Toolbar prev/next; parent sets false only for flat lists with `arrows` `'side'` / `'none'`. Always true when `groupedImages` is used. */
@@ -568,7 +566,6 @@ export function Toolbar({
   totalImages, currentIndex,
   groupCurrentIndex, groupTotal,
   hasPrevGroup, hasNextGroup,
-  atGroupStart, atGroupEnd,
   onPrevGroup, onNextGroup,
   showToolbarArrows = true,
   imageName, groupName, groupOrdinal, groupCount,
@@ -742,7 +739,7 @@ export function Toolbar({
                 label={strings.prev}
                 tip={strings.tipPrev}
                 onClick={onPrev}
-                disabled={isGroupMode ? atGroupStart : currentIndex === 0}
+                disabled={currentIndex === 0}
               >
                 <IconLeft />
               </TBtn>
@@ -770,7 +767,7 @@ export function Toolbar({
                 label={strings.next}
                 tip={strings.tipNext}
                 onClick={onNext}
-                disabled={isGroupMode ? atGroupEnd : currentIndex === totalImages - 1}
+                disabled={currentIndex === totalImages - 1}
               >
                 <IconRight />
               </TBtn>

@@ -15,7 +15,7 @@
 | `minimapSrc` | `string` | — | 仅单图：小地图图片 URL（默认同 `src`）；若设 `minimap` 则忽略 |
 | `minimap` | `React.ReactNode` | — | 仅单图：自定义小地图内容（覆盖 `minimapSrc`） |
 | `images` | `ImageItem[]` | — | 扁平多图；无非空 `groupedImages` 时 `src`/`alt` 被忽略；若与非空 `groupedImages` 同时传入则忽略 `images`（开发环境 `console.warn`） |
-| `groupedImages` | `ImageGroup[]` | — | 文件夹式分组；各组 `images` 按顺序拼接；优先于 `images`/`src`；多组时左右箭头组内导航，工具栏出现上一组/下一组 |
+| `groupedImages` | `ImageGroup[]` | — | 文件夹式分组；各组 `images` 按顺序拼接；优先于 `images`/`src`；←/→ 与按住连切沿**扁平列表跨组**；工具栏上一组/下一组（及 PageUp/PageDown）跳到组首 |
 | `visible` | `boolean` | — | 受控可见性 |
 | `defaultGroupedSelection` | `DefaultGroupedSelection` | — | 非空 `groupedImages` 时的初始 `{ defaultGroupIndex, defaultIndexInGroup }`（组下标只计非空组）；覆盖 `defaultIndex` |
 | `defaultIndex` | `number` | `0` | 扁平列表中的初始下标；与分组同时设置 `defaultGroupedSelection` 时忽略 |
@@ -179,8 +179,8 @@ interface ImagePreviewRef {
   flipVertical(): void;
 
   // 图片导航
-  next(): void;            // 组内下一张（无 groupedImages 则全局）
-  prev(): void;            // 组内上一张
+  next(): void;            // 扁平列表下一张（有 groupedImages 时会跨组）
+  prev(): void;            // 扁平列表上一张
   nextGroup(): void;       // 跳到下一组第一张
   prevGroup(): void;       // 跳到上一组第一张
   goTo(index: number): void; // 跳到扁平下标（截断）

@@ -640,9 +640,9 @@ export interface ImagePreviewRef {
   flipHorizontal(): void;
   /** Flip image vertically (top ↔ bottom). */
   flipVertical(): void;
-  /** Navigate to the next image within the current group (or globally if not grouped). */
+  /** Navigate to the next flat index (crosses groups when using `groupedImages`). */
   next(): void;
-  /** Navigate to the previous image within the current group (or globally if not grouped). */
+  /** Navigate to the previous flat index (crosses groups when using `groupedImages`). */
   prev(): void;
   /** Navigate to the first image of the next group (requires `groupedImages`). */
   nextGroup(): void;

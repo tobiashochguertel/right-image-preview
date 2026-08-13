@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import type { FlattenedGroupSlice } from './flattenGroupedImages';
 import type { ZoomMode } from './types';
 import type { ThumbPaceHoldDir } from './useThumbPacedNavigation';
 
@@ -20,11 +19,6 @@ export interface UseImagePreviewKeyboardParams {
   panByDelta(dx: number, dy: number): void;
   keyboardPanStepPx: number;
   fitEquivalentNativePercent: number | undefined;
-  currentIndex: number;
-  currentGroup: FlattenedGroupSlice | null;
-  currentGroupIdx: number;
-  groupSlices: FlattenedGroupSlice[] | undefined;
-  imagesLength: number;
   /** When set, Delete / Backspace removes the current image. */
   onDeleteImage?: () => void;
   /**
@@ -67,11 +61,6 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
     panByDelta,
     keyboardPanStepPx,
     fitEquivalentNativePercent,
-    currentIndex,
-    currentGroup,
-    currentGroupIdx,
-    groupSlices,
-    imagesLength,
     onDeleteImage,
     keyboardActive = true,
     isFullscreen,
@@ -154,14 +143,11 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
           if (mod) {
             rotateCCW();
           } else if (beginNavHold && !e.repeat) {
-            // Ignore OS key-repeat — pacing is driven by thumbnail readiness while held.
-            const atStart = currentGroup ? currentIndex === currentGroup.start : currentIndex === 0;
-            if (atStart && currentGroupIdx > 0) prevGroup();
-            else beginNavHold('prev');
+            // Ignore OS key-repeat — pacing is driven by stage presentation while held.
+            // Flat ←/→ (crosses groups); PageUp/PageDown jump groups.
+            beginNavHold('prev');
           } else if (!beginNavHold) {
-            const atStart = currentGroup ? currentIndex === currentGroup.start : currentIndex === 0;
-            if (atStart && currentGroupIdx > 0) prevGroup();
-            else prev();
+            prev();
           }
           break;
         case 'ArrowRight':
@@ -173,15 +159,9 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
           if (mod) {
             rotateCW();
           } else if (beginNavHold && !e.repeat) {
-            const atEnd = currentGroup ? currentIndex === currentGroup.end : currentIndex === imagesLength - 1;
-            const hasNext = groupSlices ? currentGroupIdx < groupSlices.length - 1 : false;
-            if (atEnd && hasNext) nextGroup();
-            else beginNavHold('next');
+            beginNavHold('next');
           } else if (!beginNavHold) {
-            const atEnd = currentGroup ? currentIndex === currentGroup.end : currentIndex === imagesLength - 1;
-            const hasNext = groupSlices ? currentGroupIdx < groupSlices.length - 1 : false;
-            if (atEnd && hasNext) nextGroup();
-            else next();
+            next();
           }
           break;
 
@@ -226,11 +206,6 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
     panByDelta,
     keyboardPanStepPx,
     fitEquivalentNativePercent,
-    currentIndex,
-    currentGroup,
-    currentGroupIdx,
-    groupSlices,
-    imagesLength,
     onDeleteImage,
     keyboardActive,
     isFullscreen,

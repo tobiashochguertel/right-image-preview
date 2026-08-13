@@ -362,16 +362,15 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       ],
     );
 
-    // Within-group (or global when flat) prev / next
+    // Flat prev / next across the full list (crosses group boundaries).
+    // Group jumps remain PageUp/PageDown + toolbar ⏮/⏭.
     const prev = useCallback(() => {
-      const boundary = currentGroup?.start ?? 0;
-      if (currentIndex > boundary) goTo(currentIndex - 1);
-    }, [currentIndex, currentGroup, goTo]);
+      if (currentIndex > 0) goTo(currentIndex - 1);
+    }, [currentIndex, goTo]);
 
     const next = useCallback(() => {
-      const boundary = currentGroup?.end ?? images.length - 1;
-      if (currentIndex < boundary) goTo(currentIndex + 1);
-    }, [currentIndex, currentGroup, images.length, goTo]);
+      if (currentIndex < images.length - 1) goTo(currentIndex + 1);
+    }, [currentIndex, images.length, goTo]);
 
     // Jump to first image of previous / next group
     const prevGroup = useCallback(() => {
@@ -600,11 +599,6 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       panByDelta,
       keyboardPanStepPx,
       fitEquivalentNativePercent,
-      currentIndex,
-      currentGroup,
-      currentGroupIdx,
-      groupSlices,
-      imagesLength: images.length,
       onDeleteImage: showDelete ? deleteCurrentImage : undefined,
       keyboardActive: isContained ? keyboardActive : true,
       isFullscreen,
@@ -805,8 +799,6 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
         ? {
             groupCurrentIndex: currentIndex - currentGroup.start + 1,
             groupTotal:        currentGroup.end - currentGroup.start + 1,
-            atGroupStart:      currentIndex === currentGroup.start,
-            atGroupEnd:        currentIndex === currentGroup.end,
             hasPrevGroup:      currentGroupIdx > 0,
             hasNextGroup:      currentGroupIdx < groupSlices.length - 1,
             groupName:         currentGroup.name,
@@ -1044,93 +1036,61 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
         )}
 
         {/* ── Side nav arrows ────────────────────────────────────────────────
-             Rules:
-             · Arrow only renders when navigation is possible — never grayed-out.
-             · At a group boundary with an adjacent group: swap the arrow for a
-               "jump to next/prev group" button (double-chevron icon).
-             · Single group: hide when at the first / last image. ── */}
+             Flat ←/→ across the full list (including across groups). Hide at the
+             absolute first / last image. Group jumps: toolbar ⏮/⏭ or PageUp/Down. ── */}
         {(() => {
           if (!showSideArrows) return null;
-          const isAtStart = currentGroup
-            ? currentIndex === currentGroup.start
-            : currentIndex === 0;
-          const isAtEnd = currentGroup
-            ? currentIndex === currentGroup.end
-            : currentIndex === images.length - 1;
-          const hasPrevGroupNav = !!(currentGroup && currentGroupIdx > 0);
-          const hasNextGroupNav = !!(currentGroup && groupSlices && currentGroupIdx < groupSlices.length - 1);
-
-          const showLeft  = !isAtStart || hasPrevGroupNav;
-          const showRight = !isAtEnd   || hasNextGroupNav;
-          const leftIsGroup  = isAtStart && hasPrevGroupNav;
-          const rightIsGroup = isAtEnd   && hasNextGroupNav;
+          const isAtStart = currentIndex === 0;
+          const isAtEnd = currentIndex === images.length - 1;
 
           return (
             <>
-              {showLeft && (
+              {!isAtStart && (
                 <ImagePreviewNavArrow
                   direction="left"
-                  isGroupJump={leftIsGroup}
-                  onClick={
-                    leftIsGroup
-                      ? prevGroup
-                      : () => {
-                          if (navArrowPointerRef.current) {
-                            navArrowPointerRef.current = false;
-                            return;
-                          }
-                          beginNavHold('prev');
-                          endNavHold('prev');
-                        }
-                  }
-                  onPointerDown={
-                    leftIsGroup
-                      ? undefined
-                      : (e) => {
-                          e.preventDefault();
-                          navArrowPointerRef.current = true;
-                          e.currentTarget.setPointerCapture?.(e.pointerId);
-                          beginNavHold('prev');
-                        }
-                  }
-                  onPointerUp={leftIsGroup ? undefined : () => endNavHold('prev')}
-                  onPointerCancel={leftIsGroup ? undefined : () => endNavHold('prev')}
-                  label={leftIsGroup ? t.prevGroup : t.prev}
-                  tip={leftIsGroup ? t.tipPrevGroup : t.tipPrev}
+                  onClick={() => {
+                    if (navArrowPointerRef.current) {
+                      navArrowPointerRef.current = false;
+                      return;
+                    }
+                    beginNavHold('prev');
+                    endNavHold('prev');
+                  }}
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    navArrowPointerRef.current = true;
+                    e.currentTarget.setPointerCapture?.(e.pointerId);
+                    beginNavHold('prev');
+                  }}
+                  onPointerUp={() => endNavHold('prev')}
+                  onPointerCancel={() => endNavHold('prev')}
+                  label={t.prev}
+                  tip={t.tipPrev}
                   visible={controlsVisible}
                   idleOpacity={idleOpacity}
                 />
               )}
-              {showRight && (
+              {!isAtEnd && (
                 <ImagePreviewNavArrow
                   direction="right"
-                  isGroupJump={rightIsGroup}
-                  onClick={
-                    rightIsGroup
-                      ? nextGroup
-                      : () => {
-                          if (navArrowPointerRef.current) {
-                            navArrowPointerRef.current = false;
-                            return;
-                          }
-                          beginNavHold('next');
-                          endNavHold('next');
-                        }
-                  }
-                  onPointerDown={
-                    rightIsGroup
-                      ? undefined
-                      : (e) => {
-                          e.preventDefault();
-                          navArrowPointerRef.current = true;
-                          e.currentTarget.setPointerCapture?.(e.pointerId);
-                          beginNavHold('next');
-                        }
-                  }
-                  onPointerUp={rightIsGroup ? undefined : () => endNavHold('next')}
-                  onPointerCancel={rightIsGroup ? undefined : () => endNavHold('next')}
-                  label={rightIsGroup ? t.nextGroup : t.next}
-                  tip={rightIsGroup ? t.tipNextGroup : t.tipNext}
+                  onClick={() => {
+                    if (navArrowPointerRef.current) {
+                      navArrowPointerRef.current = false;
+                      return;
+                    }
+                    beginNavHold('next');
+                    endNavHold('next');
+                  }}
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    navArrowPointerRef.current = true;
+                    e.currentTarget.setPointerCapture?.(e.pointerId);
+                    beginNavHold('next');
+                  }}
+                  onPointerUp={() => endNavHold('next')}
+                  onPointerCancel={() => endNavHold('next')}
+                  label={t.next}
+                  tip={t.tipNext}
                   visible={controlsVisible}
                   idleOpacity={idleOpacity}
                 />

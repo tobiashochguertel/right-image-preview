@@ -480,6 +480,28 @@ describe('ImagePreview component', () => {
       );
       expect(screen.getAllByRole('button', { name: /第 \d+ 张，共 7 张/ })).toHaveLength(7);
     });
+
+    it('prev/next cross group boundaries along the flat list', () => {
+      const onIndexChange = vi.fn();
+      const ref = createRef<ImagePreviewRef>();
+      render(
+        <ImagePreview
+          ref={ref}
+          groupedImages={GROUPED_IMAGES}
+          visible
+          defaultGroupedSelection={{ defaultGroupIndex: 0, defaultIndexInGroup: 2 }}
+          onIndexChange={onIndexChange}
+          {...ZH}
+        />,
+      );
+
+      // Group A last image (flat 2) → Group B first (flat 3)
+      act(() => ref.current!.next());
+      expect(onIndexChange).toHaveBeenLastCalledWith(3);
+
+      act(() => ref.current!.prev());
+      expect(onIndexChange).toHaveBeenLastCalledWith(2);
+    });
   });
 
   describe('controlled index and goTo', () => {

@@ -15,7 +15,7 @@
 | `minimapSrc` | `string` | — | Single-image only: optional minimap image URL (defaults to `src`); ignored when `minimap` is set |
 | `minimap` | `React.ReactNode` | — | Single-image only: optional custom minimap content (overrides `minimapSrc`) |
 | `images` | `ImageItem[]` | — | Flat list; when provided without non-empty `groupedImages`, `src`/`alt` are ignored; if both `images` and non-empty `groupedImages` are set, `images` is ignored (dev `console.warn`) |
-| `groupedImages` | `ImageGroup[]` | — | Folder-style groups; each group’s `images` are concatenated in order; takes precedence over `images` and `src`; arrows navigate within a group, toolbar gains prev/next-group when multiple groups exist |
+| `groupedImages` | `ImageGroup[]` | — | Folder-style groups; each group’s `images` are concatenated in order; takes precedence over `images` and `src`; ←/→ and hold navigate the **flat** sequence (cross groups); toolbar gains prev/next-group (and PageUp/PageDown) for jumping to a group’s first image |
 | `visible` | `boolean` | — | Controlled visibility |
 | `defaultGroupedSelection` | `DefaultGroupedSelection` | — | Initial `{ defaultGroupIndex, defaultIndexInGroup }` when using non-empty `groupedImages` (group index counts only non-empty groups); overrides `defaultIndex` |
 | `defaultIndex` | `number` | `0` | Initially displayed index in the flattened list; ignored when `defaultGroupedSelection` is set with groups |
@@ -179,8 +179,8 @@ interface ImagePreviewRef {
   flipVertical(): void;
 
   // image navigation
-  next(): void;            // next image within group (or globally if no groupedImages)
-  prev(): void;            // previous image within group
+  next(): void;            // next flat index (crosses groups when using groupedImages)
+  prev(): void;            // previous flat index
   nextGroup(): void;       // jump to first image of the next group
   prevGroup(): void;       // jump to first image of the previous group
   goTo(index: number): void; // jump to flat index (clamped)

@@ -96,7 +96,7 @@
 
 ### `groupedImages` Group Navigation
 - [x] `ImageGroup`: optional `id`, `name`, and `images: ImageItem[]` (no `start` / `end` ranges)
-- [x] Side arrows navigate within group; disabled at boundaries
+- [x] Side arrows navigate the flat list (cross groups); hidden at global first/last
 - [x] Toolbar gains "prev group" (⏮) / "next group" (⏭) buttons
 - [x] Toolbar counter shows within-group index (e.g. `2/3`), not global index
 - [x] Info badge second line: `(i/n)` group position (same styling as in-group counter), small gap, then folder name (may differ slightly)
@@ -215,7 +215,7 @@
 
 ### New Side Arrow Rules
 - [x] **No more greyed-out arrows**: when navigation is impossible the arrow is completely hidden
-- [x] **Group boundary in multi-group mode**: at the last image of a group with a next group available, the right arrow is replaced by a double-chevron "next group" button; symmetrically for the left
+- [x] **Multi-group mode**: ←/→ and side arrows browse the flat list across groups (same order as the thumbnail strip); jump to a group’s first image via toolbar ⏮/⏭ or PageUp/PageDown
 - [x] Single-group mode: no left arrow on first image, no right arrow on last image
 - [x] `NavArrow` removes `disabled` prop; adds `isGroupJump?: boolean`
 

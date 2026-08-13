@@ -9,6 +9,12 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ## [Unreleased]
 
+## [0.3.5] — 2026-08-13
+
+### Changed
+
+- **←/→ across groups** — `prev` / `next`, keyboard hold, side arrows, and toolbar arrows navigate the **flat** image list (same order as the bottom strip), so holding → continues into the next folder’s first image. Jump to a group’s first image remains PageUp/PageDown and toolbar ⏮/⏭.
+
 ## [0.3.4] — 2026-08-13
 
 ### Changed

@@ -26,8 +26,8 @@
 
 | 按键 | 功能 |
 |------|------|
-| `←` | 上一张（组内；无 `groupedImages` 时全局） |
-| `→` | 下一张（组内；无 `groupedImages` 时全局） |
+| `←` | 扁平列表上一张（有 `groupedImages` 时会跨组） |
+| `→` | 扁平列表下一张（有 `groupedImages` 时会跨组） |
 | `PageUp` | 跳到上一组第一张（需非空 `groupedImages`） |
 | `PageDown` | 跳到下一组第一张（需非空 `groupedImages`） |
 
