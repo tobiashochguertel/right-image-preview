@@ -6,15 +6,17 @@ export type ThumbPaceHoldDir = 'prev' | 'next';
 export interface UseThumbPacedNavigationParams {
   currentIndex: number;
   /**
-   * True when the current image has something paintable in the main stage
-   * (minimap underlay / full original / no progressive pipeline).
+   * True when the current image has been **presented** in the main stage
+   * (bitmap candidate + decode + two rAFs). Layout-only readiness must not count.
    */
   thumbReady: boolean;
   prev(): void;
   next(): void;
   /**
-   * After each image becomes paintable, wait this long before allowing another
-   * hold-step (and only if still held). Default {@link NAV_HOLD_MIN_VISIBLE_MS}.
+   * After each image becomes presented, wait this long before allowing another
+   * hold-step (and only if still held). Callers should pass
+   * {@link ImagePreviewProps.holdMinVisibleMs}; the hook falls back to
+   * {@link NAV_HOLD_MIN_VISIBLE_MS} only if omitted.
    */
   minVisibleMs?: number;
 }

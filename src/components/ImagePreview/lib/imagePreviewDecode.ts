@@ -2,7 +2,8 @@
 const decodeSettled = new WeakSet<HTMLImageElement>();
 const decodeInflight = new WeakMap<HTMLImageElement, Array<() => void>>();
 
-function afterDoubleAnimationFrame(): Promise<void> {
+/** Two animation frames — compositor has had a chance to present the current layer. */
+export function afterDoubleAnimationFrame(): Promise<void> {
   return new Promise((resolve) => {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => resolve());

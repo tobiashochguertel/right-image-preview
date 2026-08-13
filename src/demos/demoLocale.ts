@@ -80,6 +80,7 @@ export interface DemoStrings {
   demo6HowTo: string;
   demo6HowToShort: string;
   demo6Missing: string;
+  demo6GridHint: string;
   demo6SlotsToggle: string;
   demo6MeterTitle: string;
   demo6MeterIdle: string;
@@ -196,13 +197,14 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo5PreloadHint: 'Neighbor preload indexes',
     demo6Title: 'Demo 6 · Local large JPGs (dev only, gitignored)',
     demo6Desc:
-      'Reads gitignored `./test-images` + thumbs via Vite middleware. After dwelling, neighbors with the brightest green (display-ready) should promote the retained decoded layer — sharp near-instantly (sidebar: path + underlay/sharp ms). Toggle slots off to force every nav to cold.',
+      'Reads every original under gitignored `./test-images` that has a matching file in `thumbs/` (Vite middleware). After dwelling, neighbors with the brightest green (display-ready) should promote the retained decoded layer — sharp near-instantly (sidebar: path + underlay/sharp ms). Toggle slots off to force every nav to cold. New JPGs: run `bash scripts/generate-test-image-thumbs.sh`.',
     demo6SidebarTitle: 'Local large files',
     demo6HowTo:
       'Wait for brightest green on ± neighbors, then ←/→. Expect path=fast with sharp ≪ cold (~1s). Cold also holds blur ~800ms after decode.',
     demo6HowToShort: 'Wait for green on ±, then ←/→ · hover for detail',
     demo6Missing:
-      'No usable `./test-images` (need originals + matching files under thumbs/). Local only — never commit that folder.',
+      'No usable `./test-images` (need originals + matching files under thumbs/). Local only — never commit that folder. After adding JPGs: `bash scripts/generate-test-image-thumbs.sh`.',
+    demo6GridHint: 'Click a card to open that index · scroll for more',
     demo6SlotsToggle: 'Neighbor preload (display-ready)',
     demo6MeterTitle: 'Last navigation',
     demo6MeterIdle: 'Switch images to measure…',
@@ -313,13 +315,14 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo5PreloadHint: '相邻预加载下标',
     demo6Title: 'Demo 6 · 本地大图 JPG（仅开发，已 gitignore）',
     demo6Desc:
-      '通过中间件读取已忽略的 `./test-images`。停稳后邻居出现最深绿（display-ready）时，应复用已解码层接近秒开清晰（侧栏：path + underlay/sharp 毫秒）。关掉 slots 可强制每次都走 cold。',
+      '中间件读取 `./test-images` 中**带同名 thumbs/** 的全部原图。停稳后邻居出现最深绿（display-ready）时，应复用已解码层接近秒开清晰（侧栏：path + underlay/sharp 毫秒）。关掉 slots 可强制每次都走 cold。新增 JPG 后执行：`bash scripts/generate-test-image-thumbs.sh`。',
     demo6SidebarTitle: '本地大图',
     demo6HowTo:
       '等 ± 邻居最深绿后 ←/→。期望 path=fast 且 sharp 远小于 cold（~1s）。cold 在解码后再多停约 800ms 模糊。',
     demo6HowToShort: '等绿条后 ←/→ · 悬停看说明',
     demo6Missing:
-      '未找到可用的 `./test-images`（需原图 + thumbs/ 下同名缩略图）。仅本机使用，切勿提交该目录。',
+      '未找到可用的 `./test-images`（需原图 + thumbs/ 下同名缩略图）。仅本机使用，切勿提交该目录。新增后：`bash scripts/generate-test-image-thumbs.sh`。',
+    demo6GridHint: '点卡片打开对应 index · 可滚动',
     demo6SlotsToggle: '邻居预热（display-ready）',
     demo6MeterTitle: '上次切图',
     demo6MeterIdle: '切图后显示耗时…',

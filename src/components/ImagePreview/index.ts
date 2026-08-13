@@ -44,4 +44,5 @@ export {
   PRELOAD_DISPLAY_SETTLE_MS,
   SUGGESTED_PRELOAD_BUDGET_FRACTION_OF_AVAILABLE,
 } from './lib/neighborDisplayPreload';
+export { NAV_HOLD_MIN_VISIBLE_MS } from './imagePreviewTuning';
 export type { Rotation } from './useImageTransform';

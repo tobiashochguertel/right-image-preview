@@ -251,8 +251,28 @@ export function Demo6LocalLarge({
 
       {available === true && images.length > 0 && (
         <>
-          <div style={gridStyle}>
-            {images.slice(0, 8).map((img, i) => (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'baseline',
+              justifyContent: 'space-between',
+              gap: 12,
+              marginBottom: 10,
+            }}
+          >
+            <span style={{ fontSize: 13, color: '#9aa3b5' }}>{t.photosBadge(images.length)}</span>
+            <span style={{ fontSize: 11, color: '#666' }}>{t.demo6GridHint}</span>
+          </div>
+          <div
+            style={{
+              ...gridStyle,
+              maxHeight: 340,
+              overflowY: 'auto',
+              paddingRight: 4,
+              marginBottom: 4,
+            }}
+          >
+            {images.map((img, i) => (
               <ThumbCard
                 key={img.src}
                 src={img.minimapSrc ?? img.src}

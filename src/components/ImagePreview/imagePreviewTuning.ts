@@ -43,12 +43,12 @@ export const NAV_HOLD_REPEAT_DELAY_MS = 450;
 export const NAV_HOLD_MIN_STEP_INTERVAL_MS = 220;
 
 /**
- * After the first ←/→ step on key/pointer down, each subsequent image must stay
- * paintable (thumb underlay or full original) at least this long before another
- * step is allowed — and only if the key/pointer is still held. Default for
- * {@link ImagePreviewProps.holdMinVisibleMs}.
+ * After the first ←/→ step on key/pointer down, each subsequent image must show
+ * **painted** stage content (thumb underlay bitmap or full original) at least this
+ * long before another step is allowed — and only if the key/pointer is still held.
+ * Default for {@link ImagePreviewProps.holdMinVisibleMs}.
  */
-export const NAV_HOLD_MIN_VISIBLE_MS = 300;
+export const NAV_HOLD_MIN_VISIBLE_MS = 500;
 
 /**
  * Opacity for non-visible full-`src` layers (neighbors, or current while underlay covers).

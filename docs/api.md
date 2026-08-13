@@ -61,7 +61,7 @@
 | `preloadRadius` | `number` | `0` | Neighbor full-`src` byte preload radius; `0` = off. Does **not** alone skip progressive |
 | `preloadDisplaySlots` | `number` | `0` | Max neighbors kept **display-ready**. `0` + budget → ceiling 6; budget decides fill count |
 | `preloadDisplaySettleMs` | `number` | `600` | Debounce after navigation before warming **neighbors** (rapid ←/→ cancels). Does not delay current main decode |
-| `holdMinVisibleMs` | `number` | `300` | Hold ←/→: after the first immediate step, each image must stay paintable (thumb or full) this long before another step, and only if still held. Release cancels the pending timer (no queue) |
+| `holdMinVisibleMs` | `number` | `NAV_HOLD_MIN_VISIBLE_MS` | Hold ←/→: after the first immediate step, each image must show **presented** stage content (thumb underlay or full original) for this many ms before another step, and only if still held. Layout/meta alone does not start the clock. Release cancels the pending timer (no queue). Omit to use the library default. |
 | `preloadMemoryBudgetBytes` | `number` | — | Neighbor decoded-byte budget (excludes current main). Prefer this from Tauri; props stay fixed while browsing |
 | `estimateDecodedBytes` | `(item) => number` | EXIF w×h×4 or 12MP guess | Size estimate for budget |
 | `preloadDisplayMode` | `'slot' \| 'decode'` | `'slot'` | `'slot'` = offscreen imgs (C); `'decode'` = decode-only fallback (B) |

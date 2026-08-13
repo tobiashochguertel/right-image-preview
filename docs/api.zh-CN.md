@@ -61,7 +61,7 @@
 | `preloadRadius` | `number` | `0` | 相邻主图**字节**预加载半径；`0` 关闭。单独开启不会跳过渐进占位 |
 | `preloadDisplaySlots` | `number` | `0` | display-ready 邻居上限。`0` 且提供预算时上限为 6，实际张数由预算决定 |
 | `preloadDisplaySettleMs` | `number` | `600` | 切图后防抖：停稳这么久才开始预热**邻居**（连切会取消未启动的预热）。**不**延迟当前主图解码 |
-| `holdMinVisibleMs` | `number` | `300` | 按住 ←/→：第一次立即切一张；之后每张需主区域可看（缩略或无缩略时的原图）满此时长，且仍按住才再切。松开取消定时器，**不堆积**步进 |
+| `holdMinVisibleMs` | `number` | `NAV_HOLD_MIN_VISIBLE_MS` | 按住 ←/→：第一次立即切一张；之后每张需主区域**已呈现**可看位图（缩略 underlay 或无缩略时的原图）满此时长，且仍按住才再切。仅有布局尺寸不计时。松开取消定时器，**不堆积**步进。不传则用库默认值。 |
 | `preloadMemoryBudgetBytes` | `number` | — | **邻居**解码字节预算（不含当前主图）。推荐由 Tauri 传入；浏览中 props 可固定 |
 | `estimateDecodedBytes` | `(item) => number` | EXIF 宽×高×4 或 12MP 估算 | 预算用体积估算 |
 | `preloadDisplayMode` | `'slot' \| 'decode'` | `'slot'` | `'slot'` = 离屏 img（C）；`'decode'` = 仅 decode（B 降级） |

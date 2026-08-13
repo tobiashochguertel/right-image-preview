@@ -89,7 +89,7 @@ Goal while holding: **each index must show its main-area thumb before advancing*
 
 | Mechanism | Behavior |
 |-----------|----------|
-| **Thumb-paced hold** | First step on press is immediate. Then each landed image must be paintable (thumb underlay, or full original if no thumb) for `holdMinVisibleMs` (default 300ms) before another step, and only if still held. Release cancels the single timer — **no step queue**. Spinner stays while waiting on a no-thumb original. |
+| **Thumb-paced hold** | First step on press is immediate. Then each landed image must show **presented** stage content (thumb underlay bitmap, or full original if no thumb) for `holdMinVisibleMs` before another step, and only if still held. Layout/meta size alone does **not** start the clock (avoids black+Loading eating the dwell). Release cancels the single timer — **no step queue**. Spinner stays while waiting on a no-thumb original. |
 | **Ignore key-repeat** | `e.repeat` does not spam steps; hold + thumb readiness drives pacing. |
 | **Settle cancels neighbor heat** | Scrubbing does not start **new** neighbor decodes every hop; **already display-ready neighbor layers stay mounted** (compositor keep-alive). |
 | **No not-yet-ready full layers until settled** | Avoids mounting many undecoded full-size `<img>`s while scrubbing; ready srcs are retained stickily. |
@@ -228,7 +228,12 @@ Cold path keeps the probe + placeholder min visible time (e.g. Demo 6 dwell).
 ### 9.5 Short press vs long press (hold)
 
 - **Press**: one immediate step (a short tap is just that step).
-- **Still held**: after the new image is paintable (thumb preferred; otherwise full original) wait `holdMinVisibleMs` (default 300, settings-friendly prop); step again only if still held. At most one dwell timer — **release stops; no queue**.
+- **Still held**: after the new image has **painted** main-stage content, wait `holdMinVisibleMs`; step again only if still held. At most one dwell timer — **release stops; no queue**.
+- **Clock start (important)**: “a presented frame”, not raw `onLoad` / known dimensions.
+  - Candidate: stage opacity-ready (`imageShowReady`) and underlay or main bitmap loaded.
+  - Confirm: `decode()` on that layer (cheap for thumbs) + **two rAFs**, then start `holdMinVisibleMs`. Once confirmed for a visit, underlay→full reveal does not reset the clock.
+  - On every `src` change, force stage opacity 0 first (even when meta dims stay set) so the black flash cannot start the dwell.
+  - Still black + Loading: **do not** count time or advance.
 - No thumb and original not ready: stay on the index with the centre spinner; never skip ahead.
 
 ### 9.6 Acceptance (Demo 6)

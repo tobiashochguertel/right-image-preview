@@ -439,10 +439,11 @@ export interface ImagePreviewProps {
 
   /**
    * While holding ←/→ (keyboard or side arrows): after the **first** immediate step, each
-   * landed image must stay paintable (main-area thumb underlay, or full original when there
-   * is no thumb) for at least this many ms before another step is allowed — and only if the
-   * key/pointer is still held. Release cancels the single pending timer (no step queue).
-   * Default `300`. Hosts may expose this in settings.
+   * landed image must show **painted** main-stage content (thumb underlay bitmap, or full
+   * original when there is no thumb) — not merely layout size / progressive stage — for at
+   * least this many ms before another step is allowed, and only if still held. Release cancels
+   * the single pending timer (no step queue). When omitted, uses `NAV_HOLD_MIN_VISIBLE_MS`
+   * (defined once in `imagePreviewTuning`). Hosts may expose this in settings.
    */
   holdMinVisibleMs?: number;
 

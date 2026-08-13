@@ -9,11 +9,21 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ## [Unreleased]
 
+## [0.3.4] — 2026-08-13
+
+### Changed
+
+- **`holdMinVisibleMs`** — sole public knob for hold dwell; numeric library default lives only in `NAV_HOLD_MIN_VISIBLE_MS` (exported).
+
+### Fixed
+
+- **Hold ←/→ min-visible** — dwell starts only after stage content is a bitmap candidate **and** presented (`decode` + two rAFs). Also resets stage opacity on every `src` change even when dims stay known (fixes early dwell during black flash / occasional double-step within one dwell window).
+
 ## [0.3.3] — 2026-08-13
 
 ### Added
 
-- **`holdMinVisibleMs`** (default `300`) — hold ←/→: first step immediate; each following image must stay paintable (thumb or full) this long before another step, only while still held. Release cancels the pending timer (no step backlog).
+- **`holdMinVisibleMs`** — hold ←/→: first step immediate; each following image must stay paintable (thumb or full) for this prop’s duration before another step, only while still held. Release cancels the pending timer (no step backlog).
 - **`preloadDisplaySettleMs`** (default `600`) — debounce neighbor byte + display-ready warm-up after navigation. Rapid ←/→ cancels the pending timer so only the settled image warms neighbors. Current main-image decode is **not** delayed.
 - **Thumb-paced ←/→ hold** — short press = one step; continuous advance uses per-image min-visible gating (see `holdMinVisibleMs`) so key-hold cannot queue or skip past undrawn frames.
 - **Docs: main display flow** — [`docs/main-display-flow.md`](./docs/main-display-flow.md) / [中文](./docs/main-display-flow.zh-CN.md) describe thumb-underlay → original, long-dwell fast path, hold pacing, and **§9 validated keep-alive / panIdle / fast-probe details**.

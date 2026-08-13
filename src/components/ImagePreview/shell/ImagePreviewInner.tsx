@@ -43,6 +43,7 @@ import type {
   NeighborPreloadStatusMap,
 } from '../types';
 import { useImagePreviewKeyboard } from '../useImagePreviewKeyboard';
+import { useHoldStagePresented } from '../useHoldStagePresented';
 import { useThumbPacedNavigation } from '../useThumbPacedNavigation';
 import { useImageTransform } from '../useImageTransform';
 import { useNeighborDisplayPreload } from '../useNeighborDisplayPreload';
@@ -246,16 +247,33 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     /** Suppress CSS transform easing across image switches (avoids ~0.3s zoom pop). */
     const [suppressTransformForSrcSwitch, setSuppressTransformForSrcSwitch] = useState(false);
     const [imageShowReady, setImageShowReady] = useState(false);
+    /**
+     * Hold-pace paint gates: layout dims / progressive stage alone are NOT enough —
+     * known size can make the stage "ready" while still black + Loading.
+     */
+    const [paceVisitSrc, setPaceVisitSrc] = useState(currentImage.src);
+    const [paceUnderlayPainted, setPaceUnderlayPainted] = useState(false);
+    const [paceMainPainted, setPaceMainPainted] = useState(false);
+    if (paceVisitSrc !== currentImage.src) {
+      setPaceVisitSrc(currentImage.src);
+      setPaceUnderlayPainted(false);
+      setPaceMainPainted(false);
+    }
+    const underlayElRef = useRef<HTMLImageElement | null>(null);
 
     useLayoutEffect(() => {
       if (prevSrcRef.current === currentImage.src) return;
       prevSrcRef.current = currentImage.src;
       setSuppressTransformForSrcSwitch(true);
+      // Always hide until the next rAF — keep dims from meta without leaving opacity:1
+      // across visits (that made hold dwell start during the black flash).
+      setImageShowReady(false);
 
       const el = layerElBySrcRef.current.get(currentImage.src);
       const meta = getMeta(currentImage.src);
       const paintable = !!(el && el.complete && el.naturalWidth > 0);
       if (paintable) {
+        setPaceMainPainted(true);
         onImageLoad({
           naturalWidth: el!.naturalWidth,
           naturalHeight: el!.naturalHeight,
@@ -264,7 +282,6 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
         // Keep stage sized so minimap underlay can show (avoid opacity-0 black wrapper).
         onImageLoad(meta);
       } else {
-        setImageShowReady(false);
         resetImageDims();
       }
     }, [currentImage.src, getMeta, onImageLoad, resetImageDims]);
@@ -287,6 +304,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     useLayoutEffect(() => {
       const el = layerElBySrcRef.current.get(currentImage.src);
       if (!el || !el.complete || el.naturalWidth <= 0) return;
+      setPaceMainPainted(true);
       onImageLoad({ naturalWidth: el.naturalWidth, naturalHeight: el.naturalHeight });
       scheduleRevealAfterDecode(el, onMainImgDecoded, IMAGE_DECODE_TIMEOUT_MS);
     }, [currentImage.src, onImageLoad, onMainImgDecoded]);
@@ -296,6 +314,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
         if (el) layerElBySrcRef.current.set(src, el);
         else layerElBySrcRef.current.delete(src);
         if (isCurrent && el && el.complete && el.naturalWidth > 0) {
+          setPaceMainPainted(true);
           onImageLoad({ naturalWidth: el.naturalWidth, naturalHeight: el.naturalHeight });
           scheduleRevealAfterDecode(el, onMainImgDecoded, IMAGE_DECODE_TIMEOUT_MS);
         }
@@ -305,6 +324,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
 
     const onCurrentLayerLoad = useCallback(
       (img: HTMLImageElement) => {
+        setPaceMainPainted(true);
         onImageLoad({ naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight });
         scheduleRevealAfterDecode(img, onMainImgDecoded, IMAGE_DECODE_TIMEOUT_MS);
       },
@@ -520,14 +540,40 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
 
     const navArrowPointerRef = useRef(false);
 
-    const thumbReadyForPace =
-      imageLoadError ||
-      !progressive.pipelineActive ||
-      progressive.showMinimapUnderlay ||
-      progressive.fullDecoded ||
-      progressive.preloadStage === 'thumb-only' ||
-      progressive.preloadStage === 'error' ||
-      (imageShowReady && !currentImage.minimapSrc);
+    // Cached underlay may complete before React attaches onLoad — sync from the DOM node.
+    useLayoutEffect(() => {
+      if (!progressive.showMinimapUnderlay || !currentImage.minimapSrc) return;
+      const el = underlayElRef.current;
+      if (el && el.complete && el.naturalWidth > 0) {
+        setPaceUnderlayPainted(true);
+      }
+    }, [
+      currentImage.src,
+      currentImage.minimapSrc,
+      progressive.showMinimapUnderlay,
+      currentIndex,
+    ]);
+
+    const getHoldUnderlayEl = useCallback(() => underlayElRef.current, []);
+    const getHoldMainEl = useCallback(
+      () => layerElBySrcRef.current.get(currentImage.src) ?? null,
+      [currentImage.src],
+    );
+
+    const thumbReadyForPace = useHoldStagePresented({
+      visitKey: `${currentIndex}:${currentImage.src}`,
+      imageLoadError:
+        imageLoadError || progressive.preloadStage === 'error',
+      imageShowReady,
+      showMinimapUnderlay: progressive.showMinimapUnderlay,
+      underlayPainted: paceUnderlayPainted,
+      pipelineActive: progressive.pipelineActive,
+      fullDecoded: progressive.fullDecoded,
+      thumbOnly: progressive.preloadStage === 'thumb-only',
+      mainPainted: paceMainPainted,
+      getUnderlayEl: getHoldUnderlayEl,
+      getMainEl: getHoldMainEl,
+    });
 
     const { beginHold: beginNavHold, endHold: endNavHold } = useThumbPacedNavigation({
       currentIndex,
@@ -640,17 +686,20 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     // "zoom-out" animation.  Instead we keep opacity:0 for one animation frame
     // (so the browser paints the correct transform while the image is still
     // invisible), then set imageShowReady→true so only the opacity transitions.
+    // Key on `src` too: known dims keep `ready===true` across navigations; without
+    // this, opacity stayed 1 through the black flash and hold dwell started early.
     useEffect(() => {
       if (!ready) {
         setImageShowReady(false);
         return;
       }
+      setImageShowReady(false);
       const id = requestAnimationFrame(() => {
         setImageShowReady(true);
         setSuppressTransformForSrcSwitch(false);
       });
       return () => cancelAnimationFrame(id);
-    }, [ready]);
+    }, [ready, currentImage.src]);
 
     // Current main image counts as ready once the full src is usable.
     useEffect(() => {
@@ -876,10 +925,12 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
               currentImage.minimapSrc && (
                 <img
                   key={`${currentImage.minimapSrc}-${currentIndex}`}
+                  ref={underlayElRef}
                   src={currentImage.minimapSrc}
                   alt=""
                   aria-hidden
                   draggable={false}
+                  onLoad={() => setPaceUnderlayPainted(true)}
                   style={{
                     position:      'absolute',
                     inset:         0,
