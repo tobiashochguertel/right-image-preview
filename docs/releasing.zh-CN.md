@@ -46,30 +46,28 @@
 
 ## 发布清单
 
-### 1. 完成开发
+**优先顺序：先本地 `npm publish`，再 push tag。**  
+宿主（如 Media Lens）可马上 `npm update` 验证；CI 负责测试 / 体积检查 / GitHub Release，若 npm 上版本已存在则跳过 publish。
 
-确保本次发布的所有功能和修复均已提交到工作分支（`feature-init` 或 `main`）。
+### 1. 完成开发与自检
 
 ```bash
-git status          # 应为干净状态
-npx tsc --noEmit    # 无 TypeScript 错误
+git status          # 改动应只含本版内容
+npx tsc --noEmit
+npm test
+npm run build:lib
+npm run size
 ```
 
-### 2. 升级版本号
+### 2. 升级版本号 + CHANGELOG
 
-手动编辑 `package.json`，遵循 [SemVer 语义化版本](https://semver.org/lang/zh-CN/)：
+手动编辑 `package.json`，遵循 [SemVer](https://semver.org/lang/zh-CN/)；把 `CHANGELOG.md` 的 `[Unreleased]` 收成 `[x.y.z] — YYYY-MM-DD`。
 
 | 变更类型 | 示例 |
 |---|---|
-| Bug 修复 | 例如 `0.0.12` → `0.0.13` |
-| 向后兼容的新特性 | `0.0.13` → `0.1.0` |
-| 破坏性 API 变更 | `0.1.0` → `1.0.0` |
-
-```json
-{
-  "version": "0.0.13"
-}
-```
+| Bug 修复 | 例如 `0.3.8` → `0.3.9` |
+| 向后兼容的新特性 | `0.3.9` → `0.4.0` |
+| 破坏性 API 变更 | `0.4.0` → `1.0.0` |
 
 ### 3. 更新文档
 
@@ -80,62 +78,44 @@ npx tsc --noEmit    # 无 TypeScript 错误
 - `docs/requirements.md` / `docs/requirements.en.md`
 - `README.md` / `README.zh-CN.md`（如安装说明或功能摘要有变化）
 
-### 4. 构建库文件
-
-`prepublishOnly` 钩子会自动触发构建，也可以手动验证：
-
-```bash
-npm run build:lib
-```
-
-产物写入 `dist/` 目录：
-
-```
-dist/
-├── index.mjs       # ESM 构建
-├── index.cjs       # CommonJS 构建
-├── index.d.ts      # TypeScript 声明入口
-└── *.map           # Source Map
-```
-
-### 5. 发布到 npm
+### 4. 本地发布到 npm（先做这一步）
 
 ```bash
 npm publish
 ```
 
-此命令会先触发 `prepublishOnly` → `build:lib`，再上传 Tarball。仅 `package.json#files` 中列出的文件会被打包：
+`prepublishOnly` 会再跑一遍 `build:lib`。成功应看到：
 
-```json
-"files": ["dist", "README.md", "README.zh-CN.md", "LICENSE"]
+```
++ right-image-preview@x.y.z
 ```
 
-成功后输出：
-```
-+ right-image-preview@0.0.13
-```
-
-在 npm 上验证：[https://www.npmjs.com/package/right-image-preview](https://www.npmjs.com/package/right-image-preview)
-
-### 6. 提交并打 Tag
+立刻验证：
 
 ```bash
-git add -A
-git commit -m "chore: release v0.0.13"
-git tag v0.0.13
-git push origin feature-init --tags
+npm view right-image-preview version
 ```
 
-### 7. 推送到 GitHub
+宿主侧可马上安装该版本做联调，不必等 CI。
+
+### 5. 提交、打 Tag、推送
 
 ```bash
-git push origin feature-init
+git add -A   # 勿提交密钥 / 无意的 pnpm 工作区文件
+git commit -m "chore: release vX.Y.Z"
+git tag vX.Y.Z
+git push origin main
+git push origin vX.Y.Z
 ```
 
-GitHub Actions 会自动：
-- 执行 TypeScript 构建检查
-- 将最新 Demo 部署到 GitHub Pages：  
-  [https://zhangjian1713.github.io/right-image-preview/](https://zhangjian1713.github.io/right-image-preview/)
+推送 `v*` tag 会触发 [Release to npm](../.github/workflows/release.yml)：
+
+- 跑 typecheck / test / build / size
+- **若该版本已在 npm 上 → 跳过 publish**
+- 创建 GitHub Release
+
+Demo Pages 仍由 `main` 推送触发的其它 workflow 部署：  
+[https://zhangjian1713.github.io/right-image-preview/](https://zhangjian1713.github.io/right-image-preview/)
 
 ---
 

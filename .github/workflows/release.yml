@@ -39,8 +39,14 @@ jobs:
       - name: Check bundle size
         run: npm run size
 
-      - name: Publish to npm
-        run: npm publish
+      - name: Publish to npm (skip if already published locally)
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "right-image-preview@${VERSION}" version >/dev/null 2>&1; then
+            echo "right-image-preview@${VERSION} already on npm — skipping publish (local-first release)."
+          else
+            npm publish
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

@@ -46,96 +46,76 @@ If your npm account has **"Require 2FA for write actions"** enabled, `npm publis
 
 ## Release Checklist
 
-### 1. Finish development
+**Preferred order: local `npm publish` first, then push the tag.**  
+Hosts (e.g. Media Lens) can `npm update` immediately. CI still runs tests / size / GitHub Release, and **skips publish** if that version is already on npm.
 
-Ensure all features and bug fixes for this release are committed on the working branch (`feature-init` or `main`).
+### 1. Finish development & smoke-check
 
 ```bash
-git status          # should be clean
-npx tsc --noEmit    # no TypeScript errors
+git status          # only this release’s changes
+npx tsc --noEmit
+npm test
+npm run build:lib
+npm run size
 ```
 
-### 2. Bump the version
+### 2. Bump version + CHANGELOG
 
-Edit `package.json` manually, following [SemVer](https://semver.org/):
+Edit `package.json` (SemVer) and fold `[Unreleased]` into `[x.y.z] — YYYY-MM-DD` in `CHANGELOG.md`.
 
 | Change type | Example |
 |---|---|
-| Bug fix | e.g. `0.0.12` → `0.0.13` |
-| Backward-compatible new feature | `0.0.13` → `0.1.0` |
-| Breaking API change | `0.1.0` → `1.0.0` |
-
-```json
-{
-  "version": "0.0.13"
-}
-```
+| Bug fix | e.g. `0.3.8` → `0.3.9` |
+| Backward-compatible feature | `0.3.9` → `0.4.0` |
+| Breaking API change | `0.4.0` → `1.0.0` |
 
 ### 3. Update documentation
 
-If the release includes new props, behaviours, or keyboard shortcuts, update the relevant docs files:
+If the release includes new props, behaviours, or keyboard shortcuts, update:
 
 - `docs/api.md` / `docs/api.zh-CN.md`
 - `docs/keyboard.md` / `docs/keyboard.zh-CN.md`
 - `docs/requirements.md` / `docs/requirements.en.md`
-- `README.md` / `README.zh-CN.md` (if the feature summary or install instructions change)
+- `README.md` / `README.zh-CN.md` (if install / feature summary changes)
 
-### 4. Build the library
-
-The `prepublishOnly` hook runs this automatically, but you can verify it manually:
-
-```bash
-npm run build:lib
-```
-
-Artifacts are written to `dist/`:
-
-```
-dist/
-├── index.mjs       # ESM build
-├── index.cjs       # CommonJS build
-├── index.d.ts      # TypeScript declarations (entry point)
-└── *.map           # Source maps
-```
-
-### 5. Publish to npm
+### 4. Publish to npm locally (do this first)
 
 ```bash
 npm publish
 ```
 
-This triggers `prepublishOnly` → `build:lib` before uploading. Only the files listed in `package.json#files` are included in the tarball:
+`prepublishOnly` runs `build:lib` again. Success looks like:
 
-```json
-"files": ["dist", "README.md", "README.zh-CN.md", "LICENSE"]
+```
++ right-image-preview@x.y.z
 ```
 
-A successful publish prints:
-```
-+ right-image-preview@0.0.13
-```
-
-Verify on npm: [https://www.npmjs.com/package/right-image-preview](https://www.npmjs.com/package/right-image-preview)
-
-### 6. Commit and tag
+Verify immediately:
 
 ```bash
-git add -A
-git commit -m "chore: release v0.0.13"
-git tag v0.0.13
-git push origin feature-init --tags
+npm view right-image-preview version
 ```
 
-### 7. Push to GitHub
+Hosts can install this version right away — no need to wait for CI.
+
+### 5. Commit, tag, push
 
 ```bash
-git push origin feature-init
+git add -A   # do not commit secrets / accidental pnpm workspace files
+git commit -m "chore: release vX.Y.Z"
+git tag vX.Y.Z
+git push origin main
+git push origin vX.Y.Z
 ```
 
-GitHub Actions will automatically:
-- Run the TypeScript build check
-- Deploy the updated demo to GitHub Pages at  
-  [https://zhangjian1713.github.io/right-image-preview/](https://zhangjian1713.github.io/right-image-preview/)
+Pushing a `v*` tag runs [Release to npm](../.github/workflows/release.yml):
+
+- typecheck / test / build / size
+- **skip npm publish if the version is already on the registry**
+- create the GitHub Release
+
+Demo Pages still deploy from the `main` push via the other workflow:  
+[https://zhangjian1713.github.io/right-image-preview/](https://zhangjian1713.github.io/right-image-preview/)
 
 ---
 
