@@ -9,6 +9,16 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ## [Unreleased]
 
+### Fixed
+
+- **Outgoing hold (anti-black navigate)** — when stepping ←/→, keep the previous full-`src` frame visible (full size, above the thumb underlay) until the incoming image is paintable, then demote it to neighbor keep-alive. Stops the stage-wide `opacity: 0` blank on every `src` change so hold-scrubbing is not half black frames. Hold pacing still waits for the **incoming** bitmap (not the held previous frame).
+- **Outgoing hold no longer squashes into a thin strip** — capture the previous frame as outgoing on the **same render** as the `src` change (avoid one frame as a 1×1 neighbor), and size it with natural pixel dims instead of `width/height: 100%` + `object-fit: fill`.
+- **Independent stage layers** — each `src` is its own absolute viewport layer with a **frozen** transform when leaving; navigating no longer moves the previous frame via a shared transform parent (fixes “image jumps so its left edge sits on the viewport center”).
+
+### Changed
+
+- **Default zoom stops** — add `125` and `175` between 100 and 200 (`[10, 25, 50, 75, 100, 125, 150, 175, 200]`).
+
 ## [0.3.7] — 2026-08-13
 
 ### Fixed

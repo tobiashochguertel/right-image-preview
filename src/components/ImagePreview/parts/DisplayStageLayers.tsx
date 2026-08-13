@@ -1,91 +1,146 @@
+import type { ReactNode } from 'react';
 import { DISPLAY_LAYER_KEEPALIVE_OPACITY } from '../imagePreviewTuning';
 import type { ImageDimensions } from '../useImageTransform';
+
+export interface LayerPresentation {
+  dims: ImageDimensions;
+  /** Frozen CSS transform string (`translate … rotate … scale …`). */
+  cssTransform: string;
+}
 
 export interface DisplayLayerEntry {
   index: number;
   src: string;
   isCurrent: boolean;
+  /** Previous image held full-size under the incoming layer until it is paintable. */
+  isOutgoing?: boolean;
 }
 
 export interface DisplayStageLayersProps {
   layers: DisplayLayerEntry[];
   currentAlt: string;
-  imageDims: ImageDimensions | null;
-  /** When true, current full-res stays under the minimap underlay (keep-alive opacity, not hidden). */
+  /** Live dims / transform for the current image only. */
+  liveDims: ImageDimensions | null;
+  liveTransform: string;
+  /** Per-src frozen presentation; outgoing / kept neighbors must not share the live transform. */
+  frozenBySrc: ReadonlyMap<string, LayerPresentation>;
+  /** When true, current full-res stays under the minimap underlay (keep-alive opacity). */
   hideCurrentUntilDecoded: boolean;
-  /** @deprecated Main layer always snaps; kept for call-site compatibility. */
-  opacityTransition?: string;
+  suppressTransformTransition: boolean;
+  isPanning: boolean;
+  /** Stage opacity-ready (dims + container); applies to current layer reveal only. */
+  imageShowReady: boolean;
   bindLayerRef: (src: string, isCurrent: boolean) => (el: HTMLImageElement | null) => void;
   onCurrentLoad: (img: HTMLImageElement) => void;
   onCurrentError: () => void;
   onNeighborLoad: (index: number, el: HTMLImageElement) => void;
+  /** Progressive underlay — only mounted on the current layer, inside its transformed box. */
+  underlay?: ReactNode;
 }
 
 /**
- * Keeps current + neighbor full-`src` images mounted under stable `key={src}`.
+ * Independent absolute layers inside the viewport.
  *
- * WebViews often discard decoded bitmaps for `opacity: 0` / `visibility: hidden` images.
- * Neighbors stay mounted as a **1×1** paint with keep-alive opacity; current while covered by
- * the thumb underlay keeps full layout size at the same opacity — both remain “visible” to the
- * compositor so promote-on-navigate can skip a ~0.5–1s re-decode.
+ * Each `src` is a full-viewport stack slot with its **own** centered box + transform.
+ * Navigating away freezes that presentation; the live transform for the new image never
+ * moves the previous frame (shared-parent transform was causing the “jump to center”).
  */
 export function DisplayStageLayers({
   layers,
   currentAlt,
-  imageDims,
+  liveDims,
+  liveTransform,
+  frozenBySrc,
   hideCurrentUntilDecoded,
-  opacityTransition: _opacityTransition,
+  suppressTransformTransition,
+  isPanning,
+  imageShowReady,
   bindLayerRef,
   onCurrentLoad,
   onCurrentError,
   onNeighborLoad,
+  underlay = null,
 }: DisplayStageLayersProps) {
   return (
     <>
-      {layers.map(({ src, index, isCurrent }) => {
-        const showSharp = isCurrent && !hideCurrentUntilDecoded;
-        // Neighbors: 1×1 paint (invisible in practice). Covered current: full size under underlay.
-        const layoutW = !isCurrent
-          ? 1
-          : imageDims
-            ? imageDims.naturalWidth
-            : 'auto';
-        const layoutH = !isCurrent
-          ? 1
-          : imageDims
-            ? imageDims.naturalHeight
-            : 'auto';
+      {layers.map(({ src, index, isCurrent, isOutgoing }) => {
+        const frozen = frozenBySrc.get(src);
+        const dims = isCurrent ? liveDims : frozen?.dims ?? null;
+        const cssTransform = isCurrent
+          ? liveTransform
+          : frozen?.cssTransform ?? 'translate(0px, 0px) scale(1)';
+        const showSharp =
+          (isCurrent && !hideCurrentUntilDecoded && imageShowReady) || !!isOutgoing;
+        // Full geometry for current, outgoing, and any frozen keep-alive (instant ←).
+        const keepFullGeometry = !!isOutgoing || !!isCurrent || !!frozen;
+        const layoutW = keepFullGeometry && dims ? dims.naturalWidth : keepFullGeometry ? 'auto' : 1;
+        const layoutH = keepFullGeometry && dims ? dims.naturalHeight : keepFullGeometry ? 'auto' : 1;
+
+        let zIndex = 1;
+        if (isOutgoing) zIndex = 5;
+        else if (isCurrent && showSharp) zIndex = 4;
+        else if (isCurrent) zIndex = 3;
+        else if (frozen) zIndex = 2;
+
+        const transformTransition =
+          isCurrent && !isPanning && !suppressTransformTransition && imageShowReady
+            ? 'transform 0.3s ease'
+            : 'none';
+
         return (
-          <img
+          <div
             key={src}
-            src={src}
-            alt={isCurrent ? currentAlt : ''}
             aria-hidden={isCurrent ? undefined : true}
-            draggable={false}
-            decoding={isCurrent ? 'sync' : 'async'}
-            ref={bindLayerRef(src, isCurrent)}
-            onLoad={(e) => {
-              const el = e.currentTarget;
-              if (isCurrent) onCurrentLoad(el);
-              else onNeighborLoad(index, el);
-            }}
-            onError={isCurrent ? onCurrentError : undefined}
+            data-rip-stage-layer={isCurrent ? 'current' : isOutgoing ? 'outgoing' : 'keep'}
             style={{
-              position: isCurrent ? 'relative' : 'absolute',
-              left: isCurrent ? undefined : 0,
-              top: isCurrent ? undefined : 0,
-              display: 'block',
-              width: layoutW,
-              height: layoutH,
-              maxWidth: isCurrent ? (imageDims ? 'none' : '100%') : 'none',
-              maxHeight: isCurrent ? (imageDims ? 'none' : '100%') : 'none',
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex,
               pointerEvents: 'none',
-              visibility: 'visible',
-              opacity: showSharp ? 1 : DISPLAY_LAYER_KEEPALIVE_OPACITY,
-              transition: 'none',
-              zIndex: showSharp ? 1 : 0,
             }}
-          />
+          >
+            <div
+              style={{
+                position: 'relative',
+                width: layoutW,
+                height: layoutH,
+                maxWidth: dims ? 'none' : '100%',
+                maxHeight: dims ? 'none' : '100%',
+                transform: keepFullGeometry ? cssTransform : undefined,
+                transformOrigin: 'center center',
+                transition: transformTransition,
+                willChange: isCurrent ? 'transform' : undefined,
+              }}
+            >
+              {isCurrent ? underlay : null}
+              <img
+                src={src}
+                alt={isCurrent ? currentAlt : ''}
+                draggable={false}
+                decoding={isCurrent || isOutgoing ? 'sync' : 'async'}
+                ref={bindLayerRef(src, isCurrent)}
+                onLoad={(e) => {
+                  const el = e.currentTarget;
+                  if (isCurrent) onCurrentLoad(el);
+                  else onNeighborLoad(index, el);
+                }}
+                onError={isCurrent ? onCurrentError : undefined}
+                style={{
+                  display: 'block',
+                  width: layoutW,
+                  height: layoutH,
+                  maxWidth: dims ? 'none' : '100%',
+                  maxHeight: dims ? 'none' : '100%',
+                  opacity: showSharp ? 1 : DISPLAY_LAYER_KEEPALIVE_OPACITY,
+                  pointerEvents: 'none',
+                  transition: 'none',
+                }}
+              />
+            </div>
+          </div>
         );
       })}
     </>

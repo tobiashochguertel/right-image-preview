@@ -13,6 +13,7 @@ Props and defaults: [`api.md`](./api.md). Media Lens / Tauri checklist: [`media-
 | Priority | Goal |
 |----------|------|
 | **P0** | **Never prefer an empty stage**: a thumbnail placeholder beats a long black/blank wait. |
+| **P0** | **Outgoing hold**: if the previous full-`src` frame was already showing, keep it full-size and visible until the incoming image is paintable, then demote it to neighbor keep-alive — **never** fill the gap with stage-wide `opacity: 0`. |
 | **P0** | **Always show something paintable first**: if a main-area thumb (`ImageItem.minimapSrc`) exists, show it enlarged as underlay; only without a thumb do we go straight to the original. |
 | **P0** | **Original loads in parallel with the placeholder**: the moment we land on an image, start decoding/rendering its real `src`; when the original is fully drawable, drop the thumb underlay immediately. |
 | **P0** | **Fast original after a long dwell**: after staying on the previous image long enough (e.g. ~3s+), stepping to a **display-ready** neighbor (brightest strip green) should promote the retained decoded layer and skip a second full-`src` probe so sharp appears near-instantly. |
@@ -27,26 +28,28 @@ Props and defaults: [`api.md`](./api.md). Media Lens / Tauri checklist: [`media-
 Keyboard ←/→, side arrows, filmstrip click, `goTo` / controlled `index`, group jumps — all share the same **current main image** contract:
 
 ```text
-Land on index N
+Land on index N+1 (previous was N)
+    │
+    ├─ Outgoing hold: N stays full-size and visible; N+1 prepares on top
+    │     └─ N+1 fully drawable → N+1 is the sole main visible layer; N demotes to neighbor keep-alive
     │
     ├─ Distinct minimapSrc (and progressiveMain on)
-    │     ├─ Paint thumb underlay ASAP (content first)
+    │     ├─ Thumb underlay may still run (full previous frame is preferred anti-black cover)
     │     └─ In parallel: fetch / decode / layout real src
-    │           └─ Original fully drawable → atomic reveal; remove underlay
     │
-    └─ No minimapSrc (or progressive off / custom minimap node)
-          └─ Original-only path (may briefly lack a placeholder; hosts should
-             supply on-disk thumbs for large local files)
+    └─ No minimapSrc → outgoing hold still prevents black until the original is drawable
 ```
 
 Notes:
 
 1. **Thumb first, then original** is the default path; “no thumb → hard-load original” is a fallback, not the recommended setup.
-2. The switch frame does **not** wait for the original before giving visual feedback; placeholder and original prep run together.
+2. The switch frame does **not** wait for the original before giving visual feedback; **outgoing hold** runs in parallel with placeholder / original prep.
 3. Reveal requires a **fully drawable** bitmap (e.g. `createImageBitmap` / settled `decode` + double `rAF`) so a progressive JPEG cannot flash a left/top strip.
-4. If the neighbor was already **display-ready**, use **fast reveal**: skip artificial dwell / center spinner, but **keep** the underlay until the viewport main image is drawable — never blank solely to look “instant.”
+4. If the neighbor was already **display-ready**, use **fast reveal**: skip artificial dwell / center spinner; outgoing hold still covers the gap until the viewport main is drawable — never blank solely to look “instant.”
+5. Brief overlap with mismatched aspect (a sliver of the previous image) is acceptable; hold-scrubbing especially depends on this contract so half the time is not black.
+6. **Hold pacing “presented” tracks the incoming image only** (thumb underlay or new main), not the held previous frame — otherwise steps would advance too fast.
 
-Code entry points: `useProgressiveMainImage`, `DisplayStageLayers`, `lib/imagePreviewDecode.ts`.
+Code entry points: `useProgressiveMainImage`, `DisplayStageLayers` (`isOutgoing`), `ImagePreviewInner` outgoing state, `lib/imagePreviewDecode.ts`.
 
 ---
 
@@ -89,7 +92,7 @@ Goal while holding: **each index must show its main-area thumb before advancing*
 
 | Mechanism | Behavior |
 |-----------|----------|
-| **Thumb-paced hold** | First step on press is immediate. Then each landed image must show **presented** stage content (thumb underlay bitmap, or full original if no thumb) for `holdMinVisibleMs` before another step, and only if still held. Layout/meta size alone does **not** start the clock (avoids black+Loading eating the dwell). Release cancels the single timer — **no step queue**. Spinner stays while waiting on a no-thumb original. |
+| **Thumb-paced hold** | First step on press is immediate. Then each landed image must show **presented incoming** stage content (thumb underlay bitmap, or full original if no thumb) for `holdMinVisibleMs` before another step, and only if still held. The outgoing held previous frame does **not** count as presented. Layout/meta size alone does **not** start the clock (avoids black+Loading eating the dwell). Release cancels the single timer — **no step queue**. Spinner stays while waiting on a no-thumb original. |
 | **Ignore key-repeat** | `e.repeat` does not spam steps; hold + thumb readiness drives pacing. |
 | **Settle cancels neighbor heat** | Scrubbing does not start **new** neighbor decodes every hop; **already display-ready neighbor layers stay mounted** (compositor keep-alive). |
 | **No not-yet-ready full layers until settled** | Avoids mounting many undecoded full-size `<img>`s while scrubbing; ready srcs are retained stickily. |
