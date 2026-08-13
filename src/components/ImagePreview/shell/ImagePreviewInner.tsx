@@ -20,6 +20,7 @@ import {
   IMAGE_DECODE_TIMEOUT_MS,
   KEYBOARD_PAN_STEP_VIEWPORT_FRACTION,
   MIN_PROGRESSIVE_THUMB_VISIBLE_MS,
+  NAV_HOLD_MIN_VISIBLE_MS,
   PROGRESSIVE_MAIN_DEFAULT_FADE_MS,
   THUMBNAIL_STRIP_TOOLBAR_GAP_PX,
   thumbnailStripTotalHeightPx,
@@ -29,7 +30,7 @@ import {
 import { injectGlobalStyle } from '../injectGlobalStyle';
 import { findGroup } from '../lib/imagePreviewFindGroup';
 import { scheduleRevealAfterDecode } from '../lib/imagePreviewDecode';
-import { mergeByteAndDisplayStatus } from '../lib/neighborDisplayPreload';
+import { mergeByteAndDisplayStatus, PRELOAD_DISPLAY_SETTLE_MS } from '../lib/neighborDisplayPreload';
 import {
   resolveDefaultGroupedFlatIndex,
   resolvePreviewImages,
@@ -42,6 +43,7 @@ import type {
   NeighborPreloadStatusMap,
 } from '../types';
 import { useImagePreviewKeyboard } from '../useImagePreviewKeyboard';
+import { useThumbPacedNavigation } from '../useThumbPacedNavigation';
 import { useImageTransform } from '../useImageTransform';
 import { useNeighborDisplayPreload } from '../useNeighborDisplayPreload';
 import { useNeighborPreload } from '../useNeighborPreload';
@@ -83,6 +85,8 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       presentation = 'overlay',
       preloadRadius = 0,
       preloadDisplaySlots = 0,
+      preloadDisplaySettleMs = PRELOAD_DISPLAY_SETTLE_MS,
+      holdMinVisibleMs = NAV_HOLD_MIN_VISIBLE_MS,
       preloadMemoryBudgetBytes,
       estimateDecodedBytes,
       preloadDisplayMode = 'slot',
@@ -203,7 +207,6 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       markSrcDisplayReady,
       slotRenderEntries,
       onSlotImgLoad,
-      notifyInteraction,
     } = useNeighborDisplayPreload({
       images,
       currentIndex,
@@ -213,6 +216,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       estimateDecodedBytes,
       mode: preloadDisplayMode,
       interactionBusy: isPanning || minimapDragging,
+      settleMs: preloadDisplaySettleMs,
     });
 
     /**
@@ -372,6 +376,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       images,
       currentIndex,
       radius: preloadRadius,
+      settleMs: preloadDisplaySettleMs,
       onPreloadIndexesChange,
     });
 
@@ -426,11 +431,12 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const resetHideTimer = useCallback(() => {
-      notifyInteraction();
+      // Do not call notifyInteraction here — that paused neighbor display-ready warm-up on
+      // every mouse/key activity and never re-armed (panIdle stuck false → perpetual cold nav).
       setControlsVisible(true);
       if (hideTimerRef.current !== null) clearTimeout(hideTimerRef.current);
       hideTimerRef.current = setTimeout(() => setControlsVisible(false), 3000);
-    }, [notifyInteraction]);
+    }, []);
 
     // Kick off the timer on mount; clean up on unmount.
     useEffect(() => {
@@ -512,6 +518,25 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       else void requestFullscreen();
     }, [isFullscreen, exitFullscreen, requestFullscreen]);
 
+    const navArrowPointerRef = useRef(false);
+
+    const thumbReadyForPace =
+      imageLoadError ||
+      !progressive.pipelineActive ||
+      progressive.showMinimapUnderlay ||
+      progressive.fullDecoded ||
+      progressive.preloadStage === 'thumb-only' ||
+      progressive.preloadStage === 'error' ||
+      (imageShowReady && !currentImage.minimapSrc);
+
+    const { beginHold: beginNavHold, endHold: endNavHold } = useThumbPacedNavigation({
+      currentIndex,
+      thumbReady: thumbReadyForPace,
+      prev,
+      next,
+      minVisibleMs: holdMinVisibleMs,
+    });
+
     useImagePreviewKeyboard({
       resetHideTimer,
       onClose,
@@ -538,6 +563,8 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       keyboardActive: isContained ? keyboardActive : true,
       isFullscreen,
       exitFullscreen,
+      beginNavHold,
+      endNavHold,
     });
 
     // ── Double-click ────────────────────────────────────────────────────────
@@ -868,7 +895,9 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                           ? 0
                           : 1,
                     transition:    opacityTransition,
-                    zIndex: 0,
+                    // Above keep-alive full-src layers (opacity ~0.02) so neighbors / covered
+                    // current never ghost through the thumb placeholder.
+                    zIndex: progressive.fullDecoded ? 0 : 2,
                   }}
                 />
               )}
@@ -991,7 +1020,30 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                 <ImagePreviewNavArrow
                   direction="left"
                   isGroupJump={leftIsGroup}
-                  onClick={leftIsGroup ? prevGroup : prev}
+                  onClick={
+                    leftIsGroup
+                      ? prevGroup
+                      : () => {
+                          if (navArrowPointerRef.current) {
+                            navArrowPointerRef.current = false;
+                            return;
+                          }
+                          beginNavHold('prev');
+                          endNavHold('prev');
+                        }
+                  }
+                  onPointerDown={
+                    leftIsGroup
+                      ? undefined
+                      : (e) => {
+                          e.preventDefault();
+                          navArrowPointerRef.current = true;
+                          e.currentTarget.setPointerCapture?.(e.pointerId);
+                          beginNavHold('prev');
+                        }
+                  }
+                  onPointerUp={leftIsGroup ? undefined : () => endNavHold('prev')}
+                  onPointerCancel={leftIsGroup ? undefined : () => endNavHold('prev')}
                   label={leftIsGroup ? t.prevGroup : t.prev}
                   tip={leftIsGroup ? t.tipPrevGroup : t.tipPrev}
                   visible={controlsVisible}
@@ -1002,7 +1054,30 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                 <ImagePreviewNavArrow
                   direction="right"
                   isGroupJump={rightIsGroup}
-                  onClick={rightIsGroup ? nextGroup : next}
+                  onClick={
+                    rightIsGroup
+                      ? nextGroup
+                      : () => {
+                          if (navArrowPointerRef.current) {
+                            navArrowPointerRef.current = false;
+                            return;
+                          }
+                          beginNavHold('next');
+                          endNavHold('next');
+                        }
+                  }
+                  onPointerDown={
+                    rightIsGroup
+                      ? undefined
+                      : (e) => {
+                          e.preventDefault();
+                          navArrowPointerRef.current = true;
+                          e.currentTarget.setPointerCapture?.(e.pointerId);
+                          beginNavHold('next');
+                        }
+                  }
+                  onPointerUp={rightIsGroup ? undefined : () => endNavHold('next')}
+                  onPointerCancel={rightIsGroup ? undefined : () => endNavHold('next')}
                   label={rightIsGroup ? t.nextGroup : t.next}
                   tip={rightIsGroup ? t.tipNextGroup : t.tipNext}
                   visible={controlsVisible}

@@ -124,7 +124,7 @@ import { ImagePreview } from 'right-image-preview';
 
 ## API
 
-> **Canonical reference:** [`docs/api.md`](./docs/api.md) (EN) / [`docs/api.zh-CN.md`](./docs/api.zh-CN.md) (中文). The table below is a short overview and may lag; prefer the docs when they differ.
+> **Canonical reference:** [`docs/api.md`](./docs/api.md) (EN) / [`docs/api.zh-CN.md`](./docs/api.zh-CN.md) (中文). Main display flow: [`docs/main-display-flow.md`](./docs/main-display-flow.md). The table below is a short overview and may lag; prefer the docs when they differ.
 
 ### Props
 
@@ -285,6 +285,7 @@ src/
   App.tsx                      # Demo shell
   demos/                       # Demo sections + demo-only copy (not published to npm)
 docs/
+  main-display-flow.md / .zh-CN.md  # Main display & navigation flow (thumb then original)
   api.md / api.zh-CN.md        # Full API reference
   media-lens-integration.md    # Media Lens (Tauri) integration checklist
   media-lens-integration.zh-CN.md

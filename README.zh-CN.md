@@ -124,7 +124,7 @@ import { ImagePreview } from 'right-image-preview';
 
 ## API
 
-> **完整权威说明：** [`docs/api.zh-CN.md`](./docs/api.zh-CN.md)（中文）/ [`docs/api.md`](./docs/api.md)（英文）。下表仅为速览，若有出入以 `docs/api` 为准。
+> **完整权威说明：** [`docs/api.zh-CN.md`](./docs/api.zh-CN.md)（中文）/ [`docs/api.md`](./docs/api.md)（英文）。切图主流程（先缩略再原图）：[`docs/main-display-flow.zh-CN.md`](./docs/main-display-flow.zh-CN.md)。下表仅为速览，若有出入以 `docs/api` 为准。
 
 ### Props
 
@@ -285,6 +285,7 @@ src/
   App.tsx                      # 演示页外壳
   demos/                       # 各 Demo 与演示站文案（不打进 npm 包）
 docs/
+  main-display-flow.zh-CN.md / .md   # 主图显示与切图主流程（先缩略再原图）
   api.md / api.zh-CN.md              # Props & Ref API 参考
   media-lens-integration.zh-CN.md    # Media Lens（Tauri）接入清单
   media-lens-integration.md          # English checklist

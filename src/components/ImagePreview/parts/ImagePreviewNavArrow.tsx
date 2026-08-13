@@ -13,7 +13,10 @@ export interface ImagePreviewNavArrowProps {
   direction: 'left' | 'right';
   /** When true the icon becomes a double-chevron (group jump). */
   isGroupJump?: boolean;
-  onClick(): void;
+  onClick?: () => void;
+  onPointerDown?: (e: React.PointerEvent<HTMLButtonElement>) => void;
+  onPointerUp?: (e: React.PointerEvent<HTMLButtonElement>) => void;
+  onPointerCancel?: (e: React.PointerEvent<HTMLButtonElement>) => void;
   label: string;
   tip: string;
   visible: boolean;
@@ -25,6 +28,9 @@ export function ImagePreviewNavArrow({
   direction,
   isGroupJump = false,
   onClick,
+  onPointerDown,
+  onPointerUp,
+  onPointerCancel,
   label,
   tip,
   visible,
@@ -38,6 +44,14 @@ export function ImagePreviewNavArrow({
         type="button"
         aria-label={label}
         onClick={onClick}
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+        onPointerLeave={(e) => {
+          // Release hold if pointer slides off while pressed.
+          if (e.buttons !== 0) onPointerUp?.(e);
+          setHover(false);
+        }}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
         style={{

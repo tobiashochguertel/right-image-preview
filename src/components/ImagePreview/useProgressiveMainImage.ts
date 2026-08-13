@@ -61,6 +61,7 @@ export function useProgressiveMainImage({
   const onStageChangeRef = useLatestRef(onStageChange);
   const onImageLayoutRef = useLatestRef(onImageLayout);
   const knownDimensionsRef = useLatestRef(knownDimensions);
+  const preferFastRevealRef = useLatestRef(preferFastReveal);
 
   const pipelineActive =
     enabled && !!minimapSrc && minimapSrc !== mainSrc && !minimapCustom;
@@ -143,12 +144,26 @@ export function useProgressiveMainImage({
     let mainProbeFinished = false;
 
     const known = knownDimensionsRef.current;
-    if (known && known.naturalWidth > 0 && known.naturalHeight > 0) {
-      onImageLayoutRef.current(known);
+    const knownOk = !!(known && known.naturalWidth > 0 && known.naturalHeight > 0);
+    /**
+     * Display-ready navigate: layout meta already known and the viewport layer is (or will be)
+     * the retained decoded DOM node. A second `new Image(); img.src = mainSrc` probe re-decodes
+     * ~20–30MB and commonly costs ~1s — skip it on the fast path.
+     */
+    const skipMainProbe = preferFastRevealRef.current && knownOk;
+
+    if (knownOk) {
+      onImageLayoutRef.current(known!);
       thumbPlaceholderEnteredAtRef.current = performance.now();
       preloadStageRef.current = 'thumbnail-placeholder';
       setPreloadStage('thumbnail-placeholder');
       onStageChangeRef.current?.('thumbnail-placeholder');
+      // Layout microtask may have called onMainImgDecoded while stage was still `preloading`
+      // (sync reset on src change). Drain that pending now — do not wait for a main probe.
+      if (pendingMainRevealRef.current) {
+        pendingMainRevealRef.current = false;
+        armRevealAfterDwell();
+      }
     }
 
     // Parallel minimap preload: small file → layout + underlay immediately while main may take seconds.
@@ -157,7 +172,7 @@ export function useProgressiveMainImage({
       tEarly.onload = () => {
         if (cancelled || gen !== genRef.current || mainProbeFinished) return;
         // Prefer known full-image dims for layout when available; still mark underlay ready.
-        if (!known || known.naturalWidth <= 0) {
+        if (!knownOk) {
           onImageLayoutRef.current({
             naturalWidth: tEarly.naturalWidth,
             naturalHeight: tEarly.naturalHeight,
@@ -179,6 +194,12 @@ export function useProgressiveMainImage({
         /* main or tryMinimapFallback will still attempt layout */
       };
       tEarly.src = minimapSrc;
+    }
+
+    if (skipMainProbe) {
+      return () => {
+        cancelled = true;
+      };
     }
 
     const img = new Image();
@@ -255,7 +276,7 @@ export function useProgressiveMainImage({
       if (preloadTimeoutHolder.id !== undefined) window.clearTimeout(preloadTimeoutHolder.id);
     };
   },
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- onImageLayoutRef, onStageChangeRef, knownDimensionsRef
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- refs: layout/stage/known/preferFastReveal
   [mainSrc, minimapSrc, pipelineActive, armRevealAfterDwell],
   );
 
@@ -271,6 +292,21 @@ export function useProgressiveMainImage({
     const stage = preloadStageRef.current;
     if (stage === 'preloading') {
       pendingMainRevealRef.current = true;
+      // Display-ready: known dims mean we can enter placeholder + reveal without waiting for the
+      // progressive effect (layout microtask often races ahead of that effect).
+      const known = knownDimensionsRef.current;
+      if (
+        preferFastRevealRef.current &&
+        known &&
+        known.naturalWidth > 0 &&
+        known.naturalHeight > 0
+      ) {
+        thumbPlaceholderEnteredAtRef.current = performance.now();
+        preloadStageRef.current = 'thumbnail-placeholder';
+        setPreloadStage('thumbnail-placeholder');
+        pendingMainRevealRef.current = false;
+        armRevealAfterDwell();
+      }
       return;
     }
     if (stage === 'thumbnail-placeholder') {
@@ -282,7 +318,7 @@ export function useProgressiveMainImage({
     if (stage === 'error') {
       onStageChangeRef.current?.('full-ready');
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- preloadStageRef, onStageChangeRef
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- refs: stage/known/preferFastReveal
   }, [enabled, minimapSrc, minimapCustom, mainSrc, armRevealAfterDwell]);
 
   const showMinimapUnderlay =

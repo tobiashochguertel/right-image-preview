@@ -1,3 +1,4 @@
+import { DISPLAY_LAYER_KEEPALIVE_OPACITY } from '../imagePreviewTuning';
 import type { UseNeighborDisplayPreloadResult } from '../useNeighborDisplayPreload';
 
 export interface NeighborDisplaySlotPoolProps {
@@ -6,8 +7,8 @@ export interface NeighborDisplaySlotPoolProps {
 }
 
 /**
- * Offscreen full-size imgs kept decoded for display-ready neighbor preload (approach C).
- * Visually hidden; still in the document so decode/compositor can retain bitmaps.
+ * Fallback offscreen pool (legacy). Prefer {@link DisplayStageLayers} stage retention.
+ * Uses 1×1 clip + keep-alive opacity so WebViews do not discard decoded bitmaps.
  */
 export function NeighborDisplaySlotPool({
   entries,
@@ -26,7 +27,7 @@ export function NeighborDisplaySlotPool({
         width: 1,
         height: 1,
         overflow: 'hidden',
-        opacity: 0,
+        opacity: DISPLAY_LAYER_KEEPALIVE_OPACITY,
         pointerEvents: 'none',
         zIndex: -1,
       }}

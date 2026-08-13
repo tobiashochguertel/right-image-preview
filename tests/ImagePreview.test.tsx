@@ -593,6 +593,7 @@ describe('ImagePreview component', () => {
             preloadRadius={1}
             preloadDisplaySlots={2}
             preloadDisplayMode="decode"
+            preloadDisplaySettleMs={0}
             progressiveMain
             onPreloadStatusChange={onPreloadStatusChange}
             {...ZH}

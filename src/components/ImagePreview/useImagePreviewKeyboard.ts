@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type { FlattenedGroupSlice } from './flattenGroupedImages';
 import type { ZoomMode } from './types';
+import type { ThumbPaceHoldDir } from './useThumbPacedNavigation';
 
 export interface UseImagePreviewKeyboardParams {
   resetHideTimer(): void;
@@ -36,6 +37,12 @@ export interface UseImagePreviewKeyboardParams {
    */
   isFullscreen?: () => boolean;
   exitFullscreen?: () => void | Promise<void>;
+  /**
+   * Thumb-paced ←/→ hold (optional). When set, ArrowLeft/Right (without mod/shift)
+   * use begin/end hold instead of calling prev/next on every key-repeat.
+   */
+  beginNavHold?: (dir: ThumbPaceHoldDir) => void;
+  endNavHold?: (dir?: ThumbPaceHoldDir) => void;
 }
 
 /**
@@ -69,6 +76,8 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
     keyboardActive = true,
     isFullscreen,
     exitFullscreen,
+    beginNavHold,
+    endNavHold,
   } = p;
 
   useEffect(() => {
@@ -144,7 +153,12 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
           }
           if (mod) {
             rotateCCW();
-          } else {
+          } else if (beginNavHold && !e.repeat) {
+            // Ignore OS key-repeat — pacing is driven by thumbnail readiness while held.
+            const atStart = currentGroup ? currentIndex === currentGroup.start : currentIndex === 0;
+            if (atStart && currentGroupIdx > 0) prevGroup();
+            else beginNavHold('prev');
+          } else if (!beginNavHold) {
             const atStart = currentGroup ? currentIndex === currentGroup.start : currentIndex === 0;
             if (atStart && currentGroupIdx > 0) prevGroup();
             else prev();
@@ -158,7 +172,12 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
           }
           if (mod) {
             rotateCW();
-          } else {
+          } else if (beginNavHold && !e.repeat) {
+            const atEnd = currentGroup ? currentIndex === currentGroup.end : currentIndex === imagesLength - 1;
+            const hasNext = groupSlices ? currentGroupIdx < groupSlices.length - 1 : false;
+            if (atEnd && hasNext) nextGroup();
+            else beginNavHold('next');
+          } else if (!beginNavHold) {
             const atEnd = currentGroup ? currentIndex === currentGroup.end : currentIndex === imagesLength - 1;
             const hasNext = groupSlices ? currentGroupIdx < groupSlices.length - 1 : false;
             if (atEnd && hasNext) nextGroup();
@@ -177,8 +196,19 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
           break;
       }
     };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (!keyboardActive || !endNavHold) return;
+      if (e.key === 'ArrowLeft') endNavHold('prev');
+      if (e.key === 'ArrowRight') endNavHold('next');
+    };
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
   }, [
     resetHideTimer,
     onClose,
@@ -205,5 +235,7 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
     keyboardActive,
     isFullscreen,
     exitFullscreen,
+    beginNavHold,
+    endNavHold,
   ]);
 }

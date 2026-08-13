@@ -60,6 +60,8 @@
 | `presentation` | `'overlay' \| 'contained'` | `'overlay'` | `overlay` fullscreen dialog; `contained` fills a positioned host |
 | `preloadRadius` | `number` | `0` | Neighbor full-`src` byte preload radius; `0` = off. Does **not** alone skip progressive |
 | `preloadDisplaySlots` | `number` | `0` | Max neighbors kept **display-ready**. `0` + budget → ceiling 6; budget decides fill count |
+| `preloadDisplaySettleMs` | `number` | `600` | Debounce after navigation before warming **neighbors** (rapid ←/→ cancels). Does not delay current main decode |
+| `holdMinVisibleMs` | `number` | `300` | Hold ←/→: after the first immediate step, each image must stay paintable (thumb or full) this long before another step, and only if still held. Release cancels the pending timer (no queue) |
 | `preloadMemoryBudgetBytes` | `number` | — | Neighbor decoded-byte budget (excludes current main). Prefer this from Tauri; props stay fixed while browsing |
 | `estimateDecodedBytes` | `(item) => number` | EXIF w×h×4 or 12MP guess | Size estimate for budget |
 | `preloadDisplayMode` | `'slot' \| 'decode'` | `'slot'` | `'slot'` = offscreen imgs (C); `'decode'` = decode-only fallback (B) |
@@ -94,7 +96,7 @@ Tile image: `ImageItem.minimapSrc` if set, otherwise `src`. Layout: few tiles �
 #### Neighbor preload notes
 
 - **Byte preload** (`preloadRadius`): `Image()` fetch only. Strip phase `ready` / `warm` means bytes likely cached — **not** enough to skip {@link progressiveMain}.
-- **Display-ready** (`preloadDisplaySlots` > 0): load + `decode()` (and offscreen `<img>` when `preloadDisplayMode="slot"`). Phase `display-ready` is exact; navigating there uses fast reveal (no artificial dwell / centre spinner) while **keeping** the `minimapSrc` underlay until the viewport main image is drawable.
+- **Display-ready** (`preloadDisplaySlots` > 0): load + `decode()` (and offscreen `<img>` when `preloadDisplayMode="slot"`). Phase `display-ready` is exact; navigating there uses fast reveal (no artificial dwell / centre spinner) while **keeping** the `minimapSrc` underlay until the viewport main image is drawable. Neighbor warm-up is debounced by {@link preloadDisplaySettleMs} (default 600ms) so rapid scrubbing does not decode every hop.
 - **Memory**: the library does not read device RAM. Hosts (e.g. Tauri) should pass `preloadMemoryBudgetBytes` (see `suggestPreloadMemoryBudgetBytes`) and ideally width/height estimates. **Media Lens checklist:** [`media-lens-integration.md`](./media-lens-integration.md).
 - **Fallback**: `preloadDisplayMode="decode"` keeps the same short-circuit contract without retaining compositor layers.
 
@@ -197,4 +199,6 @@ interface ImagePreviewRef {
 
 ## See also
 
+- [Main display & navigation flow](./main-display-flow.md) — thumb underlay then original, long-dwell fast path, hold pacing.
 - [Minimap viewport drag](./minimap.md) — WebView pointer quirks and Jacobian-based 1:1 panning.
+- [Media Lens integration](./media-lens-integration.md) — Tauri memory budget and recommended props.

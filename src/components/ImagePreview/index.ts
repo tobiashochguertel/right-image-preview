@@ -41,6 +41,7 @@ export {
   resolvePreloadDisplaySlotCeiling,
   suggestPreloadMemoryBudgetBytes,
   DEFAULT_DISPLAY_SLOTS_WHEN_BUDGET_ONLY,
+  PRELOAD_DISPLAY_SETTLE_MS,
   SUGGESTED_PRELOAD_BUDGET_FRACTION_OF_AVAILABLE,
 } from './lib/neighborDisplayPreload';
 export type { Rotation } from './useImageTransform';

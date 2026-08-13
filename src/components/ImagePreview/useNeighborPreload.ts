@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { PRELOAD_DISPLAY_SETTLE_MS } from './lib/neighborDisplayPreload';
 import type { ImageItem, NeighborPreloadEntry, NeighborPreloadStatusMap } from './types';
 
 /** Max concurrent `Image()` neighbor preloads. */
@@ -18,6 +19,8 @@ export interface UseNeighborPreloadParams {
   /** Flat-index radius; `0` disables neighbor fetching (session-warm marks can still apply). */
   radius: number;
   maxConcurrent?: number;
+  /** Debounce before starting neighbor byte fetches after navigation. */
+  settleMs?: number;
   onPreloadIndexesChange?: (indexes: number[]) => void;
   onPreloadStatusChange?: (status: NeighborPreloadStatusMap) => void;
 }
@@ -93,6 +96,7 @@ export function useNeighborPreload(p: UseNeighborPreloadParams): UseNeighborPrel
     currentIndex,
     radius,
     maxConcurrent = NEIGHBOR_PRELOAD_MAX_CONCURRENT,
+    settleMs = PRELOAD_DISPLAY_SETTLE_MS,
     onPreloadIndexesChange,
     onPreloadStatusChange,
   } = p;
@@ -145,15 +149,13 @@ export function useNeighborPreload(p: UseNeighborPreloadParams): UseNeighborPrel
     wantedRef.current = wanted;
     const wantedSet = new Set(wanted);
 
-    // Drop in-flight loads that left the window.
+    // Abort all in-flight neighbor byte loads on navigation (debounce restart).
     for (const [idx, img] of [...activeRef.current.entries()]) {
-      if (!wantedSet.has(idx)) {
-        img.onload = null;
-        img.onerror = null;
-        img.src = '';
-        activeRef.current.delete(idx);
-        loadingRef.current.delete(idx);
-      }
+      img.onload = null;
+      img.onerror = null;
+      img.src = '';
+      activeRef.current.delete(idx);
+      loadingRef.current.delete(idx);
     }
 
     // Drop error marks outside window (warm/ready handled via doneSrc).
@@ -163,47 +165,61 @@ export function useNeighborPreload(p: UseNeighborPreloadParams): UseNeighborPrel
 
     publish(wanted);
 
-    if (wanted.length === 0) return;
+    if (wanted.length === 0) return undefined;
 
-    const pump = () => {
-      if (activeRef.current.size >= maxConcurrent) return;
-      for (const idx of wanted) {
-        if (activeRef.current.size >= maxConcurrent) break;
-        if (activeRef.current.has(idx)) continue;
-        const src = images[idx]?.src;
-        if (!src) continue;
-        if (doneSrcRef.current.has(src)) {
-          loadingRef.current.delete(idx);
-          errorRef.current.delete(idx);
-          continue;
-        }
-
-        const img = new Image();
-        activeRef.current.set(idx, img);
-        loadingRef.current.add(idx);
-        errorRef.current.delete(idx);
-        publish(wanted);
-
-        const finish = (ok: boolean) => {
-          activeRef.current.delete(idx);
-          loadingRef.current.delete(idx);
-          if (ok) {
-            doneSrcRef.current.add(src);
+    const delay = Math.max(0, settleMs);
+    const startId = window.setTimeout(() => {
+      const pump = () => {
+        if (activeRef.current.size >= maxConcurrent) return;
+        for (const idx of wantedRef.current) {
+          if (activeRef.current.size >= maxConcurrent) break;
+          if (activeRef.current.has(idx)) continue;
+          const src = imagesRef.current[idx]?.src;
+          if (!src) continue;
+          if (doneSrcRef.current.has(src)) {
+            loadingRef.current.delete(idx);
             errorRef.current.delete(idx);
-          } else {
-            errorRef.current.add(idx);
+            continue;
           }
+
+          const img = new Image();
+          activeRef.current.set(idx, img);
+          loadingRef.current.add(idx);
+          errorRef.current.delete(idx);
           publish(wantedRef.current);
-          pump();
-        };
-        img.onload = () => finish(true);
-        img.onerror = () => finish(false);
-        img.src = src;
+
+          const finish = (ok: boolean) => {
+            activeRef.current.delete(idx);
+            loadingRef.current.delete(idx);
+            if (ok) {
+              doneSrcRef.current.add(src);
+              errorRef.current.delete(idx);
+            } else {
+              errorRef.current.add(idx);
+            }
+            publish(wantedRef.current);
+            pump();
+          };
+          img.onload = () => finish(true);
+          img.onerror = () => finish(false);
+          img.src = src;
+        }
+      };
+
+      pump();
+    }, delay);
+
+    return () => {
+      window.clearTimeout(startId);
+      for (const [idx, img] of [...activeRef.current.entries()]) {
+        img.onload = null;
+        img.onerror = null;
+        img.src = '';
+        activeRef.current.delete(idx);
+        loadingRef.current.delete(idx);
       }
     };
-
-    pump();
-  }, [images, currentIndex, radius, maxConcurrent, publish]);
+  }, [images, currentIndex, radius, maxConcurrent, settleMs, publish]);
 
   useEffect(() => {
     const active = activeRef.current;

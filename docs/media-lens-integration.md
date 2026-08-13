@@ -4,7 +4,7 @@
 
 Guide for **Media Lens** (Tauri + React) integrating `right-image-preview` **≥ 0.3.x** with display-ready neighbor preload.
 
-Canonical API tables: [`api.md`](./api.md). This doc is the product-facing checklist.
+Canonical API tables: [`api.md`](./api.md). Main display / navigation flow (thumb then original, long-dwell fast path): [`main-display-flow.md`](./main-display-flow.md). This doc is the product-facing checklist.
 
 ---
 

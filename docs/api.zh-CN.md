@@ -60,6 +60,8 @@
 | `presentation` | `'overlay' \| 'contained'` | `'overlay'` | `overlay` 全屏对话框；`contained` 填满已定位宿主 |
 | `preloadRadius` | `number` | `0` | 相邻主图**字节**预加载半径；`0` 关闭。单独开启不会跳过渐进占位 |
 | `preloadDisplaySlots` | `number` | `0` | display-ready 邻居上限。`0` 且提供预算时上限为 6，实际张数由预算决定 |
+| `preloadDisplaySettleMs` | `number` | `600` | 切图后防抖：停稳这么久才开始预热**邻居**（连切会取消未启动的预热）。**不**延迟当前主图解码 |
+| `holdMinVisibleMs` | `number` | `300` | 按住 ←/→：第一次立即切一张；之后每张需主区域可看（缩略或无缩略时的原图）满此时长，且仍按住才再切。松开取消定时器，**不堆积**步进 |
 | `preloadMemoryBudgetBytes` | `number` | — | **邻居**解码字节预算（不含当前主图）。推荐由 Tauri 传入；浏览中 props 可固定 |
 | `estimateDecodedBytes` | `(item) => number` | EXIF 宽×高×4 或 12MP 估算 | 预算用体积估算 |
 | `preloadDisplayMode` | `'slot' \| 'decode'` | `'slot'` | `'slot'` = 离屏 img（C）；`'decode'` = 仅 decode（B 降级） |
@@ -94,7 +96,7 @@
 #### 相邻预加载说明
 
 - **字节预热**（`preloadRadius`）：仅 `Image()` 拉取。条带上的 `ready` / `warm` 表示字节可能已缓存——**不足以**跳过渐进主图。
-- **Display-ready**（`preloadDisplaySlots` > 0）：load + `decode()`（`preloadDisplayMode="slot"` 时还有离屏 `<img>`）。`display-ready` 为确切状态；切到该项走快开（无人工占位停留 / 无中央 loading），**仍保留** `minimapSrc` 占位直到视口主图可绘制。
+- **Display-ready**（`preloadDisplaySlots` > 0）：load + `decode()`（`preloadDisplayMode="slot"` 时还有离屏 `<img>`）。`display-ready` 为确切状态；切到该项走快开（无人工占位停留 / 无中央 loading），**仍保留** `minimapSrc` 占位直到视口主图可绘制。邻居预热受 `preloadDisplaySettleMs`（默认 600ms）防抖：连切不会为每一跳解码。
 - **内存**：组件不读设备内存。宿主（如 Tauri）应传入 `preloadMemoryBudgetBytes`（可用 `suggestPreloadMemoryBudgetBytes`），并尽量提供宽高。**Media Lens 接入清单：** [`media-lens-integration.zh-CN.md`](./media-lens-integration.zh-CN.md)。
 - **降级**：`preloadDisplayMode="decode"` 保持同一短路契约，但不常驻合成层。
 
@@ -197,4 +199,6 @@ interface ImagePreviewRef {
 
 ## 另见
 
+- [主图显示与切图主流程](./main-display-flow.zh-CN.md) — 先缩略占位再揭开原图、长停留后快开、连按节奏。
 - [小地图视口拖动](./minimap.zh-CN.md) — WebView 指针行为与基于雅可比的 1:1 平移。
+- [Media Lens 接入清单](./media-lens-integration.zh-CN.md) — Tauri 内存预算与推荐 props。

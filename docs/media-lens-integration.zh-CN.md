@@ -4,7 +4,7 @@
 
 面向 **Media Lens**（Tauri + React）接入 `right-image-preview` **≥ 0.3.x**（含 display-ready 邻居预热）的清单。
 
-完整 API 表见 [`api.zh-CN.md`](./api.zh-CN.md)。
+完整 API 表见 [`api.zh-CN.md`](./api.zh-CN.md)。切图「先缩略再原图 / 长停留后快开」主流程见 [`main-display-flow.zh-CN.md`](./main-display-flow.zh-CN.md)。
 
 ---
 
@@ -63,6 +63,8 @@ const preloadDisplaySlots = 4; // 可选硬顶
 ```
 
 浏览过程中 **props 保持不变是正常的**。同一文件夹里 6K/9K 混排时，组件会在每次切图时按单张估算重新挑选邻居。
+
+邻居 display-ready / 字节预热默认在切图后 **`preloadDisplaySettleMs`（600ms）** 防抖：连切会取消未启动的预热，只对停稳的那张热邻居。当前主图解码**不会**被这 600ms 推迟。
 
 只传预算、不传 slots（`preloadDisplaySlots={0}`）也可以：组件用默认上限 6，再由预算决定实际填几张。
 

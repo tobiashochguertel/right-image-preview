@@ -1,0 +1,118 @@
+import { act, renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useThumbPacedNavigation } from '../src/components/ImagePreview/useThumbPacedNavigation';
+
+describe('useThumbPacedNavigation', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('steps once immediately on beginHold', () => {
+    const next = vi.fn();
+    const { result } = renderHook(() =>
+      useThumbPacedNavigation({
+        currentIndex: 2,
+        thumbReady: true,
+        next,
+        prev: vi.fn(),
+        minVisibleMs: 300,
+      }),
+    );
+
+    act(() => result.current.beginHold('next'));
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('short press: release before min-visible on the new image → no second step', () => {
+    const next = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ thumbReady, currentIndex }) =>
+        useThumbPacedNavigation({
+          currentIndex,
+          thumbReady,
+          next,
+          prev: vi.fn(),
+          minVisibleMs: 300,
+        }),
+      { initialProps: { thumbReady: true, currentIndex: 0 } },
+    );
+
+    act(() => result.current.beginHold('next'));
+    expect(next).toHaveBeenCalledTimes(1);
+
+    act(() => rerender({ thumbReady: true, currentIndex: 1 }));
+    act(() => {
+      vi.advanceTimersByTime(200);
+      result.current.endHold('next');
+    });
+    act(() => vi.advanceTimersByTime(500));
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('while held: waits until paintable, then minVisibleMs, then steps once — no backlog after endHold', () => {
+    const next = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ thumbReady, currentIndex }) =>
+        useThumbPacedNavigation({
+          currentIndex,
+          thumbReady,
+          next,
+          prev: vi.fn(),
+          minVisibleMs: 300,
+        }),
+      { initialProps: { thumbReady: true, currentIndex: 0 } },
+    );
+
+    act(() => result.current.beginHold('next'));
+    expect(next).toHaveBeenCalledTimes(1);
+
+    // Land on index 1 — not paintable yet (e.g. large original, no thumb).
+    act(() => rerender({ thumbReady: false, currentIndex: 1 }));
+    act(() => vi.advanceTimersByTime(2000));
+    expect(next).toHaveBeenCalledTimes(1);
+
+    // Becomes paintable → must still wait minVisibleMs.
+    act(() => rerender({ thumbReady: true, currentIndex: 1 }));
+    act(() => vi.advanceTimersByTime(299));
+    expect(next).toHaveBeenCalledTimes(1);
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(next).toHaveBeenCalledTimes(2);
+
+    // Land on 2, paint instantly, wait 300ms → step to 3.
+    act(() => rerender({ thumbReady: true, currentIndex: 2 }));
+    act(() => vi.advanceTimersByTime(300));
+    expect(next).toHaveBeenCalledTimes(3);
+
+    act(() => rerender({ thumbReady: true, currentIndex: 3 }));
+    act(() => result.current.endHold('next'));
+    // Would have stepped again after 300ms if still held — must not.
+    act(() => vi.advanceTimersByTime(1000));
+    expect(next).toHaveBeenCalledTimes(3);
+  });
+
+  it('endHold cancels a pending dwell even if paint was already ready', () => {
+    const next = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ thumbReady, currentIndex }) =>
+        useThumbPacedNavigation({
+          currentIndex,
+          thumbReady,
+          next,
+          prev: vi.fn(),
+          minVisibleMs: 300,
+        }),
+      { initialProps: { thumbReady: true, currentIndex: 0 } },
+    );
+
+    act(() => result.current.beginHold('next'));
+    act(() => rerender({ thumbReady: true, currentIndex: 1 }));
+    act(() => vi.advanceTimersByTime(100));
+    act(() => result.current.endHold('next'));
+    act(() => vi.advanceTimersByTime(1000));
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+});

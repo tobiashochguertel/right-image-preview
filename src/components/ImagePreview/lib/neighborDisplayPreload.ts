@@ -10,8 +10,16 @@ export const DEFAULT_DECODED_BYTES_GUESS = 12_000_000 * 4;
  */
 export const DEFAULT_DISPLAY_SLOTS_WHEN_BUDGET_ONLY = 6;
 
-/** Idle debounce before starting display decode after user activity. */
+/** Idle debounce before starting display decode after pan/minimap drag settles. */
 export const DISPLAY_PRELOAD_IDLE_MS = 120;
+
+/**
+ * After navigation (`currentIndex` change), wait this long with no further navigation
+ * before starting **neighbor** display-ready preload. Rapid ←/→ cancels the pending timer
+ * so only the final settled image warms neighbors. Current main-image decode is unaffected.
+ */
+export const PRELOAD_DISPLAY_SETTLE_MS = 600;
+
 
 /**
  * Fraction of *available* RAM suggested for the neighbor display-ready pool

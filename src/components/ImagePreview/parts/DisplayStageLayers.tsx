@@ -1,3 +1,4 @@
+import { DISPLAY_LAYER_KEEPALIVE_OPACITY } from '../imagePreviewTuning';
 import type { ImageDimensions } from '../useImageTransform';
 
 export interface DisplayLayerEntry {
@@ -10,7 +11,7 @@ export interface DisplayStageLayersProps {
   layers: DisplayLayerEntry[];
   currentAlt: string;
   imageDims: ImageDimensions | null;
-  /** When true, current full-res layer stays opacity 0 (progressive underlay showing). */
+  /** When true, current full-res stays under the minimap underlay (keep-alive opacity, not hidden). */
   hideCurrentUntilDecoded: boolean;
   /** @deprecated Main layer always snaps; kept for call-site compatibility. */
   opacityTransition?: string;
@@ -22,7 +23,11 @@ export interface DisplayStageLayersProps {
 
 /**
  * Keeps current + neighbor full-`src` images mounted under stable `key={src}`.
- * Navigating to a pre-decoded neighbor reuses the same DOM node → no second ~1s decode.
+ *
+ * WebViews often discard decoded bitmaps for `opacity: 0` / `visibility: hidden` images.
+ * Neighbors stay mounted as a **1×1** paint with keep-alive opacity; current while covered by
+ * the thumb underlay keeps full layout size at the same opacity — both remain “visible” to the
+ * compositor so promote-on-navigate can skip a ~0.5–1s re-decode.
  */
 export function DisplayStageLayers({
   layers,
@@ -37,40 +42,52 @@ export function DisplayStageLayers({
 }: DisplayStageLayersProps) {
   return (
     <>
-      {layers.map(({ src, index, isCurrent }) => (
-        <img
-          key={src}
-          src={src}
-          alt={isCurrent ? currentAlt : ''}
-          aria-hidden={isCurrent ? undefined : true}
-          draggable={false}
-          decoding={isCurrent ? 'sync' : 'async'}
-          ref={bindLayerRef(src, isCurrent)}
-          onLoad={(e) => {
-            const el = e.currentTarget;
-            if (isCurrent) onCurrentLoad(el);
-            else onNeighborLoad(index, el);
-          }}
-          onError={isCurrent ? onCurrentError : undefined}
-          style={{
-            position: isCurrent ? 'relative' : 'absolute',
-            left: isCurrent ? undefined : 0,
-            top: isCurrent ? undefined : 0,
-            display: 'block',
-            width: isCurrent && imageDims ? imageDims.naturalWidth : 'auto',
-            height: isCurrent && imageDims ? imageDims.naturalHeight : 'auto',
-            maxWidth: isCurrent ? (imageDims ? 'none' : '100%') : 'none',
-            maxHeight: isCurrent ? (imageDims ? 'none' : '100%') : 'none',
-            pointerEvents: 'none',
-            // Keep invisible until fully decoded — opacity alone can still flash progressive JPEG strips.
-            visibility: isCurrent && hideCurrentUntilDecoded ? 'hidden' : 'visible',
-            opacity: isCurrent ? (hideCurrentUntilDecoded ? 0 : 1) : 0,
-            // Snap on: fading in a huge JPG can still show a left/top scan strip mid-transition.
-            transition: 'none',
-            zIndex: isCurrent ? 1 : 0,
-          }}
-        />
-      ))}
+      {layers.map(({ src, index, isCurrent }) => {
+        const showSharp = isCurrent && !hideCurrentUntilDecoded;
+        // Neighbors: 1×1 paint (invisible in practice). Covered current: full size under underlay.
+        const layoutW = !isCurrent
+          ? 1
+          : imageDims
+            ? imageDims.naturalWidth
+            : 'auto';
+        const layoutH = !isCurrent
+          ? 1
+          : imageDims
+            ? imageDims.naturalHeight
+            : 'auto';
+        return (
+          <img
+            key={src}
+            src={src}
+            alt={isCurrent ? currentAlt : ''}
+            aria-hidden={isCurrent ? undefined : true}
+            draggable={false}
+            decoding={isCurrent ? 'sync' : 'async'}
+            ref={bindLayerRef(src, isCurrent)}
+            onLoad={(e) => {
+              const el = e.currentTarget;
+              if (isCurrent) onCurrentLoad(el);
+              else onNeighborLoad(index, el);
+            }}
+            onError={isCurrent ? onCurrentError : undefined}
+            style={{
+              position: isCurrent ? 'relative' : 'absolute',
+              left: isCurrent ? undefined : 0,
+              top: isCurrent ? undefined : 0,
+              display: 'block',
+              width: layoutW,
+              height: layoutH,
+              maxWidth: isCurrent ? (imageDims ? 'none' : '100%') : 'none',
+              maxHeight: isCurrent ? (imageDims ? 'none' : '100%') : 'none',
+              pointerEvents: 'none',
+              visibility: 'visible',
+              opacity: showSharp ? 1 : DISPLAY_LAYER_KEEPALIVE_OPACITY,
+              transition: 'none',
+              zIndex: showSharp ? 1 : 0,
+            }}
+          />
+        );
+      })}
     </>
   );
 }

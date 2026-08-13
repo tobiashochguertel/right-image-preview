@@ -214,15 +214,16 @@ export interface NeighborPreloadEntry {
  * - `loading` / `ready`: byte-level neighbor preload (HTTP cache likely for `ready`).
  * - `display-ready`: neighbor load+decode settled — navigating here uses fast reveal
  *   (no artificial placeholder dwell / spinner; minimap underlay stays until the viewport
- *   main `<img>` is drawable — offscreen decode alone is not enough in WKWebView).
+ *   main `<img>` is drawable). Slot layers keep a tiny non-zero opacity so WKWebView does
+ *   not discard decoded bitmaps (`opacity: 0` alone is not enough).
  * - `warm`: bytes succeeded earlier this session, outside the window (not display-ready).
  */
 export type NeighborPreloadStatusMap = Readonly<Record<number, NeighborPreloadEntry>>;
 
 /**
  * How neighbor **display** preload keeps decoded bitmaps.
- * - `'slot'` (default): offscreen `<img>` in the DOM + `decode()` (approach C).
- * - `'decode'`: `Image()` + `decode()` only, no offscreen layer (approach B fallback).
+ * - `'slot'` (default): retained stage `<img>` + `decode()` + keep-alive opacity (approach C).
+ * - `'decode'`: `Image()` + `decode()` only, no retained layer (approach B fallback).
  */
 export type PreloadDisplayMode = 'slot' | 'decode';
 
@@ -426,6 +427,24 @@ export interface ImagePreviewProps {
    * Ignored when {@link preloadRadius} is `0`.
    */
   preloadDisplaySlots?: number;
+
+  /**
+   * Debounce (ms) after navigation before starting **neighbor** display-ready preload.
+   * Further ←/→ within this window cancels the pending warm-up so rapid scrubbing does not
+   * decode dozens of full originals. Default `600`. Does **not** delay decoding the current
+   * main image — after a long stay on N, one click to N+1 still aims for instant sharp when
+   * that neighbor was already warmed.
+   */
+  preloadDisplaySettleMs?: number;
+
+  /**
+   * While holding ←/→ (keyboard or side arrows): after the **first** immediate step, each
+   * landed image must stay paintable (main-area thumb underlay, or full original when there
+   * is no thumb) for at least this many ms before another step is allowed — and only if the
+   * key/pointer is still held. Release cancels the single pending timer (no step queue).
+   * Default `300`. Hosts may expose this in settings.
+   */
+  holdMinVisibleMs?: number;
 
   /**
    * Decoded-bitmap byte budget for **neighbor** display-ready slots (not including the current

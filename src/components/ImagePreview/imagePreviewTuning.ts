@@ -27,6 +27,36 @@ export const PROGRESSIVE_PRELOAD_TIMEOUT_MS = 180_000;
  */
 export const MIN_PROGRESSIVE_THUMB_VISIBLE_MS = 160;
 
+// ── ←/→ hold navigation (`useThumbPacedNavigation`) ─────────────────────────
+
+/**
+ * Time a key/pointer must stay down before continuous advance starts.
+ * @deprecated Prefer {@link NAV_HOLD_MIN_VISIBLE_MS} — first step is immediate; further
+ * steps wait until each image has been visible for min-visible, then re-check hold.
+ */
+export const NAV_HOLD_REPEAT_DELAY_MS = 450;
+
+/**
+ * Minimum interval between auto-steps while holding (after {@link NAV_HOLD_REPEAT_DELAY_MS}).
+ * @deprecated Prefer {@link NAV_HOLD_MIN_VISIBLE_MS}.
+ */
+export const NAV_HOLD_MIN_STEP_INTERVAL_MS = 220;
+
+/**
+ * After the first ←/→ step on key/pointer down, each subsequent image must stay
+ * paintable (thumb underlay or full original) at least this long before another
+ * step is allowed — and only if the key/pointer is still held. Default for
+ * {@link ImagePreviewProps.holdMinVisibleMs}.
+ */
+export const NAV_HOLD_MIN_VISIBLE_MS = 300;
+
+/**
+ * Opacity for non-visible full-`src` layers (neighbors, or current while underlay covers).
+ * Must be **> 0**: WKWebView / Chromium often discard decoded bitmaps for `opacity: 0` /
+ * `visibility: hidden` images, causing ~0.5–1s re-decode on navigate despite display-ready.
+ */
+export const DISPLAY_LAYER_KEEPALIVE_OPACITY = 0.02;
+
 // ── Viewport pan clamp (`useImageTransform`, axis-aligned overlap model) ─────
 
 /** Main image drag: min fraction of viewport **width** and **height** that must show image. */

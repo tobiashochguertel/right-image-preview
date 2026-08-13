@@ -4,6 +4,7 @@ import {
   mergeByteAndDisplayStatus,
   orderedNeighborIndexes,
   pickDisplaySlotIndexes,
+  PRELOAD_DISPLAY_SETTLE_MS,
   resolvePreloadDisplaySlotCeiling,
   rgbaDecodedBytes,
   suggestPreloadMemoryBudgetBytes,
@@ -85,5 +86,9 @@ describe('neighborDisplayPreload helpers', () => {
     );
     expect(merged[1]).toEqual({ phase: 'ready', progress: 1 });
     expect(merged[2]).toEqual({ phase: 'display-ready', progress: 1 });
+  });
+
+  it('defaults neighbor settle debounce to 600ms', () => {
+    expect(PRELOAD_DISPLAY_SETTLE_MS).toBe(600);
   });
 });

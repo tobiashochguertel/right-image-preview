@@ -78,12 +78,24 @@ export interface DemoStrings {
   demo6Desc: string;
   demo6SidebarTitle: string;
   demo6HowTo: string;
+  demo6HowToShort: string;
   demo6Missing: string;
   demo6SlotsToggle: string;
   demo6MeterTitle: string;
   demo6MeterIdle: string;
   demo6MeterHint: string;
   demo6HistoryTitle: string;
+  demo6PoolTitle: string;
+  demo6PoolModeOn: string;
+  demo6PoolModeOff: string;
+  demo6PoolNow: string;
+  demo6PoolIfOff: string;
+  demo6PoolCurrent: string;
+  demo6PoolNeighbors: string;
+  demo6PoolExtra: string;
+  demo6PoolCap: string;
+  demo6PoolHint: string;
+  demo6PoolHintShort: string;
   photosBadge: (n: number) => string;
   thumbAria: (label: string) => string;
 }
@@ -184,18 +196,31 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo5PreloadHint: 'Neighbor preload indexes',
     demo6Title: 'Demo 6 · Local large JPGs (dev only, gitignored)',
     demo6Desc:
-      'Reads gitignored `./test-images` + thumbs via Vite middleware. After the black-screen fix, green (display-ready) no longer means “instant sharp” — both paths show a thumb underlay while the viewport re-decodes ~20–30MB. Use the sidebar meter: path + underlay/sharp ms. Toggle slots off to force every nav to cold.',
+      'Reads gitignored `./test-images` + thumbs via Vite middleware. After dwelling, neighbors with the brightest green (display-ready) should promote the retained decoded layer — sharp near-instantly (sidebar: path + underlay/sharp ms). Toggle slots off to force every nav to cold.',
     demo6SidebarTitle: 'Local large files',
     demo6HowTo:
-      'Wait for brightest green on ± neighbors, then ←/→. Compare path=fast-reveal vs cold. Sharp ms are often similar (decode-bound); cold also holds the blur ~800ms after decode.',
+      'Wait for brightest green on ± neighbors, then ←/→. Expect path=fast with sharp ≪ cold (~1s). Cold also holds blur ~800ms after decode.',
+    demo6HowToShort: 'Wait for green on ±, then ←/→ · hover for detail',
     demo6Missing:
       'No usable `./test-images` (need originals + matching files under thumbs/). Local only — never commit that folder.',
-    demo6SlotsToggle: 'preloadDisplaySlots on (display-ready pool)',
+    demo6SlotsToggle: 'Neighbor preload (display-ready)',
     demo6MeterTitle: 'Last navigation',
     demo6MeterIdle: 'Switch images to measure…',
     demo6MeterHint:
-      'fast-reveal + sharp≪200ms means the retained layer promoted (what you want). cold ≈1s sharp is decode. Wait for green on neighbors before ←/→.',
+      'fast + sharp≪200ms = retained layer. cold ≈1s = full decode. Wait for next=display-ready before ←/→.',
     demo6HistoryTitle: 'Recent',
+    demo6PoolTitle: 'RAM (est.)',
+    demo6PoolModeOn: 'Preload ON',
+    demo6PoolModeOff: 'Preload OFF',
+    demo6PoolNow: 'Now',
+    demo6PoolIfOff: 'If OFF',
+    demo6PoolCurrent: 'current',
+    demo6PoolNeighbors: 'neighbors',
+    demo6PoolExtra: 'Extra (preload cost)',
+    demo6PoolCap: 'Demo fake budget',
+    demo6PoolHint:
+      'RGBA w×h×4 estimates, not Task Manager. “Extra” is what weaker PCs pay for fast ←/→. Demo fake budget is NOT a library default — Media Lens should pass preloadMemoryBudgetBytes from Tauri.',
+    demo6PoolHintShort: 'hover: how to read',
     photosBadge: (n) => `${n} photos`,
     thumbAria: (label) => `Open photo: ${label}`,
   },
@@ -288,18 +313,31 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo5PreloadHint: '相邻预加载下标',
     demo6Title: 'Demo 6 · 本地大图 JPG（仅开发，已 gitignore）',
     demo6Desc:
-      '通过中间件读取已忽略的 `./test-images`。修黑屏后，绿条（display-ready）不再等于「秒开清晰」——两边都会在视口重解码 ~20–30MB 时先显示缩略占位。请看侧栏：path + underlay/sharp 毫秒。关掉 slots 可强制每次都走 cold。',
+      '通过中间件读取已忽略的 `./test-images`。停稳后邻居出现最深绿（display-ready）时，应复用已解码层接近秒开清晰（侧栏：path + underlay/sharp 毫秒）。关掉 slots 可强制每次都走 cold。',
     demo6SidebarTitle: '本地大图',
     demo6HowTo:
-      '等 ± 邻居最深绿后 ←/→。对比 path=fast-reveal 与 cold。sharp 往往接近（解码主导）；cold 在解码后再多停约 800ms 模糊。',
+      '等 ± 邻居最深绿后 ←/→。期望 path=fast 且 sharp 远小于 cold（~1s）。cold 在解码后再多停约 800ms 模糊。',
+    demo6HowToShort: '等绿条后 ←/→ · 悬停看说明',
     demo6Missing:
       '未找到可用的 `./test-images`（需原图 + thumbs/ 下同名缩略图）。仅本机使用，切勿提交该目录。',
-    demo6SlotsToggle: '开启 preloadDisplaySlots（display-ready 池）',
+    demo6SlotsToggle: '邻居预热（display-ready）',
     demo6MeterTitle: '上次切图',
     demo6MeterIdle: '切图后显示耗时…',
     demo6MeterHint:
-      'fast-reveal 且 sharp≪200ms = 已解码层直接提升（目标效果）。cold 的 sharp≈1s 仍是解码。先等邻居最深绿再 ←/→。',
+      'fast 且 sharp≪200ms = 层复用成功。cold ≈1s = 整图解码。先等 next=display-ready 再切。',
     demo6HistoryTitle: '最近几次',
+    demo6PoolTitle: '内存（估算）',
+    demo6PoolModeOn: '预热：开',
+    demo6PoolModeOff: '预热：关',
+    demo6PoolNow: '现在',
+    demo6PoolIfOff: '若关闭',
+    demo6PoolCurrent: '当前',
+    demo6PoolNeighbors: '邻居',
+    demo6PoolExtra: '预热多占',
+    demo6PoolCap: 'Demo 模拟预算',
+    demo6PoolHint:
+      'RGBA 宽×高×4 估算，非任务管理器。「预热多占」是弱机为快切多付的内存。Demo 模拟预算不是组件默认——Media Lens 应由 Tauri 传入 preloadMemoryBudgetBytes。',
+    demo6PoolHintShort: '悬停：怎么看',
     photosBadge: (n) => `${n} 张`,
     thumbAria: (label) => `预览图片：${label}`,
   },
