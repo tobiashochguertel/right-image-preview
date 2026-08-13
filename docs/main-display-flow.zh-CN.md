@@ -68,8 +68,8 @@
 **切图时的三拍同步：**
 
 1. **立刻**：`currentIndex` 推进 → 底片条选中边框（及条带定位）切到新 index；L1 可用上一帧 **outgoing hold** 托底，主图看起来仍可暂留旧图。
-2. **等待揭开**：只要 outgoing 仍盖住舞台，且 `showSwitchLoader` 为真（默认），**L4 Loading** 显示中央 spinner。上一帧须保持**全尺寸全不透明**托底，直到下一张会以 `showSharp` 绘制——过早撤托底会露出空隙；保活邻居则为 1×1，不再用半透明全图。
-3. **揭开瞬间**：incoming 可绘制且可全亮、outgoing 降为保活 → spinner **同步**关掉（无淡出），用户看到的就是新主图。
+2. **等待揭开**：只要 outgoing 仍盖住舞台，且 `showSwitchLoader` 为真（默认），**L4 Loading** 显示中央 spinner。上一帧须保持**全尺寸全不透明**托底；允许与下一张有短暂重叠。**禁止**在下一张尚未以全尺寸主图层绘出前，就把上一张缩成 1×1（否则会黑屏只剩一点——Media Lens 回归过）。
+3. **揭开瞬间**：incoming 已 `imageShowReady`、有 dims、且 `<img>` 可绘制（再经 **双 rAF** 等一帧绘制）之后，才清除 `isOutgoing`；上一张再降为邻居 **1×1 保活**。spinner 与揭开**同帧**关掉（无淡出）。
 
 ---
 

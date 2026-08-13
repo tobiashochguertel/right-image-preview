@@ -240,6 +240,9 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     const outgoingSrcRef = useRef<string | null>(null);
     const outgoingDimsRef = useRef<ImageDimensions | null>(null);
     const outgoingIndexRef = useRef(-1);
+    /** rAF ids for deferred outgoing clear (cancel on deps change / unmount). */
+    const clearOutgoingRaf1Ref = useRef<number | null>(null);
+    const clearOutgoingRaf2Ref = useRef<number | null>(null);
     /** Per-src frozen box + transform — never reuse the live transform for a leaving frame. */
     const frozenBySrcRef = useRef(new Map<string, LayerPresentation>());
     const [frozenEpoch, setFrozenEpoch] = useState(0);
@@ -277,24 +280,27 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     if (prevSrcRef.current !== currentImage.src) {
       const prevSrc = prevSrcRef.current;
       const prevEl = layerElBySrcRef.current.get(prevSrc);
-      if (prevSrc && prevEl && prevEl.complete && prevEl.naturalWidth > 0) {
+      const prevFrozen = frozenBySrcRef.current.get(prevSrc);
+      const prevFromEl =
+        !!(prevEl && prevEl.complete && prevEl.naturalWidth > 0);
+      // Prefer live <img>; fall back to frozen dims so Media Lens / remount still holds.
+      if (prevSrc && (prevFromEl || prevFrozen?.dims)) {
         holdSrc = prevSrc;
         holdIndex = prevIndexRef.current;
-        holdDims = imageDims ?? {
-          naturalWidth: prevEl.naturalWidth,
-          naturalHeight: prevEl.naturalHeight,
-        };
+        holdDims = prevFromEl
+          ? (imageDims ?? {
+              naturalWidth: prevEl!.naturalWidth,
+              naturalHeight: prevEl!.naturalHeight,
+            })
+          : { ...prevFrozen!.dims };
         outgoingSrcRef.current = holdSrc;
         outgoingDimsRef.current = holdDims;
         outgoingIndexRef.current = holdIndex;
-        if (holdDims) {
-          // Freeze synchronously so this render already paints the old pose.
-          if (!frozenBySrcRef.current.has(prevSrc)) {
-            frozenBySrcRef.current.set(prevSrc, {
-              dims: { ...holdDims },
-              cssTransform: transform.cssTransform,
-            });
-          }
+        if (holdDims && !frozenBySrcRef.current.has(prevSrc)) {
+          frozenBySrcRef.current.set(prevSrc, {
+            dims: { ...holdDims },
+            cssTransform: transform.cssTransform,
+          });
         }
       } else if (outgoingSrcRef.current && outgoingSrcRef.current !== currentImage.src) {
         holdSrc = outgoingSrcRef.current;
@@ -354,14 +360,17 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       const prevSrc = prevSrcRef.current;
       const prevIndex = prevIndexRef.current;
       const prevEl = layerElBySrcRef.current.get(prevSrc);
-      const prevPaintable = !!(prevEl && prevEl.complete && prevEl.naturalWidth > 0);
+      const prevFrozen = frozenBySrcRef.current.get(prevSrc);
+      const prevFromEl = !!(prevEl && prevEl.complete && prevEl.naturalWidth > 0);
 
-      // Outgoing hold: keep the last paintable frame visible until incoming is ready.
-      if (prevSrc && prevPaintable) {
-        const dims = {
-          naturalWidth: prevEl!.naturalWidth,
-          naturalHeight: prevEl!.naturalHeight,
-        };
+      // Outgoing hold: keep last frame full-size until incoming is the visible main.
+      if (prevSrc && (prevFromEl || prevFrozen?.dims)) {
+        const dims = prevFromEl
+          ? {
+              naturalWidth: prevEl!.naturalWidth,
+              naturalHeight: prevEl!.naturalHeight,
+            }
+          : { ...prevFrozen!.dims };
         outgoingSrcRef.current = prevSrc;
         outgoingDimsRef.current = dims;
         outgoingIndexRef.current = prevIndex;
@@ -825,26 +834,53 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       !progressive.fullDecoded &&
       progressive.preloadStage !== 'thumb-only';
 
-    // Drop outgoing hold only when the incoming layer would paint *sharp* (full-size).
-    // Demoting earlier used to leave a full-frame ~2% ghost; keep-alive is now 1×1 opaque,
-    // but outgoing must still cover until the next image is actually the visible main.
-    useLayoutEffect(() => {
+    // Drop outgoing hold only after the incoming layer is the visible full-size main.
+    // Shrinking previous to 1×1 any earlier → black stage + one pixel (Media Lens).
+    // useEffect + double rAF: demote only after current has had a chance to paint.
+    useEffect(() => {
       if (!outgoingSrc) return;
       if (hideMainUntilDecoded) return;
       if (!imageShowReady) return;
+      if (!imageDims || imageDims.naturalWidth <= 0) return;
       const el = layerElBySrcRef.current.get(currentImage.src);
       const incomingPaintable = !!(el && el.complete && el.naturalWidth > 0);
       if (!incomingPaintable && !paceMainPainted) return;
-      outgoingSrcRef.current = null;
-      outgoingDimsRef.current = null;
-      outgoingIndexRef.current = -1;
-      setOutgoingSrc(null);
-      setOutgoingIndex(-1);
-      setOutgoingDims(null);
+
+      let cancelled = false;
+      const clearRafs = () => {
+        if (clearOutgoingRaf1Ref.current != null) {
+          cancelAnimationFrame(clearOutgoingRaf1Ref.current);
+          clearOutgoingRaf1Ref.current = null;
+        }
+        if (clearOutgoingRaf2Ref.current != null) {
+          cancelAnimationFrame(clearOutgoingRaf2Ref.current);
+          clearOutgoingRaf2Ref.current = null;
+        }
+      };
+      clearRafs();
+      clearOutgoingRaf1Ref.current = requestAnimationFrame(() => {
+        clearOutgoingRaf2Ref.current = requestAnimationFrame(() => {
+          clearOutgoingRaf1Ref.current = null;
+          clearOutgoingRaf2Ref.current = null;
+          if (cancelled) return;
+          if (outgoingSrcRef.current !== outgoingSrc) return;
+          outgoingSrcRef.current = null;
+          outgoingDimsRef.current = null;
+          outgoingIndexRef.current = -1;
+          setOutgoingSrc(null);
+          setOutgoingIndex(-1);
+          setOutgoingDims(null);
+        });
+      });
+      return () => {
+        cancelled = true;
+        clearRafs();
+      };
     }, [
       outgoingSrc,
       hideMainUntilDecoded,
       imageShowReady,
+      imageDims,
       currentImage.src,
       paceMainPainted,
       progressive.fullDecoded,

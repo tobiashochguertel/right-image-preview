@@ -9,6 +9,12 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ## [Unreleased]
 
+## [0.3.11] — 2026-08-14
+
+### Fixed
+
+- **Navigate “black + one pixel”** — do not shrink the outgoing frame to 1×1 keep-alive until the incoming main layer has painted (`imageShowReady` + dims + paintable `<img>`, then double rAF). Outgoing/`paintFullFrame` layers never collapse to 1×1 when dims are briefly missing. Arm hold from frozen dims when the previous `<img>` node is gone (Media Lens remount).
+
 ## [0.3.10] — 2026-08-14
 
 ### Changed

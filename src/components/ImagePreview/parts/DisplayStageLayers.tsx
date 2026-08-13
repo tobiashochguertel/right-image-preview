@@ -11,7 +11,10 @@ export interface DisplayLayerEntry {
   index: number;
   src: string;
   isCurrent: boolean;
-  /** Previous image held full-size under the incoming layer until it is paintable. */
+  /**
+   * Previous image held **full-size on top** until the incoming current layer is visible.
+   * Only after that may this layer shrink to 1×1 keep-alive — never earlier.
+   */
   isOutgoing?: boolean;
 }
 
@@ -23,7 +26,7 @@ export interface DisplayStageLayersProps {
   liveTransform: string;
   /** Per-src frozen presentation; outgoing / kept neighbors must not share the live transform. */
   frozenBySrc: ReadonlyMap<string, LayerPresentation>;
-  /** When true, current full-res stays under the minimap underlay (1×1 keep-alive until sharp). */
+  /** When true, current full-res stays under the minimap underlay (1×1 img until sharp). */
   hideCurrentUntilDecoded: boolean;
   suppressTransformTransition: boolean;
   isPanning: boolean;
@@ -40,12 +43,8 @@ export interface DisplayStageLayersProps {
 /**
  * Independent absolute layers inside the viewport.
  *
- * Each `src` is a full-viewport stack slot with its **own** centered box + transform.
- * Navigating away freezes that presentation; the live transform for the new image never
- * moves the previous frame (shared-parent transform was causing the “jump to center”).
- *
- * Keep-alive (non-sharp layers): **1×1 CSS px + opacity 1** — compositor still paints so
- * WebViews retain the decoded bitmap, without a full-size translucent ghost.
+ * Contract: outgoing stay **full-size** until current is sharp; only then demote neighbors to
+ * **1×1 opaque** keep-alive. Demoting earlier → black stage with a single pixel.
  */
 export function DisplayStageLayers({
   layers,
@@ -71,18 +70,21 @@ export function DisplayStageLayers({
         const cssTransform = isCurrent
           ? liveTransform
           : frozen?.cssTransform ?? 'translate(0px, 0px) scale(1)';
-        const showSharp =
-          (isCurrent && !hideCurrentUntilDecoded && imageShowReady) || !!isOutgoing;
-        // Underlay needs a full-size box; the <img> itself stays 1×1 until sharp.
-        const boxFull = showSharp || (isCurrent && underlay != null);
-        const boxW = boxFull && dims ? dims.naturalWidth : 1;
-        const boxH = boxFull && dims ? dims.naturalHeight : 1;
-        const imgW = showSharp && dims ? dims.naturalWidth : 1;
-        const imgH = showSharp && dims ? dims.naturalHeight : 1;
+        const currentSharp =
+          isCurrent && !hideCurrentUntilDecoded && imageShowReady;
+        const paintFullFrame = currentSharp || !!isOutgoing;
+        const boxFull = paintFullFrame || (isCurrent && underlay != null);
+        const fullW = dims?.naturalWidth;
+        const fullH = dims?.naturalHeight;
+        const boxW = boxFull && fullW ? fullW : boxFull ? 'auto' : 1;
+        const boxH = boxFull && fullH ? fullH : boxFull ? 'auto' : 1;
+        // Never collapse outgoing / sharp to 1×1 when dims briefly missing.
+        const imgW = paintFullFrame ? (fullW ?? 'auto') : 1;
+        const imgH = paintFullFrame ? (fullH ?? 'auto') : 1;
 
         let zIndex = 1;
         if (isOutgoing) zIndex = 5;
-        else if (isCurrent && showSharp) zIndex = 4;
+        else if (currentSharp) zIndex = 4;
         else if (isCurrent) zIndex = 3;
         else if (frozen) zIndex = 2;
 
@@ -111,13 +113,13 @@ export function DisplayStageLayers({
                 position: 'relative',
                 width: boxW,
                 height: boxH,
-                maxWidth: boxFull && dims ? 'none' : undefined,
-                maxHeight: boxFull && dims ? 'none' : undefined,
+                maxWidth: boxFull && fullW ? 'none' : undefined,
+                maxHeight: boxFull && fullH ? 'none' : undefined,
                 transform: boxFull ? cssTransform : undefined,
                 transformOrigin: 'center center',
                 transition: transformTransition,
                 willChange: isCurrent ? 'transform' : undefined,
-                overflow: showSharp ? undefined : 'hidden',
+                overflow: paintFullFrame ? undefined : 'hidden',
               }}
             >
               {isCurrent ? underlay : null}
@@ -137,8 +139,8 @@ export function DisplayStageLayers({
                   display: 'block',
                   width: imgW,
                   height: imgH,
-                  maxWidth: showSharp && dims ? 'none' : undefined,
-                  maxHeight: showSharp && dims ? 'none' : undefined,
+                  maxWidth: paintFullFrame && fullW ? 'none' : undefined,
+                  maxHeight: paintFullFrame && fullH ? 'none' : undefined,
                   opacity: 1,
                   pointerEvents: 'none',
                   transition: 'none',

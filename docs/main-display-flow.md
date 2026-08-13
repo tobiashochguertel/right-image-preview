@@ -67,8 +67,8 @@ Outgoing hold and neighbor keep-alive order only inside **L1**; do not paper ove
 **Three beats on navigate:**
 
 1. **Immediately:** `currentIndex` advances → filmstrip active border (and strip position) move to the new index; L1 may still show the previous frame via **outgoing hold**.
-2. **While waiting:** as long as outgoing covers the stage and `showSwitchLoader` is true (default), **L4 loading** shows the center spinner. The previous frame must stay **full-size and opaque** until the incoming layer would paint sharp — keep-alive neighbors are **1×1 opaque**, not full-frame translucent.
-3. **On reveal:** when incoming is drawable and sharp, and outgoing demotes to keep-alive, the spinner turns **off in the same frame** (no fade) with the new main image.
+2. **While waiting:** as long as outgoing covers the stage and `showSwitchLoader` is true (default), **L4 loading** shows the center spinner. The previous frame must stay **full-size and opaque**; brief overlap with the next frame is fine. **Never** shrink the previous frame to 1×1 before the incoming full-size main has painted (that is the Media Lens “black + one pixel” regression).
+3. **On reveal:** only after incoming is `imageShowReady`, has dims, and its `<img>` is paintable — then **double rAF** so paint can commit — clear `isOutgoing` and demote the previous layer to neighbor **1×1 keep-alive**. Spinner turns **off in the same frame** (no fade).
 
 ---
 
