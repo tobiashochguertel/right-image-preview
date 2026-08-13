@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { DISPLAY_LAYER_KEEPALIVE_OPACITY } from '../imagePreviewTuning';
 import type { ImageDimensions } from '../useImageTransform';
 
 export interface LayerPresentation {
@@ -24,7 +23,7 @@ export interface DisplayStageLayersProps {
   liveTransform: string;
   /** Per-src frozen presentation; outgoing / kept neighbors must not share the live transform. */
   frozenBySrc: ReadonlyMap<string, LayerPresentation>;
-  /** When true, current full-res stays under the minimap underlay (keep-alive opacity). */
+  /** When true, current full-res stays under the minimap underlay (1×1 keep-alive until sharp). */
   hideCurrentUntilDecoded: boolean;
   suppressTransformTransition: boolean;
   isPanning: boolean;
@@ -44,6 +43,9 @@ export interface DisplayStageLayersProps {
  * Each `src` is a full-viewport stack slot with its **own** centered box + transform.
  * Navigating away freezes that presentation; the live transform for the new image never
  * moves the previous frame (shared-parent transform was causing the “jump to center”).
+ *
+ * Keep-alive (non-sharp layers): **1×1 CSS px + opacity 1** — compositor still paints so
+ * WebViews retain the decoded bitmap, without a full-size translucent ghost.
  */
 export function DisplayStageLayers({
   layers,
@@ -71,10 +73,12 @@ export function DisplayStageLayers({
           : frozen?.cssTransform ?? 'translate(0px, 0px) scale(1)';
         const showSharp =
           (isCurrent && !hideCurrentUntilDecoded && imageShowReady) || !!isOutgoing;
-        // Full geometry for current, outgoing, and any frozen keep-alive (instant ←).
-        const keepFullGeometry = !!isOutgoing || !!isCurrent || !!frozen;
-        const layoutW = keepFullGeometry && dims ? dims.naturalWidth : keepFullGeometry ? 'auto' : 1;
-        const layoutH = keepFullGeometry && dims ? dims.naturalHeight : keepFullGeometry ? 'auto' : 1;
+        // Underlay needs a full-size box; the <img> itself stays 1×1 until sharp.
+        const boxFull = showSharp || (isCurrent && underlay != null);
+        const boxW = boxFull && dims ? dims.naturalWidth : 1;
+        const boxH = boxFull && dims ? dims.naturalHeight : 1;
+        const imgW = showSharp && dims ? dims.naturalWidth : 1;
+        const imgH = showSharp && dims ? dims.naturalHeight : 1;
 
         let zIndex = 1;
         if (isOutgoing) zIndex = 5;
@@ -105,14 +109,15 @@ export function DisplayStageLayers({
             <div
               style={{
                 position: 'relative',
-                width: layoutW,
-                height: layoutH,
-                maxWidth: dims ? 'none' : '100%',
-                maxHeight: dims ? 'none' : '100%',
-                transform: keepFullGeometry ? cssTransform : undefined,
+                width: boxW,
+                height: boxH,
+                maxWidth: boxFull && dims ? 'none' : undefined,
+                maxHeight: boxFull && dims ? 'none' : undefined,
+                transform: boxFull ? cssTransform : undefined,
                 transformOrigin: 'center center',
                 transition: transformTransition,
                 willChange: isCurrent ? 'transform' : undefined,
+                overflow: showSharp ? undefined : 'hidden',
               }}
             >
               {isCurrent ? underlay : null}
@@ -130,11 +135,11 @@ export function DisplayStageLayers({
                 onError={isCurrent ? onCurrentError : undefined}
                 style={{
                   display: 'block',
-                  width: layoutW,
-                  height: layoutH,
-                  maxWidth: dims ? 'none' : '100%',
-                  maxHeight: dims ? 'none' : '100%',
-                  opacity: showSharp ? 1 : DISPLAY_LAYER_KEEPALIVE_OPACITY,
+                  width: imgW,
+                  height: imgH,
+                  maxWidth: showSharp && dims ? 'none' : undefined,
+                  maxHeight: showSharp && dims ? 'none' : undefined,
+                  opacity: 1,
                   pointerEvents: 'none',
                   transition: 'none',
                 }}

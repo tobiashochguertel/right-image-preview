@@ -9,6 +9,12 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ## [Unreleased]
 
+## [0.3.10] — 2026-08-14
+
+### Changed
+
+- **Keep-alive strategy** — non-sharp stage layers use **1×1 CSS px + `opacity: 1`** instead of full-frame ~2% opacity (avoids dark translucent ghosts; lighter for the compositor). `DISPLAY_LAYER_KEEPALIVE_OPACITY` kept only as a deprecated export.
+
 ## [0.3.9] — 2026-08-14
 
 ### Fixed

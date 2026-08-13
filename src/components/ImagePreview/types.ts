@@ -214,15 +214,15 @@ export interface NeighborPreloadEntry {
  * - `loading` / `ready`: byte-level neighbor preload (HTTP cache likely for `ready`).
  * - `display-ready`: neighbor load+decode settled — navigating here uses fast reveal
  *   (no artificial placeholder dwell / spinner; minimap underlay stays until the viewport
- *   main `<img>` is drawable). Slot layers keep a tiny non-zero opacity so WKWebView does
- *   not discard decoded bitmaps (`opacity: 0` alone is not enough).
+ *   main `<img>` is drawable). Slot layers paint **1×1 opaque** so WKWebView does
+ *   not discard decoded bitmaps (`opacity: 0` / full-frame translucent ghosts are avoided).
  * - `warm`: bytes succeeded earlier this session, outside the window (not display-ready).
  */
 export type NeighborPreloadStatusMap = Readonly<Record<number, NeighborPreloadEntry>>;
 
 /**
  * How neighbor **display** preload keeps decoded bitmaps.
- * - `'slot'` (default): retained stage `<img>` + `decode()` + keep-alive opacity (approach C).
+ * - `'slot'` (default): retained stage `<img>` + `decode()` + 1×1 opaque keep-alive.
  * - `'decode'`: `Image()` + `decode()` only, no retained layer (approach B fallback).
  */
 export type PreloadDisplayMode = 'slot' | 'decode';

@@ -825,10 +825,9 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       !progressive.fullDecoded &&
       progressive.preloadStage !== 'thumb-only';
 
-    // Drop outgoing hold only when the incoming layer would paint *sharp* (opacity 1).
-    // If we demote the previous frame to keep-alive (~0.02) any earlier, the frosted
-    // overlay shows through and it looks like a dark translucent veil over a ghost of
-    // the previous image — common when `complete`/`fullDecoded` race ahead of showSharp.
+    // Drop outgoing hold only when the incoming layer would paint *sharp* (full-size).
+    // Demoting earlier used to leave a full-frame ~2% ghost; keep-alive is now 1×1 opaque,
+    // but outgoing must still cover until the next image is actually the visible main.
     useLayoutEffect(() => {
       if (!outgoingSrc) return;
       if (hideMainUntilDecoded) return;

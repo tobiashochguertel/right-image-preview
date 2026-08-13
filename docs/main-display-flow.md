@@ -67,7 +67,7 @@ Outgoing hold and neighbor keep-alive order only inside **L1**; do not paper ove
 **Three beats on navigate:**
 
 1. **Immediately:** `currentIndex` advances → filmstrip active border (and strip position) move to the new index; L1 may still show the previous frame via **outgoing hold**.
-2. **While waiting:** as long as outgoing covers the stage and `showSwitchLoader` is true (default), **L4 loading** shows the center spinner. The previous frame must stay **fully opaque** until the incoming layer would paint sharp — demoting it to keep-alive opacity (~0.02) too early shows a dark frosted “veil” over a ghost of the previous image.
+2. **While waiting:** as long as outgoing covers the stage and `showSwitchLoader` is true (default), **L4 loading** shows the center spinner. The previous frame must stay **full-size and opaque** until the incoming layer would paint sharp — keep-alive neighbors are **1×1 opaque**, not full-frame translucent.
 3. **On reveal:** when incoming is drawable and sharp, and outgoing demotes to keep-alive, the spinner turns **off in the same frame** (no fade) with the new main image.
 
 ---
@@ -100,7 +100,7 @@ Within memory budget, library + host should:
 3. **Pass a stable `preloadMemoryBudgetBytes`** (Tauri available RAM + `suggestPreloadMemoryBudgetBytes`) and width/height estimates so the budget can pick neighbors correctly.
 4. **Keep `preloadDisplayMode="slot"` (default)** for same-DOM promotion; `"decode"` is a memory fallback, not equal “instant.”
 5. **Sensible `preloadRadius` (often 1–2) + slots/budget** so after settle the next image is already display-ready.
-6. **Layer retention + compositor keep-alive**: `DisplayStageLayers` keeps current + neighbor full-`src` imgs under `key={src}`. Neighbors paint as **1×1 + tiny non-zero opacity**; current while under the thumb underlay keeps full layout size at the same opacity — so WKWebView/Chrome do not discard decoded bitmaps (`opacity: 0` often forces a ~0.5–1s re-decode on promote). The minimap underlay covers them so keep-alive is not visible.
+6. **Layer retention + compositor keep-alive**: `DisplayStageLayers` keeps current + neighbor full-`src` imgs under `key={src}`. Non-sharp neighbors paint as **1×1 + opacity 1** (not a full-size translucent plate); current `<img>` while under the thumb underlay is also 1×1 while the underlay uses the full box — so WKWebView/Chrome do not discard decoded bitmaps.
 7. **Fast path**: on display-ready, skip dwell/spinner; underlay only until the viewport is drawable.
 
 ---
@@ -151,7 +151,7 @@ User holds → past repeat delay
 | Settle 600ms slows the current image | It only gates **neighbor** warm-up. |
 | Faster key-repeat is better UX | Hold should follow thumb pace; the premium path is long-dwell → next. |
 | Corner minimap = main placeholder | Main flow uses `minimapSrc` underlay; `showMinimap` is navigation chrome. |
-| Offscreen `opacity: 0` `<img>` is enough | **Not** (especially WKWebView): the compositor often drops decoded bitmaps; keep-alive needs non-zero opacity (see §9). |
+| Offscreen `opacity: 0` `<img>` is enough | **Not** (especially WKWebView): prefer **1×1 opaque** paint (see §9). |
 | Any UI activity should pause neighbor warm | **No**: if control auto-fade mistakenly clears `panIdle` and never restores it, display-ready dies forever — “waited 5s, strip blue, still cold ≈1s”. |
 
 ---
@@ -176,7 +176,7 @@ Full Tauri memory / props examples: [`media-lens-integration.md`](./media-lens-i
 | Progressive underlay → original / fast-path races | `useProgressiveMainImage.ts` |
 | Fully drawable / atomic reveal / WeakSet fast path | `lib/imagePreviewDecode.ts`, `ImagePreviewInner` |
 | Neighbor layer reuse + 1×1 keep-alive | `parts/DisplayStageLayers.tsx` |
-| Keep-alive opacity constant | `imagePreviewTuning.ts` → `DISPLAY_LAYER_KEEPALIVE_OPACITY` |
+| Keep-alive strategy | Non-sharp: `1×1` + `opacity: 1` (not full-frame translucent) |
 | Display-ready pick, settle, panIdle, sticky src | `lib/neighborDisplayPreload.ts`, `useNeighborDisplayPreload.ts` |
 | Byte warm settle | `useNeighborPreload.ts` |
 | Short-press / long-press pacing | `useThumbPacedNavigation.ts`, `useImagePreviewKeyboard.ts` |
@@ -195,7 +195,7 @@ Dwell on N long enough
   → settle elapsed and panIdle (neighbor warm allowed)
   → neighbor N±1 full-src <img> mounted; load + decode settled
   → readySrc sticky; strip phase = display-ready (**blue** bar)
-  → compositor still holds the bitmap (non-zero opacity keep-alive;
+  → compositor still holds the bitmap (1×1 opaque keep-alive;
      ready layers not unmounted during settle pause)
 
 Navigate to N+1
@@ -211,16 +211,16 @@ Break any link and you fall back to **cold ≈ 1s** (typical: warm paused by mis
 
 **Problem:** Neighbor layers at `opacity: 0` / `visibility: hidden` often lose decoded bitmaps in WKWebView/Chromium. Strip may have been display-ready, but promote still costs ~0.5–1s `createImageBitmap`; A↔B thrashing pays that each way.
 
-**Approach (`DisplayStageLayers` + `DISPLAY_LAYER_KEEPALIVE_OPACITY ≈ 0.02`):**
+**Approach (`DisplayStageLayers`):**
 
 | Layer | Layout | Opacity | Notes |
 |-------|--------|---------|-------|
-| Neighbor (not current) | **1×1 CSS px** | keep-alive > 0 | Convince the compositor the image must paint; invisible in practice; stable `key={src}` |
-| Current while under thumb | **Full size** | keep-alive > 0 | Never `visibility:hidden` right before promote |
-| Current revealed | Full size | `1` | Normal |
-| Thumb underlay | Cover | `1`→`0` | **Higher z-index** so keep-alive never ghosts through |
+| Neighbor (not current / not outgoing) | **1×1 CSS px** | `1` | Compositor still paints → keep-alive; invisible; stable `key={src}` |
+| Current while under thumb | Full box (for underlay); **`<img>` 1×1** | `1` | Never `visibility:hidden` right before promote |
+| Current revealed / outgoing hold | Full size | `1` | Normal |
+| Thumb underlay | Cover current box | `1`→`0` | Covers unrevealed main |
 
-On promote, the same `<img>` only changes style (1×1 → natural size, opacity → 1) — no `src` reload, no key change.
+On promote, the same `<img>` only changes style (1×1 → natural size) — no `src` reload, no key change. Do **not** keep full frames at ~2% opacity (dark ghost through the frosted overlay).
 
 ### 9.3 Fast path: no second probe, drain races
 

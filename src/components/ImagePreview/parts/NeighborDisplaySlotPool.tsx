@@ -1,4 +1,3 @@
-import { DISPLAY_LAYER_KEEPALIVE_OPACITY } from '../imagePreviewTuning';
 import type { UseNeighborDisplayPreloadResult } from '../useNeighborDisplayPreload';
 
 export interface NeighborDisplaySlotPoolProps {
@@ -8,7 +7,7 @@ export interface NeighborDisplaySlotPoolProps {
 
 /**
  * Fallback offscreen pool (legacy). Prefer {@link DisplayStageLayers} stage retention.
- * Uses 1×1 clip + keep-alive opacity so WebViews do not discard decoded bitmaps.
+ * 1×1 opaque paint so WebViews do not discard decoded bitmaps.
  */
 export function NeighborDisplaySlotPool({
   entries,
@@ -27,7 +26,7 @@ export function NeighborDisplaySlotPool({
         width: 1,
         height: 1,
         overflow: 'hidden',
-        opacity: DISPLAY_LAYER_KEEPALIVE_OPACITY,
+        opacity: 1,
         pointerEvents: 'none',
         zIndex: -1,
       }}
@@ -40,7 +39,7 @@ export function NeighborDisplaySlotPool({
           decoding="async"
           draggable={false}
           onLoad={(e) => onSlotImgLoad(index, e.currentTarget)}
-          style={{ display: 'block', maxWidth: 'none' }}
+          style={{ display: 'block', width: 1, height: 1, maxWidth: 'none' }}
         />
       ))}
     </div>

@@ -68,7 +68,7 @@
 **切图时的三拍同步：**
 
 1. **立刻**：`currentIndex` 推进 → 底片条选中边框（及条带定位）切到新 index；L1 可用上一帧 **outgoing hold** 托底，主图看起来仍可暂留旧图。
-2. **等待揭开**：只要 outgoing 仍盖住舞台，且 `showSwitchLoader` 为真（默认），**L4 Loading** 显示中央 spinner。上一帧须保持**全不透明**托底，直到下一张会以 `showSharp`（opacity 1）绘制——过早降为保活透明度（~0.02）会透过毛玻璃底露出「发黑的上一张残影」。
+2. **等待揭开**：只要 outgoing 仍盖住舞台，且 `showSwitchLoader` 为真（默认），**L4 Loading** 显示中央 spinner。上一帧须保持**全尺寸全不透明**托底，直到下一张会以 `showSharp` 绘制——过早撤托底会露出空隙；保活邻居则为 1×1，不再用半透明全图。
 3. **揭开瞬间**：incoming 可绘制且可全亮、outgoing 降为保活 → spinner **同步**关掉（无淡出），用户看到的就是新主图。
 
 ---
@@ -101,7 +101,7 @@
 3. **传入稳定的 `preloadMemoryBudgetBytes`**（Tauri 读可用内存 + `suggestPreloadMemoryBudgetBytes`），并尽量提供宽高估算（EXIF / 索引），让预算能正确选邻。
 4. **`preloadDisplayMode="slot"`（默认）**：保留已解码 DOM，切图晋升同一节点；`"decode"` 仅作内存降级，不能指望同等秒开。
 5. **合适的 `preloadRadius`（常见 1～2）+ slots/预算**：停稳后把下一张解进 display-ready 池。
-6. **层复用 + 合成保活**：`DisplayStageLayers` 用 `key={src}` 挂住当前 + 邻居全尺寸图；邻居以 **1×1 像素 + 极低非零透明度** 保活，被占位盖住的当前层用全尺寸同样保活——避免 WKWebView/Chrome 丢弃 `opacity:0` 图层的解码位图后切图再解 ~0.5–1s。缩略 underlay 盖在上面，用户看不到保活层。
+6. **层复用 + 合成保活**：`DisplayStageLayers` 用 `key={src}` 挂住当前 + 邻居全尺寸图；非 sharp 邻居以 **1×1 CSS 像素 + opacity 1** 保活（不靠半透明大图），被占位盖住的当前 `<img>` 同样 1×1，underlay 仍用全尺寸盒——避免 WKWebView/Chrome 丢弃 `opacity:0` / 隐藏层的解码位图后切图再解 ~0.5–1s。
 7. **快开路径**：命中 display-ready 时跳过 dwell/spinner，underlay 仅保留到视口可绘制。
 
 ---
@@ -177,7 +177,7 @@
 | 渐进占位 → 原图 / 快开竞态 | `useProgressiveMainImage.ts` |
 | 整图可绘制 / 原子揭开 / WeakSet 快路径 | `lib/imagePreviewDecode.ts`、`ImagePreviewInner` |
 | 邻居层复用 + 1×1 保活 | `parts/DisplayStageLayers.tsx` |
-| 保活透明度常量 | `imagePreviewTuning.ts` → `DISPLAY_LAYER_KEEPALIVE_OPACITY` |
+| 保活策略 | 非 sharp：`1×1` + `opacity: 1`（勿用全图半透明） |
 | Display-ready 挑选、settle、panIdle、粘性 src | `lib/neighborDisplayPreload.ts`、`useNeighborDisplayPreload.ts` |
 | 字节预热 settle | `useNeighborPreload.ts` |
 | 短按 / 长按节奏 | `useThumbPacedNavigation.ts`、`useImagePreviewKeyboard.ts` |
@@ -211,16 +211,16 @@
 
 **问题：** 邻居层若使用 `opacity: 0` 或 `visibility: hidden`，WKWebView / Chromium 常把已解码位图丢掉。条带虽曾是 display-ready，切过去仍要 `createImageBitmap` 再解约 0.5–1s；两张来回切也会各吃半秒。
 
-**做法（`DisplayStageLayers` + `DISPLAY_LAYER_KEEPALIVE_OPACITY ≈ 0.02`）：**
+**做法（`DisplayStageLayers`）：**
 
 | 层 | 布局 | 透明度 | 说明 |
 |----|------|--------|------|
-| 邻居（非当前） | **1×1 CSS 像素** | 保活非零 | 「骗」合成器这张图需要绘制；肉眼不可见；`key={src}` 不变 |
-| 当前且仍被缩略盖住 | **全尺寸** | 保活非零 | 不 `visibility:hidden`，避免晋升前一刻丢位图 |
-| 当前已揭开 | 全尺寸 | `1` | 正常显示 |
-| 缩略 underlay | 铺满 | `1`→`0` | **更高 z-index** 盖住保活层，避免残影 |
+| 邻居（非当前 / 非 outgoing） | **1×1 CSS 像素** | `1` | 合成器仍绘制 → 保活；肉眼不可见；`key={src}` 不变 |
+| 当前且仍被缩略盖住 | 盒全尺寸（给 underlay）；**`<img>` 1×1** | `1` | 不 `visibility:hidden`，避免晋升前丢位图 |
+| 当前已揭开 / outgoing 托底 | 全尺寸 | `1` | 正常显示 |
+| 缩略 underlay | 铺满当前盒 | `1`→`0` | 盖住未揭开的主图 |
 
-晋升时同一 `<img>` 仅改 style（1×1 → natural 宽高、opacity → 1），不重新 `src`、不换 key。
+晋升时同一 `<img>` 仅改 style（1×1 → natural 宽高），不重新 `src`、不换 key。勿再用全尺寸 ~2% 透明度保活（易透出「发黑残影」）。
 
 ### 9.3 快开路径：不要二次探针、排空竞态
 

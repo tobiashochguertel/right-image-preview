@@ -51,9 +51,8 @@ export const NAV_HOLD_MIN_STEP_INTERVAL_MS = 220;
 export const NAV_HOLD_MIN_VISIBLE_MS = 300;
 
 /**
- * Opacity for non-visible full-`src` layers (neighbors, or current while underlay covers).
- * Must be **> 0**: WKWebView / Chromium often discard decoded bitmaps for `opacity: 0` /
- * `visibility: hidden` images, causing ~0.5–1s re-decode on navigate despite display-ready.
+ * @deprecated Prefer 1×1 opaque keep-alive (`DisplayStageLayers`). Kept for any host
+ * code that still imports the constant; stage layers no longer use translucent full frames.
  */
 export const DISPLAY_LAYER_KEEPALIVE_OPACITY = 0.02;
 
