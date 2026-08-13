@@ -164,8 +164,9 @@ export function ThumbnailsStrip({
   const renderTile = (entry: ThumbnailStripEntry, listIndex: number) => {
     const { flatIndex, item } = entry;
     const active = flatIndex === activeFlatIndex;
-    const fill = preloadFillRatio(preloadStatus?.[flatIndex]);
-    const phase = preloadStatus?.[flatIndex]?.phase;
+    // Active tile: selection border only — never a preload color bar.
+    const fill = active ? null : preloadFillRatio(preloadStatus?.[flatIndex]);
+    const phase = active ? undefined : preloadStatus?.[flatIndex]?.phase;
     const isWarm = phase === 'warm';
     const isDisplayReady = phase === 'display-ready';
     const barFillColor = isDisplayReady ? PRELOAD_BAR_DISPLAY_READY : PRELOAD_BAR_DARK_GREEN;

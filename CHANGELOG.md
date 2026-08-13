@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ## [Unreleased]
 
+## [0.3.9] — 2026-08-14
+
+### Fixed
+
+- **Dark translucent “veil” on navigate** — do not demote the outgoing frame to keep-alive opacity (~0.02) until the incoming layer is actually sharp (`imageShowReady` and not hidden pending decode). Clearing hold too early let the frosted overlay show through a ghost of the previous image.
+- **Current thumbnail preload bar** — the active strip tile no longer shows green/blue bottom edge; selection border alone marks “here.”
+
 ## [0.3.8] — 2026-08-14
 
 ### Changed

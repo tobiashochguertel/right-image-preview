@@ -825,11 +825,14 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       !progressive.fullDecoded &&
       progressive.preloadStage !== 'thumb-only';
 
-    // Drop outgoing hold once the incoming full-src layer is the visible main image.
-    // Frozen presentation stays in the map so ← can restore instantly at keepalive opacity.
+    // Drop outgoing hold only when the incoming layer would paint *sharp* (opacity 1).
+    // If we demote the previous frame to keep-alive (~0.02) any earlier, the frosted
+    // overlay shows through and it looks like a dark translucent veil over a ghost of
+    // the previous image — common when `complete`/`fullDecoded` race ahead of showSharp.
     useLayoutEffect(() => {
       if (!outgoingSrc) return;
       if (hideMainUntilDecoded) return;
+      if (!imageShowReady) return;
       const el = layerElBySrcRef.current.get(currentImage.src);
       const incomingPaintable = !!(el && el.complete && el.naturalWidth > 0);
       if (!incomingPaintable && !paceMainPainted) return;
@@ -842,6 +845,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     }, [
       outgoingSrc,
       hideMainUntilDecoded,
+      imageShowReady,
       currentImage.src,
       paceMainPainted,
       progressive.fullDecoded,

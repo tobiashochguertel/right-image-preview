@@ -67,7 +67,7 @@
 | `preloadDisplayMode` | `'slot' \| 'decode'` | `'slot'` | `'slot'` = 离屏 img（C）；`'decode'` = 仅 decode（B 降级） |
 | `onPreloadIndexesChange` | `(indexes: number[]) => void` | — | 可选：当前计划预加载的扁平下标 |
 | `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | 含 `display-ready`（decode 完成，切图快开：无 dwell/转圈，占位保留到可绘制）。字节 `ready` ≠ 可秒开 |
-| `showThumbnailPreloadStatus` | `boolean` | `false` | 底片条：**蓝** = 邻居槽位内且已 decode（可瞬切）；加载中仍为灰/绿进度；**绿** = 字节就绪 / 会话 warm |
+| `showThumbnailPreloadStatus` | `boolean` | `false` | 底片条：**蓝** = 邻居槽位内且已 decode；加载中灰/绿进度；**绿** = 字节就绪 / 会话 warm；**当前张无底条** |
 | `showSwitchLoader` | `boolean` | `true` | 切图等待下一张可绘制时显示中央圆环 Loading；`false` 只隐藏转圈，不影响托底 / 揭开时机 |
 | `chrome` | `'default' \| 'minimal'` | `'default'` | `minimal` 空闲时控件完全隐藏 |
 | `index` | `number` | — | 受控扁平下标 |

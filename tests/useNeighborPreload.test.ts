@@ -111,7 +111,7 @@ describe('useNeighborPreload', () => {
     });
   });
 
-  it('marks the current image as ready, then warm after leaving', async () => {
+  it('omits the current image from strip status, then warm after leaving', async () => {
     const onPreloadStatusChange = vi.fn();
     const { result, rerender } = renderHook(
       ({ index }) =>
@@ -130,7 +130,8 @@ describe('useNeighborPreload', () => {
         number,
         { phase: string }
       >;
-      expect(last[0]).toEqual({ phase: 'ready', progress: 1 });
+      // Current tile: no preload bar / phase.
+      expect(last[0]).toBeUndefined();
     });
 
     // After navigating away (radius 0 → no ready window), becomes warm.

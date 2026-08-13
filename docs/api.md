@@ -67,7 +67,7 @@
 | `preloadDisplayMode` | `'slot' \| 'decode'` | `'slot'` | `'slot'` = offscreen imgs (C); `'decode'` = decode-only fallback (B) |
 | `onPreloadIndexesChange` | `(indexes: number[]) => void` | — | Optional debug hook for planned preload indexes |
 | `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | Phases include `display-ready` (exact: decode settled — fast reveal; underlay until viewport drawable). Byte `ready` ≠ instant reveal |
-| `showThumbnailPreloadStatus` | `boolean` | `false` | Strip edges: **blue** = neighbor slot **and** decode settled (instant-switch); still loading stays gray/green progress; **green** = byte ready / session-warm |
+| `showThumbnailPreloadStatus` | `boolean` | `false` | Strip edges: **blue** = neighbor slot **and** decode settled; gray/green progress while loading; **green** = byte ready / session-warm; **current tile has no bar** |
 | `showSwitchLoader` | `boolean` | `true` | Center ring spinner while switching images (outgoing hold / waiting for next drawable main). `false` hides it only |
 | `chrome` | `'default' \| 'minimal'` | `'default'` | `minimal` fades idle chrome to 0% |
 | `index` | `number` | — | Controlled flat index |

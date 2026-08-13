@@ -68,8 +68,8 @@
 **切图时的三拍同步：**
 
 1. **立刻**：`currentIndex` 推进 → 底片条选中边框（及条带定位）切到新 index；L1 可用上一帧 **outgoing hold** 托底，主图看起来仍可暂留旧图。
-2. **等待揭开**：只要 outgoing 仍盖住舞台，且 `showSwitchLoader` 为真（默认），**L4 Loading** 显示中央 spinner。
-3. **揭开瞬间**：incoming 可绘制、outgoing 降为保活 → spinner **同步**关掉（无淡出），用户看到的就是新主图。
+2. **等待揭开**：只要 outgoing 仍盖住舞台，且 `showSwitchLoader` 为真（默认），**L4 Loading** 显示中央 spinner。上一帧须保持**全不透明**托底，直到下一张会以 `showSharp`（opacity 1）绘制——过早降为保活透明度（~0.02）会透过毛玻璃底露出「发黑的上一张残影」。
+3. **揭开瞬间**：incoming 可绘制且可全亮、outgoing 降为保活 → spinner **同步**关掉（无淡出），用户看到的就是新主图。
 
 ---
 

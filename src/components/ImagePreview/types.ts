@@ -486,6 +486,7 @@ export interface ImagePreviewProps {
    * **Blue** = neighbor in the active slot window **and** decode settled (instant-switch).
    * Being a neighbor alone is never enough — still-loading neighbors stay gray/green progress.
    * **Green** = byte-ready / session-warm (cache hint only, not guaranteed instant).
+   * The **current** thumbnail has no preload bar (active border is enough).
    */
   showThumbnailPreloadStatus?: boolean;
 

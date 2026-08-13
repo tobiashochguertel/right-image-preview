@@ -57,11 +57,9 @@ function buildStatusMap(
     const src = images[idx]?.src;
     if (!src) continue;
 
-    // Current main image is definitely loaded when marked — dark green `ready`.
+    // Current tile: no strip bar — white active border already marks “here”.
+    // Green would wrongly read as “cache hint” / blue as “instant neighbor”.
     if (idx === currentIndex) {
-      if (doneSrc.has(src)) {
-        next[idx] = { phase: 'ready', progress: 1 };
-      }
       continue;
     }
 
@@ -87,8 +85,9 @@ function buildStatusMap(
 
 /**
  * Prefetch full `src` for neighbors within `radius`, and track session-warm URLs for strip UI.
- * - `loading` / `ready`: current image or active preload window (dark green).
+ * - `loading` / `ready`: active neighbor preload window (green).
  * - `warm`: loaded earlier this session, outside the window (light green).
+ * - Current index is omitted from the map (no bottom bar on the active tile).
  */
 export function useNeighborPreload(p: UseNeighborPreloadParams): UseNeighborPreloadResult {
   const {
