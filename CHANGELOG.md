@@ -9,11 +9,17 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ## [Unreleased]
 
+## [0.3.7] — 2026-08-13
+
+### Fixed
+
+- **Long-press ←/→ broken in 0.3.6** — keyboard listeners no longer rebind (and call `endNavHold`) on every `prev`/`next` identity change, which stopped hold after the first step and could flicker the cursor. Keep: `keyup` always ends hold; `stepNow` ignores steps after `endHold` when `holdMinVisibleMs` is 0. Removed aggressive `blur` / `lostpointercapture` stop-hold paths from 0.3.6.
+
 ## [0.3.6] — 2026-08-13
 
 ### Fixed
 
-- **Hold ←/→ stops on release when `holdMinVisibleMs` is 0** — `keyup` / window blur / `visibilitychange` always end the paced hold (no longer gated on `keyboardActive`). Contained focus loss and effect cleanup also clear the hold so rapid flips cannot keep advancing after the key is up. Side arrows end hold on `lostpointercapture`.
+- **Hold ←/→ stops on release when `holdMinVisibleMs` is 0** — `keyup` always ends the paced hold (not gated on `keyboardActive`); `stepNow` ignores a `setTimeout(0)` that fires after `endHold`. *(0.3.6 also rebound listeners too aggressively — fixed in 0.3.7.)*
 
 ## [0.3.5] — 2026-08-13
 

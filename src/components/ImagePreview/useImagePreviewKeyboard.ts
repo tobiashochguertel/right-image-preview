@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ZoomMode } from './types';
 import type { ThumbPaceHoldDir } from './useThumbPacedNavigation';
 
@@ -42,44 +42,47 @@ export interface UseImagePreviewKeyboardParams {
 /**
  * Global keydown for the preview dialog (zoom, navigate, rotate, close).
  * Skips handling when focus is in an input/textarea (e.g. zoom % field).
+ *
+ * Listeners are registered once and read the latest params via a ref — so navigating
+ * (which recreates `prev`/`next`) must not tear down the effect and call `endNavHold`
+ * mid-hold (that bug made long-press ←/→ stop after one step).
  */
 export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void {
-  const {
-    resetHideTimer,
-    onClose,
-    zoomIn,
-    zoomOut,
-    fit,
-    setNative,
-    mode,
-    prev,
-    next,
-    prevGroup,
-    nextGroup,
-    rotateCW,
-    rotateCCW,
-    panByDelta,
-    keyboardPanStepPx,
-    fitEquivalentNativePercent,
-    onDeleteImage,
-    keyboardActive = true,
-    isFullscreen,
-    exitFullscreen,
-    beginNavHold,
-    endNavHold,
-  } = p;
+  const paramsRef = useRef(p);
+  paramsRef.current = p;
 
-  // Contained 失焦 / holdMinVisibleMs=0 极速翻页时，keyup 若仍要求 keyboardActive
-  // 会漏掉 endHold，表现为松手后仍一直切图。失焦与卸载必须强制结束 hold。
+  // Contained: when focus leaves the preview, stop any in-flight hold.
   useEffect(() => {
-    if (keyboardActive || !endNavHold) return;
-    endNavHold();
-  }, [keyboardActive, endNavHold]);
+    if (p.keyboardActive !== false) return;
+    p.endNavHold?.();
+  }, [p.keyboardActive, p.endNavHold]);
 
   useEffect(() => {
-    const stopHold = () => endNavHold?.();
-
     const onKeyDown = (e: KeyboardEvent) => {
+      const {
+        keyboardActive = true,
+        resetHideTimer,
+        onClose,
+        zoomIn,
+        zoomOut,
+        fit,
+        setNative,
+        mode,
+        prev,
+        next,
+        prevGroup,
+        nextGroup,
+        rotateCW,
+        rotateCCW,
+        panByDelta,
+        keyboardPanStepPx,
+        fitEquivalentNativePercent,
+        onDeleteImage,
+        isFullscreen,
+        exitFullscreen,
+        beginNavHold,
+      } = paramsRef.current;
+
       if (!keyboardActive) return;
 
       resetHideTimer();
@@ -153,7 +156,6 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
             rotateCCW();
           } else if (beginNavHold && !e.repeat) {
             // Ignore OS key-repeat — pacing is driven by stage presentation while held.
-            // Flat ←/→ (crosses groups); PageUp/PageDown jump groups.
             beginNavHold('prev');
           } else if (!beginNavHold) {
             prev();
@@ -174,7 +176,6 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
           }
           break;
 
-        // Jump group (no-op when not grouped — prevGroup/nextGroup guard internally).
         case 'PageUp':
           e.preventDefault();
           prevGroup();
@@ -187,7 +188,9 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
-      // 不依赖 keyboardActive：失焦后仍要结束 hold，否则 minVisibleMs=0 会空跑连切。
+      // Always end hold on keyup (do not gate on keyboardActive): otherwise a
+      // focus flicker with holdMinVisibleMs=0 can leave the paced hold running.
+      const { endNavHold } = paramsRef.current;
       if (!endNavHold) return;
       if (e.key === 'ArrowLeft') endNavHold('prev');
       if (e.key === 'ArrowRight') endNavHold('next');
@@ -195,37 +198,11 @@ export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void 
 
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
-    window.addEventListener('blur', stopHold);
-    document.addEventListener('visibilitychange', stopHold);
     return () => {
-      stopHold();
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
-      window.removeEventListener('blur', stopHold);
-      document.removeEventListener('visibilitychange', stopHold);
+      // True unmount only (empty deps) — safe to clear hold.
+      paramsRef.current.endNavHold?.();
     };
-  }, [
-    resetHideTimer,
-    onClose,
-    zoomIn,
-    zoomOut,
-    fit,
-    setNative,
-    mode,
-    prev,
-    next,
-    prevGroup,
-    nextGroup,
-    rotateCW,
-    rotateCCW,
-    panByDelta,
-    keyboardPanStepPx,
-    fitEquivalentNativePercent,
-    onDeleteImage,
-    keyboardActive,
-    isFullscreen,
-    exitFullscreen,
-    beginNavHold,
-    endNavHold,
-  ]);
+  }, []);
 }
