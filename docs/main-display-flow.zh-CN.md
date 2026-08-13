@@ -16,7 +16,7 @@
 | **P0** | **上一帧托底（Outgoing hold）**：有上一张已显示的全图时，切走后仍全尺寸可见，直到下一张可绘制再降为邻居保活——**禁止**用整台 `opacity:0` 填空隙。 |
 | **P0** | **切图一律先有可看内容**：有主区域缩略图（`ImageItem.minimapSrc`）则先放大显示占位；没有才直接拉原图。 |
 | **P0** | **原图与占位并行**：切到某张的瞬间就开始解码/渲染该张真正的 `src`；原图一旦整图可绘制，立刻撤掉缩略占位。 |
-| **P0** | **长停留后的下一张要快**：在前一张上稳定浏览足够久（例如约 3s+）再切到下一张时，若邻居已是 display-ready（条带最深绿），应复用已解码层并跳过二次原图探针，使清晰原图接近瞬时出现。 |
+| **P0** | **长停留后的下一张要快**：在前一张上稳定浏览足够久（例如约 3s+）再切到下一张时，若邻居已是 display-ready（条带**蓝条**），应复用已解码层并跳过二次原图探针，使清晰原图接近瞬时出现。 |
 | **P1** | **连按 / 按住不刷爆解码**：快速 ←/→ 时按「主区域缩略已展示」节奏推进，不为每一跳都把大原图解完。 |
 
 「主区域缩略占位」指舞台中央的渐进 underlay（`minimapSrc` 放大模糊占位），**不是**右下角导航小地图（`showMinimap`）。
@@ -51,6 +51,25 @@
 7. **图层隔离**：上一张与下一张是视口内互不干扰的绝对定位层；离开时**冻结**该层的尺寸与 transform，切图不得改动上一层的位置/缩放。就绪后上一层降为保活（仍挂载、肉眼不可见），← 可瞬间拉回。
 
 相关实现入口：`useProgressiveMainImage`、`DisplayStageLayers`（独立层 + `frozenBySrc`）、`ImagePreviewInner` outgoing 状态机、`lib/imagePreviewDecode.ts`。
+
+### 2.1 舞台楼层（DOM 顺序，少用 z-index）
+
+预览内部按「楼层」叠放；同级绝对定位时**后渲染盖前渲染**：
+
+| 楼层 | `data-rip-floor` | 内容 |
+|------|------------------|------|
+| L1 内容 | `content` | 主图 + 邻居 / outgoing hold（`DisplayStageLayers` 统一外壳；`z-index:0` **隔离**，内部层序不得盖住上层楼） |
+| L2 命中 | `hit` | 拖拽 / 双击缩放透明层（`z-index:1`） |
+| L3 控件 | `chrome` | 关闭、←/→、工具栏与文件名、小地图、底片条、EXIF（`z-index:2`；外壳 `pointer-events: none`，子控件自开 `auto`） |
+| L4 加载 | `loading` | 中央 spinner 与错误回退——**始终最顶**（`z-index:3`） |
+
+切图托底与邻居保活只在 **L1 内部**排层序；不要用临时大数字 z-index 让 spinner 与主图互相抢。
+
+**切图时的三拍同步：**
+
+1. **立刻**：`currentIndex` 推进 → 底片条选中边框（及条带定位）切到新 index；L1 可用上一帧 **outgoing hold** 托底，主图看起来仍可暂留旧图。
+2. **等待揭开**：只要 outgoing 仍盖住舞台，且 `showSwitchLoader` 为真（默认），**L4 Loading** 显示中央 spinner。
+3. **揭开瞬间**：incoming 可绘制、outgoing 降为保活 → spinner **同步**关掉（无淡出），用户看到的就是新主图。
 
 ---
 
@@ -176,7 +195,7 @@
 停在 N 上足够久
   → settle 到期且 panIdle（邻居允许预热）
   → 邻居 N±1 的全尺寸 <img> 挂载、load + decode 落稳
-  → readySrc 记 sticky；条带 phase = display-ready（最深绿）
+  → readySrc 记 sticky；条带 phase = display-ready（**蓝条**）
   → 合成器仍持有该位图（非零透明度保活，且 settle 暂停时不卸已就绪层）
 
 用户切到 N+1
@@ -226,7 +245,7 @@
 
 **Settle 期间层保留：** 暂停*新*预热时，`slotRenderEntries` 仍挂载 **src 已在 `readySrc` 里** 的邻居，避免一切图就卸掉保活 DOM。
 
-**条带粘性：** `display-ready` 按 **src** 粘性标记 flat index（离开邻居窗口仍显示最深绿），与 `isSrcDisplayReady(src)` 一致；勿把中绿字节 `ready` 当成可秒开。
+**条带蓝条条件（AND）：** ① 在当前邻居槽位窗口内；② **decode 已完成、可瞬切**。仅是邻居、仍在加载 → 灰/绿进度，**绝不变蓝**。离开窗口后降为绿条 `warm`。`readySrc` 仍按 src 粘性供切回去快开。
 
 ### 9.5 短按 vs 长按（hold）
 

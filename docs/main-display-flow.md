@@ -16,7 +16,7 @@ Props and defaults: [`api.md`](./api.md). Media Lens / Tauri checklist: [`media-
 | **P0** | **Outgoing hold**: if the previous full-`src` frame was already showing, keep it full-size and visible until the incoming image is paintable, then demote it to neighbor keep-alive — **never** fill the gap with stage-wide `opacity: 0`. |
 | **P0** | **Always show something paintable first**: if a main-area thumb (`ImageItem.minimapSrc`) exists, show it enlarged as underlay; only without a thumb do we go straight to the original. |
 | **P0** | **Original loads in parallel with the placeholder**: the moment we land on an image, start decoding/rendering its real `src`; when the original is fully drawable, drop the thumb underlay immediately. |
-| **P0** | **Fast original after a long dwell**: after staying on the previous image long enough (e.g. ~3s+), stepping to a **display-ready** neighbor (brightest strip green) should promote the retained decoded layer and skip a second full-`src` probe so sharp appears near-instantly. |
+| **P0** | **Fast original after a long dwell**: after staying on the previous image long enough (e.g. ~3s+), stepping to a **display-ready** neighbor (**blue** strip bar) should promote the retained decoded layer and skip a second full-`src` probe so sharp appears near-instantly. |
 | **P1** | **Rapid hold must not flood decode**: fast ←/→ advances only after the main-area thumb for the current index has painted. |
 
 “Main-area thumbnail placeholder” means the progressive underlay in the center stage (`minimapSrc`), **not** the corner navigation minimap (`showMinimap`).
@@ -50,6 +50,25 @@ Notes:
 6. **Hold pacing “presented” tracks the incoming image only** (thumb underlay or new main), not the held previous frame — otherwise steps would advance too fast.
 
 Code entry points: `useProgressiveMainImage`, `DisplayStageLayers` (`isOutgoing`), `ImagePreviewInner` outgoing state, `lib/imagePreviewDecode.ts`.
+
+### 2.1 Stage floors (DOM order; minimize z-index)
+
+Inside the preview, floors stack by **later sibling paints above earlier**:
+
+| Floor | `data-rip-floor` | Contents |
+|-------|------------------|----------|
+| L1 content | `content` | Main + neighbor / outgoing hold (`DisplayStageLayers` in one shell; `z-index:0` **isolates** so inner stacking cannot cover higher floors) |
+| L2 hit | `hit` | Transparent pan / double-click zoom target (`z-index:1`) |
+| L3 chrome | `chrome` | Close, ←/→, toolbar + filename, minimap, filmstrip, EXIF (`z-index:2`; shell `pointer-events: none`; children opt into `auto`) |
+| L4 loading | `loading` | Center spinner + error fallback — **always topmost** (`z-index:3`) |
+
+Outgoing hold and neighbor keep-alive order only inside **L1**; do not paper over conflicts with large ad-hoc z-index values between spinner and the image stack.
+
+**Three beats on navigate:**
+
+1. **Immediately:** `currentIndex` advances → filmstrip active border (and strip position) move to the new index; L1 may still show the previous frame via **outgoing hold**.
+2. **While waiting:** as long as outgoing covers the stage and `showSwitchLoader` is true (default), **L4 loading** shows the center spinner.
+3. **On reveal:** when incoming is drawable and outgoing demotes to keep-alive, the spinner turns **off in the same frame** (no fade) with the new main image.
 
 ---
 
@@ -128,12 +147,12 @@ User holds → past repeat delay
 | Misconception | Correct reading |
 |---------------|-----------------|
 | Dropping the thumb makes it faster | On large files this usually means a black stage; P0 is paintable content. |
-| Byte `ready` = instant sharp | Need display-ready (decode settled + same-DOM keep-alive promote). Mid/light strip green is often byte-level only. |
+| Byte `ready` = instant sharp | Need display-ready (decode settled + same-DOM keep-alive promote). Strip **green** is often byte-level / warm only; **blue** is display-ready. |
 | Settle 600ms slows the current image | It only gates **neighbor** warm-up. |
 | Faster key-repeat is better UX | Hold should follow thumb pace; the premium path is long-dwell → next. |
 | Corner minimap = main placeholder | Main flow uses `minimapSrc` underlay; `showMinimap` is navigation chrome. |
 | Offscreen `opacity: 0` `<img>` is enough | **Not** (especially WKWebView): the compositor often drops decoded bitmaps; keep-alive needs non-zero opacity (see §9). |
-| Any UI activity should pause neighbor warm | **No**: if control auto-fade mistakenly clears `panIdle` and never restores it, display-ready dies forever — “waited 5s, strip green, still cold ≈1s”. |
+| Any UI activity should pause neighbor warm | **No**: if control auto-fade mistakenly clears `panIdle` and never restores it, display-ready dies forever — “waited 5s, strip blue, still cold ≈1s”. |
 
 ---
 
@@ -175,7 +194,7 @@ What actually worked on Demo 6 / large JPGs: after dwelling a few seconds on a *
 Dwell on N long enough
   → settle elapsed and panIdle (neighbor warm allowed)
   → neighbor N±1 full-src <img> mounted; load + decode settled
-  → readySrc sticky; strip phase = display-ready (brightest green)
+  → readySrc sticky; strip phase = display-ready (**blue** bar)
   → compositor still holds the bitmap (non-zero opacity keep-alive;
      ready layers not unmounted during settle pause)
 
@@ -226,7 +245,7 @@ Cold path keeps the probe + placeholder min visible time (e.g. Demo 6 dwell).
 
 **Retain layers during settle:** While *new* warm-up is paused, `slotRenderEntries` still mounts neighbors whose src is already in `readySrc` so keep-alive DOM is not torn down on every hop.
 
-**Sticky strip:** `display-ready` is sticky by **src** across flat indexes (matches `isSrcDisplayReady`); do not treat mid-green byte `ready` as instant-sharp.
+**Sticky strip:** `readySrc` / `isSrcDisplayReady(src)` stay sticky by **src** (fast reveal when returning); strip **blue** bars only mark indexes in the **current neighbor slot window** that are decoded (`radius`/`slots`, often ±1). Outside the window they fall back to **green** `warm` (cache hint) — not instant-sharp.
 
 ### 9.5 Short press vs long press (hold)
 

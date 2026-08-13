@@ -48,7 +48,7 @@ export const NAV_HOLD_MIN_STEP_INTERVAL_MS = 220;
  * long before another step is allowed — and only if the key/pointer is still held.
  * Default for {@link ImagePreviewProps.holdMinVisibleMs}.
  */
-export const NAV_HOLD_MIN_VISIBLE_MS = 500;
+export const NAV_HOLD_MIN_VISIBLE_MS = 300;
 
 /**
  * Opacity for non-visible full-`src` layers (neighbors, or current while underlay covers).

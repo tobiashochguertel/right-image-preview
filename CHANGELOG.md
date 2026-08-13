@@ -9,15 +9,24 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ## [Unreleased]
 
+## [0.3.8] — 2026-08-14
+
+### Changed
+
+- **Stage floor stacking** — preview UI is layered as content → hit → chrome → loading (DOM order). Loading stays topmost; close / ←→ / toolbar / filmstrip / minimap live in a chrome floor with `pointer-events: none` on the shell. Removes ad-hoc pan/spinner `z-index` values.
+- **Navigate UX: strip now, spinner while holding, sync hide** — on ←/→, filmstrip selection updates with `currentIndex` immediately (instant scroll); L4 spinner shows for the whole outgoing-hold / hide-until-decoded gap (including prefer-fast-reveal); spinner clears in the same frame the previous frame demotes. Floor `z-index` isolates content so outgoing `z-index:5` cannot cover the loader.
+- **`showSwitchLoader`** (default `true`) — toggle the center ring spinner while switching images; does not change outgoing-hold / reveal timing.
+- **Default `preloadRadius` = `1`** — neighbors current±1 byte-warm by default; pass `0` to disable.
+- **Strip preload colors** — **blue** only when a neighbor is in the active slot window **and** decode has settled (instant-switch). Adjacent-but-still-loading stays gray/green progress — never blue just for being a neighbor. **Green** = byte-ready / session-warm outside that ready set (cache hint).
+- **Default zoom stops** — add `125` and `175` between 100 and 200 (`[10, 25, 50, 75, 100, 125, 150, 175, 200]`).
+- **Default `holdMinVisibleMs`** — `300` (was `500`).
+- **Bundle size budget** — gzip limit raised `30 kB` → `32 kB` after stage-layer / navigate UX growth.
+
 ### Fixed
 
 - **Outgoing hold (anti-black navigate)** — when stepping ←/→, keep the previous full-`src` frame visible (full size, above the thumb underlay) until the incoming image is paintable, then demote it to neighbor keep-alive. Stops the stage-wide `opacity: 0` blank on every `src` change so hold-scrubbing is not half black frames. Hold pacing still waits for the **incoming** bitmap (not the held previous frame).
 - **Outgoing hold no longer squashes into a thin strip** — capture the previous frame as outgoing on the **same render** as the `src` change (avoid one frame as a 1×1 neighbor), and size it with natural pixel dims instead of `width/height: 100%` + `object-fit: fill`.
 - **Independent stage layers** — each `src` is its own absolute viewport layer with a **frozen** transform when leaving; navigating no longer moves the previous frame via a shared transform parent (fixes “image jumps so its left edge sits on the viewport center”).
-
-### Changed
-
-- **Default zoom stops** — add `125` and `175` between 100 and 200 (`[10, 25, 50, 75, 100, 125, 150, 175, 200]`).
 
 ## [0.3.7] — 2026-08-13
 

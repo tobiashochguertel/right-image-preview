@@ -58,7 +58,7 @@
 | `showThumbnails` | `boolean` | `false` | Bottom horizontal thumbnail strip inside the overlay; hidden when ≤ 1 navigable image |
 | `thumbnailsScope` | `'group' \| 'flat'` | `'group'` | Which images appear in the strip when `showThumbnails` is true; see table below |
 | `presentation` | `'overlay' \| 'contained'` | `'overlay'` | `overlay` fullscreen dialog; `contained` fills a positioned host |
-| `preloadRadius` | `number` | `0` | Neighbor full-`src` byte preload radius; `0` = off. Does **not** alone skip progressive |
+| `preloadRadius` | `number` | `1` | Neighbor full-`src` byte preload radius; `0` = off. Does **not** alone skip progressive |
 | `preloadDisplaySlots` | `number` | `0` | Max neighbors kept **display-ready**. `0` + budget → ceiling 6; budget decides fill count |
 | `preloadDisplaySettleMs` | `number` | `600` | Debounce after navigation before warming **neighbors** (rapid ←/→ cancels). Does not delay current main decode |
 | `holdMinVisibleMs` | `number` | `NAV_HOLD_MIN_VISIBLE_MS` | Hold ←/→: after the first immediate step, each image must show **presented** stage content (thumb underlay or full original) for this many ms before another step, and only if still held. Layout/meta alone does not start the clock. Release cancels the pending timer (no queue). Omit to use the library default. |
@@ -67,7 +67,8 @@
 | `preloadDisplayMode` | `'slot' \| 'decode'` | `'slot'` | `'slot'` = offscreen imgs (C); `'decode'` = decode-only fallback (B) |
 | `onPreloadIndexesChange` | `(indexes: number[]) => void` | — | Optional debug hook for planned preload indexes |
 | `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | Phases include `display-ready` (exact: decode settled — fast reveal; underlay until viewport drawable). Byte `ready` ≠ instant reveal |
-| `showThumbnailPreloadStatus` | `boolean` | `false` | Strip edges: brightest = `display-ready`; dark = byte ready; light = warm |
+| `showThumbnailPreloadStatus` | `boolean` | `false` | Strip edges: **blue** = neighbor slot **and** decode settled (instant-switch); still loading stays gray/green progress; **green** = byte ready / session-warm |
+| `showSwitchLoader` | `boolean` | `true` | Center ring spinner while switching images (outgoing hold / waiting for next drawable main). `false` hides it only |
 | `chrome` | `'default' \| 'minimal'` | `'default'` | `minimal` fades idle chrome to 0% |
 | `index` | `number` | — | Controlled flat index |
 | `toolbarExtra` | `ReactNode` | — | Extra content at the end of the toolbar |

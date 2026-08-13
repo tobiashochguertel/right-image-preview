@@ -414,7 +414,7 @@ export interface ImagePreviewProps {
 
   /**
    * Preload full `src` for neighbors within this flat-index radius of the current image.
-   * `0` (default) disables neighbor preload. Recommended for gallery apps: `1` or `2`.
+   * Default `1` (current ±1). Pass `0` to disable neighbor byte preload.
    * Byte preload alone does **not** skip {@link progressiveMain}; see {@link preloadDisplaySlots}.
    */
   preloadRadius?: number;
@@ -483,9 +483,18 @@ export interface ImagePreviewProps {
 
   /**
    * When true, thumbnail tiles show bottom-edge indicators for preload status. Default: `false`.
-   * Dark green = byte ready / loading; brightest = `display-ready`; light green = session-warm.
+   * **Blue** = neighbor in the active slot window **and** decode settled (instant-switch).
+   * Being a neighbor alone is never enough — still-loading neighbors stay gray/green progress.
+   * **Green** = byte-ready / session-warm (cache hint only, not guaranteed instant).
    */
   showThumbnailPreloadStatus?: boolean;
+
+  /**
+   * Show the center L4 ring spinner while switching images (outgoing hold / waiting for the
+   * next main frame to become drawable). Default: `true`. Set `false` to hide that feedback
+   * without changing hold / reveal timing.
+   */
+  showSwitchLoader?: boolean;
 
   /**
    * Control chrome density. Default: `'default'`. See {@link ChromeDensity}.

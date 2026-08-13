@@ -58,7 +58,7 @@
 | `showThumbnails` | `boolean` | `false` | 预览层内底部横向缩略图条；可导航图片 ≤ 1 时自动隐藏 |
 | `thumbnailsScope` | `'group' \| 'flat'` | `'group'` | `showThumbnails` 为 true 时条带展示范围；见下表 |
 | `presentation` | `'overlay' \| 'contained'` | `'overlay'` | `overlay` 全屏对话框；`contained` 填满已定位宿主 |
-| `preloadRadius` | `number` | `0` | 相邻主图**字节**预加载半径；`0` 关闭。单独开启不会跳过渐进占位 |
+| `preloadRadius` | `number` | `1` | 相邻主图**字节**预加载半径；`0` 关闭。单独开启不会跳过渐进占位 |
 | `preloadDisplaySlots` | `number` | `0` | display-ready 邻居上限。`0` 且提供预算时上限为 6，实际张数由预算决定 |
 | `preloadDisplaySettleMs` | `number` | `600` | 切图后防抖：停稳这么久才开始预热**邻居**（连切会取消未启动的预热）。**不**延迟当前主图解码 |
 | `holdMinVisibleMs` | `number` | `NAV_HOLD_MIN_VISIBLE_MS` | 按住 ←/→：第一次立即切一张；之后每张需主区域**已呈现**可看位图（缩略 underlay 或无缩略时的原图）满此时长，且仍按住才再切。仅有布局尺寸不计时。松开取消定时器，**不堆积**步进。不传则用库默认值。 |
@@ -67,7 +67,8 @@
 | `preloadDisplayMode` | `'slot' \| 'decode'` | `'slot'` | `'slot'` = 离屏 img（C）；`'decode'` = 仅 decode（B 降级） |
 | `onPreloadIndexesChange` | `(indexes: number[]) => void` | — | 可选：当前计划预加载的扁平下标 |
 | `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | 含 `display-ready`（decode 完成，切图快开：无 dwell/转圈，占位保留到可绘制）。字节 `ready` ≠ 可秒开 |
-| `showThumbnailPreloadStatus` | `boolean` | `false` | 底片条指示：最深绿 = display-ready；深绿 = 字节就绪；浅绿 = warm |
+| `showThumbnailPreloadStatus` | `boolean` | `false` | 底片条：**蓝** = 邻居槽位内且已 decode（可瞬切）；加载中仍为灰/绿进度；**绿** = 字节就绪 / 会话 warm |
+| `showSwitchLoader` | `boolean` | `true` | 切图等待下一张可绘制时显示中央圆环 Loading；`false` 只隐藏转圈，不影响托底 / 揭开时机 |
 | `chrome` | `'default' \| 'minimal'` | `'default'` | `minimal` 空闲时控件完全隐藏 |
 | `index` | `number` | — | 受控扁平下标 |
 | `toolbarExtra` | `ReactNode` | — | 工具栏末尾自定义内容 |

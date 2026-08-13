@@ -85,7 +85,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       showThumbnails = false,
       thumbnailsScope = 'group',
       presentation = 'overlay',
-      preloadRadius = 0,
+      preloadRadius = 1,
       preloadDisplaySlots = 0,
       preloadDisplaySettleMs = PRELOAD_DISPLAY_SETTLE_MS,
       holdMinVisibleMs = NAV_HOLD_MIN_VISIBLE_MS,
@@ -95,6 +95,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       onPreloadIndexesChange,
       onPreloadStatusChange,
       showThumbnailPreloadStatus = false,
+      showSwitchLoader = true,
       chrome = 'default',
       progressiveMain = true,
       progressivePlaceholderMinMs = MIN_PROGRESSIVE_THUMB_VISIBLE_MS,
@@ -918,19 +919,33 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     const suppressTransformTransition =
       thumbHoldingMainArea || suppressTransformForSrcSwitch;
 
-    /** Progressive: spinner stays on top of the thumbnail until the real main bitmap replaces it. */
+    /**
+     * Waiting for the *current* main to be the visible sharp frame.
+     * Outgoing hold and progressive “hide until decoded” both count — prefer-fast-reveal
+     * must not hide the L4 spinner during that gap (users otherwise see a stuck previous
+     * frame with no feedback).
+     */
+    const outgoingHolding = !!holdSrc && holdSrc !== currentImage.src;
+    const awaitingMainReveal = outgoingHolding || hideMainUntilDecoded;
+
+    /** Progressive: spinner over thumb underlay when not already covered by awaitingMainReveal. */
     const progressiveWaitingFullOverThumb =
-      progressive.pipelineActive && progressive.showMinimapUnderlay && !progressive.fullDecoded;
+      !awaitingMainReveal &&
+      progressive.pipelineActive &&
+      progressive.showMinimapUnderlay &&
+      !progressive.fullDecoded;
 
     const progressivePreloadSpinnerNoThumbYet =
+      !awaitingMainReveal &&
       progressive.pipelineActive &&
       !progressive.showMinimapUnderlay &&
       progressive.preloadStage === 'preloading' &&
       delayedPreloadSpinner;
 
     const showCenterLoader =
-      !preferFastReveal &&
-      (progressiveWaitingFullOverThumb ||
+      showSwitchLoader &&
+      (awaitingMainReveal ||
+        progressiveWaitingFullOverThumb ||
         progressivePreloadSpinnerNoThumbYet ||
         (!progressive.pipelineActive && showLoader) ||
         (progressive.pipelineActive && progressive.preloadStage === 'error' && showLoader));
@@ -1006,16 +1021,8 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
           }
         }}
       >
-        {/* ── Close button — top-right corner ── */}
-        <ImagePreviewCloseButton
-          onClick={() => onClose?.()}
-          visible={controlsVisible}
-          idleOpacity={idleOpacity}
-          label={t.close}
-          tip={t.tipClose}
-        />
-
-        {/* ── Viewport ── */}
+        {/* Stage floors (bottom → top via DOM order; avoid ad-hoc z-index):
+            L1 content → L2 hit → L3 chrome → L4 loading */}
         {/* NOTE: This div is 100 % × 100 % and covers the whole overlay, so mask
             clicks land here (not on the overlay root). We mirror the same check. */}
         <div
@@ -1028,63 +1035,70 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
             overflow: 'hidden',
           }}
         >
-          {progressive.preloadStage !== 'thumb-only' && (
-            <DisplayStageLayers
-              layers={displayLayers}
-              currentAlt={currentImage.alt ?? ''}
-              liveDims={imageDims}
-              liveTransform={transform.cssTransform}
-              frozenBySrc={frozenBySrc}
-              hideCurrentUntilDecoded={hideMainUntilDecoded}
-              suppressTransformTransition={suppressTransformTransition}
-              isPanning={isPanning || minimapDragging}
-              imageShowReady={imageShowReady}
-              bindLayerRef={bindLayerRef}
-              onCurrentLoad={onCurrentLayerLoad}
-              onCurrentError={() => {
-                onMainImgDecoded();
-                setImageLoadError(true);
-                onImageError?.(currentIndex, currentImage.src);
-              }}
-              onNeighborLoad={onSlotImgLoad}
-              underlay={
-                progressive.showMinimapUnderlay && currentImage.minimapSrc ? (
-                  <img
-                    key={`${currentImage.minimapSrc}-${currentIndex}`}
-                    ref={underlayElRef}
-                    src={currentImage.minimapSrc}
-                    alt=""
-                    aria-hidden
-                    draggable={false}
-                    onLoad={() => setPaceUnderlayPainted(true)}
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'fill',
-                      pointerEvents: 'none',
-                      display: 'block',
-                      opacity: holdSrc
-                        ? 0
-                        : progressive.fullDecoded
-                          ? 0
-                          : 1,
-                      transition: opacityTransition,
-                      zIndex: progressive.fullDecoded ? 0 : 2,
-                    }}
-                  />
-                ) : null
-              }
-            />
-          )}
-
-          {/* Pan / zoom hit target — live transform lives on the current layer only. */}
+          {/* L1 — main + neighbor image layers (isolated so inner z-index cannot cover L4) */}
           <div
+            data-rip-floor="content"
+            style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 0 }}
+          >
+            {progressive.preloadStage !== 'thumb-only' && (
+              <DisplayStageLayers
+                layers={displayLayers}
+                currentAlt={currentImage.alt ?? ''}
+                liveDims={imageDims}
+                liveTransform={transform.cssTransform}
+                frozenBySrc={frozenBySrc}
+                hideCurrentUntilDecoded={hideMainUntilDecoded}
+                suppressTransformTransition={suppressTransformTransition}
+                isPanning={isPanning || minimapDragging}
+                imageShowReady={imageShowReady}
+                bindLayerRef={bindLayerRef}
+                onCurrentLoad={onCurrentLayerLoad}
+                onCurrentError={() => {
+                  onMainImgDecoded();
+                  setImageLoadError(true);
+                  onImageError?.(currentIndex, currentImage.src);
+                }}
+                onNeighborLoad={onSlotImgLoad}
+                underlay={
+                  progressive.showMinimapUnderlay && currentImage.minimapSrc ? (
+                    <img
+                      key={`${currentImage.minimapSrc}-${currentIndex}`}
+                      ref={underlayElRef}
+                      src={currentImage.minimapSrc}
+                      alt=""
+                      aria-hidden
+                      draggable={false}
+                      onLoad={() => setPaceUnderlayPainted(true)}
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'fill',
+                        pointerEvents: 'none',
+                        display: 'block',
+                        opacity: holdSrc
+                          ? 0
+                          : progressive.fullDecoded
+                            ? 0
+                            : 1,
+                        transition: opacityTransition,
+                        zIndex: progressive.fullDecoded ? 0 : 2,
+                      }}
+                    />
+                  ) : null
+                }
+              />
+            )}
+          </div>
+
+          {/* L2 — pan / zoom hit target (live transform lives on the current layer only) */}
+          <div
+            data-rip-floor="hit"
             style={{
               position: 'absolute',
               inset: 0,
-              zIndex: 20,
+              zIndex: 1,
               cursor: mode === 'native' ? 'grab' : 'zoom-in',
               touchAction: 'none',
               userSelect: 'none',
@@ -1097,208 +1111,227 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
             onDoubleClick={handleDoubleClick}
           />
 
-          {/* ── Loading spinner ── */}
+          {/* L3 — chrome: close, ←/→, toolbar/filename, minimap, filmstrip, EXIF */}
           <div
-            aria-label={t.loadingImage}
-            aria-live="polite"
-            style={{
-              position:      'absolute',
-              inset:         0,
-              zIndex:        21,
-              display:       'flex',
-              alignItems:    'center',
-              justifyContent:'center',
-              pointerEvents: 'none',
-              opacity:       showCenterLoader ? 1 : 0,
-              transition:    showCenterLoader ? 'none' : 'opacity 0.2s ease',
-            }}
+            data-rip-floor="chrome"
+            style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none' }}
           >
-            <div style={{
-              width:         28,
-              height:        28,
-              borderRadius:  '50%',
-              border:        '2.5px solid rgba(180, 200, 230, 0.12)',
-              borderTopColor:'rgba(180, 200, 230, 0.55)',
-              animation:     '_rip_spin 0.75s linear infinite',
-            }} />
+            <ImagePreviewCloseButton
+              onClick={() => onClose?.()}
+              visible={controlsVisible}
+              idleOpacity={idleOpacity}
+              label={t.close}
+              tip={t.tipClose}
+            />
+
+            {showMinimap && imageDims && containerSize && (
+              <Minimap
+                imageSrc={currentImage.minimapSrc ?? currentImage.src}
+                thumbnail={currentImage.minimap}
+                imageAlt={currentImage.alt ?? ''}
+                nw={imageDims.naturalWidth}
+                nh={imageDims.naturalHeight}
+                cw={containerSize.width}
+                ch={containerSize.height}
+                scale={transform.scale}
+                mode={mode}
+                tx={transform.translateX}
+                ty={transform.translateY}
+                rotationDeg={transform.rotation}
+                flipH={transform.flipH}
+                flipV={transform.flipV}
+                controlsVisible={controlsVisible}
+                idleOpacity={minimapIdleOpacity}
+                bottomPx={MINIMAP_BOTTOM + stripLiftPx}
+                onPanByDelta={panByDelta}
+                onJumpToNatural={panJumpToNatural}
+                onUserActivity={resetHideTimer}
+                onDragChange={setMinimapDragging}
+                ariaLabel={t.minimapNav}
+                minimapTooltip={t.tipMinimap}
+              />
+            )}
+
+            {/* Flat ←/→ across the full list (including across groups). Hide at the
+                absolute first / last image. Group jumps: toolbar ⏮/⏭ or PageUp/Down. */}
+            {(() => {
+              if (!showSideArrows) return null;
+              const isAtStart = currentIndex === 0;
+              const isAtEnd = currentIndex === images.length - 1;
+
+              return (
+                <>
+                  {!isAtStart && (
+                    <ImagePreviewNavArrow
+                      direction="left"
+                      onClick={() => {
+                        if (navArrowPointerRef.current) {
+                          navArrowPointerRef.current = false;
+                          return;
+                        }
+                        beginNavHold('prev');
+                        endNavHold('prev');
+                      }}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        navArrowPointerRef.current = true;
+                        e.currentTarget.setPointerCapture?.(e.pointerId);
+                        beginNavHold('prev');
+                      }}
+                      onPointerUp={() => endNavHold('prev')}
+                      onPointerCancel={() => endNavHold('prev')}
+                      label={t.prev}
+                      tip={t.tipPrev}
+                      visible={controlsVisible}
+                      idleOpacity={idleOpacity}
+                    />
+                  )}
+                  {!isAtEnd && (
+                    <ImagePreviewNavArrow
+                      direction="right"
+                      onClick={() => {
+                        if (navArrowPointerRef.current) {
+                          navArrowPointerRef.current = false;
+                          return;
+                        }
+                        beginNavHold('next');
+                        endNavHold('next');
+                      }}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        navArrowPointerRef.current = true;
+                        e.currentTarget.setPointerCapture?.(e.pointerId);
+                        beginNavHold('next');
+                      }}
+                      onPointerUp={() => endNavHold('next')}
+                      onPointerCancel={() => endNavHold('next')}
+                      label={t.next}
+                      tip={t.tipNext}
+                      visible={controlsVisible}
+                      idleOpacity={idleOpacity}
+                    />
+                  )}
+                </>
+              );
+            })()}
+
+            {stripEntries.length > 0 && (
+              <ThumbnailsStrip
+                entries={stripEntries}
+                activeFlatIndex={currentIndex}
+                controlsVisible={controlsVisible}
+                idleOpacity={idleOpacity}
+                preloadStatus={showThumbnailPreloadStatus ? neighborPreloadStatus : undefined}
+                ariaLabel={t.thumbnailsNav}
+                thumbAria={t.thumbStripItem}
+                onSelect={goTo}
+                onUserActivity={resetHideTimer}
+              />
+            )}
+
+            {showExif && exifOpen && (
+              <ExifInfoPanel
+                exif={currentImage.exif}
+                strings={t}
+                onUserActivity={resetHideTimer}
+              />
+            )}
+
+            <Toolbar
+              controlsVisible={controlsVisible}
+              idleOpacity={idleOpacity}
+              bottomPx={stripLiftPx + THUMBNAIL_STRIP_TOOLBAR_GAP_PX}
+              mode={mode}
+              nativePercent={nativePercent}
+              fitEquivalentNativePercent={fitEquivalentNativePercent}
+              stops={sortedStops}
+              atMinStop={atMinStop}
+              atMaxStop={atMaxStop}
+              totalImages={images.length}
+              currentIndex={currentIndex}
+              imageName={currentImage.name}
+              showFlip={showFlip}
+              showExif={showExif}
+              exifOpen={exifOpen}
+              showDelete={showDelete}
+              showFullscreen
+              isFullscreen={isFs}
+              toolbarExtra={toolbarExtra}
+              showToolbarArrows={showToolbarArrows}
+              zoomLocked={zoomLocked}
+              strings={t}
+              zoomLabelSlotPx={zoomLabelSlotPx}
+              zoomDropdownWidthPx={zoomDropdownWidthPx}
+              onToggleLock={() => setZoomLocked((v) => !v)}
+              onToggleExif={() => setExifOpen((v) => !v)}
+              onDeleteImage={deleteCurrentImage}
+              onToggleFullscreen={toggleFullscreen}
+              onZoomIn={() => zoomIn(fitEquivalentNativePercent)}
+              onZoomOut={() => zoomOut(fitEquivalentNativePercent)}
+              onFit={fit}
+              onOneToOne={() => setNative(100)}
+              onSetNative={setNative}
+              onRotateCW={rotateCW}
+              onRotateCCW={rotateCCW}
+              onFlipH={flipHorizontal}
+              onFlipV={flipVertical}
+              onPrev={prev}
+              onNext={next}
+              {...groupToolbarProps}
+            />
           </div>
 
-          {/* ── Error fallback ── */}
-          {imageLoadError && errorFallback && (
+          {/* L4 — loading / error (always topmost) */}
+          <div
+            data-rip-floor="loading"
+            data-rip-loader={showCenterLoader ? 'on' : 'off'}
+            style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 3 }}
+          >
             <div
+              aria-label={t.loadingImage}
+              aria-live="polite"
+              aria-hidden={!showCenterLoader}
               style={{
-                position:       'absolute',
-                inset:          0,
-                zIndex:         2,
-                display:        'flex',
-                alignItems:     'center',
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'center',
                 justifyContent: 'center',
-                pointerEvents:  'none',
+                pointerEvents: 'none',
+                visibility: showCenterLoader ? 'visible' : 'hidden',
+                opacity: showCenterLoader ? 1 : 0,
+                /* No fade — appear/disappear in lockstep with outgoing hold / reveal. */
+                transition: 'none',
               }}
             >
-              {errorFallback(currentIndex, currentImage.src)}
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: '50%',
+                  border: '3px solid rgba(96, 165, 250, 0.28)',
+                  borderTopColor: 'rgba(147, 197, 253, 0.95)',
+                  animation: '_rip_spin 0.75s linear infinite',
+                }}
+              />
             </div>
-          )}
+
+            {imageLoadError && errorFallback && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  pointerEvents: 'none',
+                }}
+              >
+                {errorFallback(currentIndex, currentImage.src)}
+              </div>
+            )}
+          </div>
         </div>
-
-        {showMinimap && imageDims && containerSize && (
-          <Minimap
-            imageSrc={currentImage.minimapSrc ?? currentImage.src}
-            thumbnail={currentImage.minimap}
-            imageAlt={currentImage.alt ?? ''}
-            nw={imageDims.naturalWidth}
-            nh={imageDims.naturalHeight}
-            cw={containerSize.width}
-            ch={containerSize.height}
-            scale={transform.scale}
-            mode={mode}
-            tx={transform.translateX}
-            ty={transform.translateY}
-            rotationDeg={transform.rotation}
-            flipH={transform.flipH}
-            flipV={transform.flipV}
-            controlsVisible={controlsVisible}
-            idleOpacity={minimapIdleOpacity}
-            bottomPx={MINIMAP_BOTTOM + stripLiftPx}
-            onPanByDelta={panByDelta}
-            onJumpToNatural={panJumpToNatural}
-            onUserActivity={resetHideTimer}
-            onDragChange={setMinimapDragging}
-            ariaLabel={t.minimapNav}
-            minimapTooltip={t.tipMinimap}
-          />
-        )}
-
-        {/* ── Side nav arrows ────────────────────────────────────────────────
-             Flat ←/→ across the full list (including across groups). Hide at the
-             absolute first / last image. Group jumps: toolbar ⏮/⏭ or PageUp/Down. ── */}
-        {(() => {
-          if (!showSideArrows) return null;
-          const isAtStart = currentIndex === 0;
-          const isAtEnd = currentIndex === images.length - 1;
-
-          return (
-            <>
-              {!isAtStart && (
-                <ImagePreviewNavArrow
-                  direction="left"
-                  onClick={() => {
-                    if (navArrowPointerRef.current) {
-                      navArrowPointerRef.current = false;
-                      return;
-                    }
-                    beginNavHold('prev');
-                    endNavHold('prev');
-                  }}
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                    navArrowPointerRef.current = true;
-                    e.currentTarget.setPointerCapture?.(e.pointerId);
-                    beginNavHold('prev');
-                  }}
-                  onPointerUp={() => endNavHold('prev')}
-                  onPointerCancel={() => endNavHold('prev')}
-                  label={t.prev}
-                  tip={t.tipPrev}
-                  visible={controlsVisible}
-                  idleOpacity={idleOpacity}
-                />
-              )}
-              {!isAtEnd && (
-                <ImagePreviewNavArrow
-                  direction="right"
-                  onClick={() => {
-                    if (navArrowPointerRef.current) {
-                      navArrowPointerRef.current = false;
-                      return;
-                    }
-                    beginNavHold('next');
-                    endNavHold('next');
-                  }}
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                    navArrowPointerRef.current = true;
-                    e.currentTarget.setPointerCapture?.(e.pointerId);
-                    beginNavHold('next');
-                  }}
-                  onPointerUp={() => endNavHold('next')}
-                  onPointerCancel={() => endNavHold('next')}
-                  label={t.next}
-                  tip={t.tipNext}
-                  visible={controlsVisible}
-                  idleOpacity={idleOpacity}
-                />
-              )}
-            </>
-          );
-        })()}
-
-        {stripEntries.length > 0 && (
-          <ThumbnailsStrip
-            entries={stripEntries}
-            activeFlatIndex={currentIndex}
-            controlsVisible={controlsVisible}
-            idleOpacity={idleOpacity}
-            preloadStatus={showThumbnailPreloadStatus ? neighborPreloadStatus : undefined}
-            ariaLabel={t.thumbnailsNav}
-            thumbAria={t.thumbStripItem}
-            onSelect={goTo}
-            onUserActivity={resetHideTimer}
-          />
-        )}
-
-        {/* Neighbor decode layers live in DisplayStageLayers (slot mode). decode-mode uses detached Image(). */}
-
-        {showExif && exifOpen && (
-          <ExifInfoPanel
-            exif={currentImage.exif}
-            strings={t}
-            onUserActivity={resetHideTimer}
-          />
-        )}
-
-        <Toolbar
-          controlsVisible={controlsVisible}
-          idleOpacity={idleOpacity}
-          bottomPx={stripLiftPx + THUMBNAIL_STRIP_TOOLBAR_GAP_PX}
-          mode={mode}
-          nativePercent={nativePercent}
-          fitEquivalentNativePercent={fitEquivalentNativePercent}
-          stops={sortedStops}
-          atMinStop={atMinStop}
-          atMaxStop={atMaxStop}
-          totalImages={images.length}
-          currentIndex={currentIndex}
-          imageName={currentImage.name}
-          showFlip={showFlip}
-          showExif={showExif}
-          exifOpen={exifOpen}
-          showDelete={showDelete}
-          showFullscreen
-          isFullscreen={isFs}
-          toolbarExtra={toolbarExtra}
-          showToolbarArrows={showToolbarArrows}
-          zoomLocked={zoomLocked}
-          strings={t}
-          zoomLabelSlotPx={zoomLabelSlotPx}
-          zoomDropdownWidthPx={zoomDropdownWidthPx}
-          onToggleLock={() => setZoomLocked((v) => !v)}
-          onToggleExif={() => setExifOpen((v) => !v)}
-          onDeleteImage={deleteCurrentImage}
-          onToggleFullscreen={toggleFullscreen}
-          onZoomIn={() => zoomIn(fitEquivalentNativePercent)}
-          onZoomOut={() => zoomOut(fitEquivalentNativePercent)}
-          onFit={fit}
-          onOneToOne={() => setNative(100)}
-          onSetNative={setNative}
-          onRotateCW={rotateCW}
-          onRotateCCW={rotateCCW}
-          onFlipH={flipHorizontal}
-          onFlipV={flipVertical}
-          onPrev={prev}
-          onNext={next}
-          {...groupToolbarProps}
-        />
       </div>
     );
   },

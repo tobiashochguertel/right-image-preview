@@ -259,7 +259,6 @@ export function ExifInfoPanel({
         width: PANEL_WIDTH,
         maxWidth: '100vw',
         maxHeight: maxH,
-        zIndex: 8,
         display: 'flex',
         flexDirection: 'column',
         background: PANEL_BG,
@@ -268,6 +267,7 @@ export function ExifInfoPanel({
         border: `1px solid ${PANEL_BORDER}`,
         boxShadow: '0 8px 28px rgba(0,0,0,0.28)',
         overflow: 'hidden',
+        pointerEvents: 'auto',
         userSelect: dragging ? 'none' : 'auto',
         ...edgeStyle,
       }}

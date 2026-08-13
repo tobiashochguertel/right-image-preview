@@ -104,10 +104,24 @@ export function useNeighborDisplayPreload(
   const decodeImagesRef = useRef<Map<number, HTMLImageElement>>(new Map());
   const inFlightRef = useRef<Set<number>>(new Set());
   const panIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const slotIndexesRef = useRef(slotIndexes);
+  slotIndexesRef.current = slotIndexes;
 
   const bumpReady = useCallback(() => {
     setReadyEpoch((n) => n + 1);
   }, []);
+
+  /** Blue strip = in active neighbor slots AND decode settled — never “neighbor ⇒ blue”. */
+  const rebuildDisplayReadyIndexes = useCallback(() => {
+    setDisplayReadyIndexes(() => {
+      const next = new Set<number>();
+      for (const i of slotIndexesRef.current) {
+        const src = images[i]?.src;
+        if (src && readySrcRef.current.has(src)) next.add(i);
+      }
+      return next;
+    });
+  }, [images]);
 
   const clearPanIdleTimer = useCallback(() => {
     if (panIdleTimerRef.current != null) {
@@ -142,9 +156,12 @@ export function useNeighborDisplayPreload(
           naturalHeight: img.naturalHeight,
         });
       }
+      // Sticky by src for fast-reveal when this neighbor is visited later.
       readySrcRef.current.add(src);
       inFlightRef.current.delete(idx);
       bumpReady();
+      // Strip blue only if still in the neighbor slot window *and* decode just settled.
+      if (!slotIndexesRef.current.includes(idx)) return;
       setDisplayReadyIndexes((prev) => {
         if (prev.has(idx)) return prev;
         const next = new Set(prev);
@@ -163,10 +180,11 @@ export function useNeighborDisplayPreload(
       }
       readySrcRef.current.add(src);
       bumpReady();
+      // Only paint blue for neighbors currently in slots that match this src.
       setDisplayReadyIndexes((prev) => {
         const next = new Set(prev);
         let changed = false;
-        for (const idx of slotIndexes) {
+        for (const idx of slotIndexesRef.current) {
           if (images[idx]?.src === src && !next.has(idx)) {
             next.add(idx);
             changed = true;
@@ -175,7 +193,7 @@ export function useNeighborDisplayPreload(
         return changed ? next : prev;
       });
     },
-    [bumpReady, slotIndexes, images],
+    [bumpReady, images],
   );
 
   const notifyInteraction = useCallback(() => {
@@ -209,16 +227,9 @@ export function useNeighborDisplayPreload(
   }, [neighborWarmActive, abortInFlightNeighborDecodes]);
 
   useEffect(() => {
-    // Sticky by src: any flat index whose src was display-decoded stays marked, even after
-    // leaving the neighbor window (strip + Demo path detection stay truthful).
-    setDisplayReadyIndexes(() => {
-      const next = new Set<number>();
-      for (let i = 0; i < images.length; i++) {
-        const src = images[i]?.src;
-        if (src && readySrcRef.current.has(src)) next.add(i);
-      }
-      return next;
-    });
+    // Recompute strip blues: slot window ∩ decode-settled only.
+    // Still-loading neighbors stay gray/green progress — never blue just for being adjacent.
+    rebuildDisplayReadyIndexes();
     const allowed = new Set(slotIndexes);
     for (const [idx, img] of [...decodeImagesRef.current.entries()]) {
       if (!allowed.has(idx)) {
@@ -229,7 +240,7 @@ export function useNeighborDisplayPreload(
         inFlightRef.current.delete(idx);
       }
     }
-  }, [slotIndexes, images, readyEpoch]);
+  }, [slotIndexes, images, readyEpoch, rebuildDisplayReadyIndexes]);
 
   const slotCeiling = resolvePreloadDisplaySlotCeiling(displaySlots, memoryBudgetBytes);
 
@@ -241,12 +252,8 @@ export function useNeighborDisplayPreload(
       const src = images[idx]?.src;
       if (!src) continue;
       if (readySrcRef.current.has(src)) {
-        setDisplayReadyIndexes((prev) => {
-          if (prev.has(idx)) return prev;
-          const next = new Set(prev);
-          next.add(idx);
-          return next;
-        });
+        // Already decode-settled — eligible for blue in the active window only.
+        rebuildDisplayReadyIndexes();
         continue;
       }
 
@@ -266,7 +273,7 @@ export function useNeighborDisplayPreload(
       };
       img.src = src;
     }
-  }, [neighborWarmActive, mode, slotCeiling, radius, slotIndexes, images, markIndexReady]);
+  }, [neighborWarmActive, mode, slotCeiling, radius, slotIndexes, images, markIndexReady, rebuildDisplayReadyIndexes]);
 
   const onSlotImgLoad = useCallback(
     (index: number, el: HTMLImageElement) => {
@@ -281,22 +288,11 @@ export function useNeighborDisplayPreload(
     [mode, images, markIndexReady],
   );
 
-  // When settle resumes, mark already-ready srcs in the new window.
+  // When settle resumes, repaint blues for slot-window ∩ already-decoded only.
   useEffect(() => {
     if (!neighborWarmActive || mode !== 'slot') return;
-    for (const idx of slotIndexes) {
-      const src = images[idx]?.src;
-      if (!src) continue;
-      if (readySrcRef.current.has(src)) {
-        setDisplayReadyIndexes((prev) => {
-          if (prev.has(idx)) return prev;
-          const next = new Set(prev);
-          next.add(idx);
-          return next;
-        });
-      }
-    }
-  }, [neighborWarmActive, mode, slotIndexes, images]);
+    rebuildDisplayReadyIndexes();
+  }, [neighborWarmActive, mode, slotIndexes, images, rebuildDisplayReadyIndexes]);
 
   const slotRenderEntries = useMemo(() => {
     if (mode !== 'slot' || slotCeiling <= 0 || radius <= 0) return [];

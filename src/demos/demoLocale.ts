@@ -189,7 +189,7 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
       'Toolbar “i” toggles EXIF; the trash button (or Delete / Backspace) removes the current image. Metadata is on `ImageItem.exif`. Deleting calls `onDeleteImage(index, item)` — this demo filters by `item.id`, so the count drops and focus moves to the next (or previous) photo. Empty fields are hidden; the third photo starts with no EXIF.',
     demo5Title: 'Demo 5 · Contained workspace + flat strip + preload',
     demo5Desc:
-      'Embedded preview (`presentation="contained"`) fills the centre pane while a fake sidebar stays usable. Uses controlled `index`, `showThumbnails` + `thumbnailsScope="flat"`, `preloadRadius={1}`, `preloadDisplaySlots={2}` (display-ready decode; fast reveal keeps minimap underlay until the viewport main image is drawable), `showThumbnailPreloadStatus`, and `chrome="minimal"`. Brightest green = display-ready; darker = byte-ready; light = session-warm. Click the preview to focus it before using arrow keys.',
+      'Embedded preview (`presentation="contained"`) fills the centre pane while a fake sidebar stays usable. Uses controlled `index`, `showThumbnails` + `thumbnailsScope="flat"`, `preloadRadius={1}`, `preloadDisplaySlots={2}` (display-ready decode; fast reveal keeps minimap underlay until the viewport main image is drawable), `showThumbnailPreloadStatus`, and `chrome="minimal"`. **Blue** bar = display-ready; **green** = byte-ready / session-warm. Click the preview to focus it before using arrow keys.',
     demo5SidebarTitle: 'Sidebar',
     demo5ShowPreview: 'Show preview',
     demo5HidePreview: 'Hide preview',
@@ -197,7 +197,7 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo5PreloadHint: 'Neighbor preload indexes',
     demo6Title: 'Demo 6 · Local large JPGs (dev only, gitignored)',
     demo6Desc:
-      'Reads every original under gitignored `./test-images` that has a matching file in `thumbs/` (Vite middleware). After dwelling, neighbors with the brightest green (display-ready) should promote the retained decoded layer — sharp near-instantly (sidebar: path + underlay/sharp ms). Toggle slots off to force every nav to cold. New JPGs: run `bash scripts/generate-test-image-thumbs.sh`.',
+      'Reads every original under gitignored `./test-images` that has a matching file in `thumbs/` (Vite middleware). After dwelling, neighbors with a **blue** strip bar (display-ready) should promote the retained decoded layer — sharp near-instantly (sidebar: path + underlay/sharp ms). Toggle slots off to force every nav to cold. New JPGs: run `bash scripts/generate-test-image-thumbs.sh`.',
     demo6SidebarTitle: 'Local large files',
     demo6HowTo:
       'Wait for brightest green on ± neighbors, then ←/→. Expect path=fast with sharp ≪ cold (~1s). Cold also holds blur ~800ms after decode.',
@@ -307,7 +307,7 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
       '工具栏「i」开关 EXIF；垃圾桶（或 Delete / Backspace）删除当前图。元数据在 `ImageItem.exif`。删除回调为 `onDeleteImage(index, item)` — 本 Demo 按 `item.id` 更新列表，张数减一并跳到下一张（若已是最后一张则上一张）。空字段不显示；第三张默认无 EXIF。',
     demo5Title: 'Demo 5 · 嵌入工作区 + 扁平缩略图条 + 预加载',
     demo5Desc:
-      '嵌入式预览（`presentation="contained"`）填满中央工作区，假侧栏仍可操作。使用受控 `index`、`showThumbnails` + `thumbnailsScope="flat"`、`preloadRadius={1}`、`preloadDisplaySlots={2}`（display-ready 解码；快开仍保留 minimap 占位直到视口主图可绘制）、`showThumbnailPreloadStatus` 与 `chrome="minimal"`。最深绿 = display-ready；深绿 = 字节就绪；浅绿 = 会话曾加载。请先点击预览再按方向键。',
+      '嵌入式预览（`presentation="contained"`）填满中央工作区，假侧栏仍可操作。使用受控 `index`、`showThumbnails` + `thumbnailsScope="flat"`、`preloadRadius={1}`、`preloadDisplaySlots={2}`（display-ready 解码；快开仍保留 minimap 占位直到视口主图可绘制）、`showThumbnailPreloadStatus` 与 `chrome="minimal"`。**蓝条** = display-ready；**绿条** = 字节就绪 / 会话曾加载。请先点击预览再按方向键。',
     demo5SidebarTitle: '侧栏',
     demo5ShowPreview: '显示预览',
     demo5HidePreview: '隐藏预览',
@@ -315,7 +315,7 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo5PreloadHint: '相邻预加载下标',
     demo6Title: 'Demo 6 · 本地大图 JPG（仅开发，已 gitignore）',
     demo6Desc:
-      '中间件读取 `./test-images` 中**带同名 thumbs/** 的全部原图。停稳后邻居出现最深绿（display-ready）时，应复用已解码层接近秒开清晰（侧栏：path + underlay/sharp 毫秒）。关掉 slots 可强制每次都走 cold。新增 JPG 后执行：`bash scripts/generate-test-image-thumbs.sh`。',
+      '中间件读取 `./test-images` 中**带同名 thumbs/** 的全部原图。停稳后邻居出现**蓝条**（display-ready）时，应复用已解码层接近秒开清晰（侧栏：path + underlay/sharp 毫秒）。关掉 slots 可强制每次都走 cold。新增 JPG 后执行：`bash scripts/generate-test-image-thumbs.sh`。',
     demo6SidebarTitle: '本地大图',
     demo6HowTo:
       '等 ± 邻居最深绿后 ←/→。期望 path=fast 且 sharp 远小于 cold（~1s）。cold 在解码后再多停约 800ms 模糊。',

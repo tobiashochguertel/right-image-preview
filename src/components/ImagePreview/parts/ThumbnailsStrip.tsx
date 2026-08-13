@@ -46,17 +46,20 @@ function itemKey(item: ImageItem, flatIndex: number): string {
   return item.id ?? `${flatIndex}-${item.src}`;
 }
 
-const GLASS_BG = 'rgba(6, 10, 20, 0.55)';
-/** Byte-level ready / loading in active window. */
-const PRELOAD_BAR_DARK_GREEN = '#2db85a';
-/** Display-ready (decode settled — fast reveal on navigate). */
-const PRELOAD_BAR_DISPLAY_READY = '#1a9f4b';
+/**
+ * Display-ready (decode settled — can switch over immediately).
+ * Blue is **not** “neighbor window”; only neighbors that finished decode get this color.
+ */
+const PRELOAD_BAR_DISPLAY_READY = '#3b82f6';
 const PRELOAD_BAR_GRAY = 'rgba(140, 150, 165, 0.55)';
 /**
  * Session-warm outside the window: HTTP cache likely, not guaranteed.
- * Lighter solid green — same family as ready, weaker confidence.
+ * Lighter solid green — same family as byte-ready, weaker confidence.
  */
 const PRELOAD_BAR_LIGHT_GREEN = 'rgba(62, 207, 106, 0.45)';
+/** Byte-level ready / in-progress fill (cache likely — not instant-switch). */
+const PRELOAD_BAR_DARK_GREEN = '#2db85a';
+const GLASS_BG = 'rgba(6, 10, 20, 0.55)';
 /** Match tile `borderRadius` so the bar sits on the straight bottom edge. */
 const PRELOAD_BAR_INSET_X = 4;
 const PRELOAD_BAR_HEIGHT = 2;
@@ -142,7 +145,9 @@ export function ThumbnailsStrip({
       const activePos = entries.findIndex((e) => e.flatIndex === activeFlatIndex);
       if (activePos < 0) return;
       const target = activePos * stride - scroller.clientWidth / 2 + tileOuter / 2;
-      scroller.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
+      // Instant scroll so the active border and strip position update with navigation
+      // (same beat as currentIndex), not after a smooth pan that lags the main stage.
+      scroller.scrollTo({ left: Math.max(0, target), behavior: 'auto' });
       return;
     }
 
@@ -150,7 +155,7 @@ export function ThumbnailsStrip({
     el.scrollIntoView({
       block: 'nearest',
       inline: 'center',
-      behavior: 'smooth',
+      behavior: 'auto',
     });
   }, [activeFlatIndex, useVirtual, entries, stride, tileOuter]);
 
@@ -189,7 +194,7 @@ export function ThumbnailsStrip({
           background: 'rgba(0, 0, 0, 0.35)',
           cursor: 'pointer',
           opacity: active ? 1 : THUMBNAIL_STRIP_INACTIVE_OPACITY,
-          transition: 'opacity 0.15s ease, border-color 0.15s ease',
+          transition: 'opacity 0.15s ease',
           overflow: 'hidden',
         }}
       >
@@ -213,11 +218,11 @@ export function ThumbnailsStrip({
             data-preload-bar={phase ?? 'loading'}
             title={
               isDisplayReady
-                ? 'Display-ready (fast reveal; underlay until drawable)'
+                ? 'Display-ready (blue): decoded — can switch immediately'
                 : isWarm
-                  ? 'Loaded earlier this session (cache likely, not guaranteed)'
+                  ? 'Session-warm (green): loaded earlier; cache likely, not guaranteed'
                   : phase === 'ready'
-                    ? 'Byte-ready (current or active preload window)'
+                    ? 'Byte-ready (green): bytes in window; cache likely, not instant-switch'
                     : 'Preloading…'
             }
             style={{
