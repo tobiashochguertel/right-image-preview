@@ -51,8 +51,8 @@ export const NAV_HOLD_MIN_STEP_INTERVAL_MS = 220;
 export const NAV_HOLD_MIN_VISIBLE_MS = 300;
 
 /**
- * @deprecated Prefer 1×1 opaque keep-alive (`DisplayStageLayers`). Kept for any host
- * code that still imports the constant; stage layers no longer use translucent full frames.
+ * @deprecated Stage keep-alive is **1×1 + opacity 1** (`DisplayStageLayers`). Kept for hosts
+ * that still import this constant; do not use for full-frame translucent plates.
  */
 export const DISPLAY_LAYER_KEEPALIVE_OPACITY = 0.02;
 

@@ -240,7 +240,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     const outgoingSrcRef = useRef<string | null>(null);
     const outgoingDimsRef = useRef<ImageDimensions | null>(null);
     const outgoingIndexRef = useRef(-1);
-    /** rAF ids for deferred outgoing clear (cancel on deps change / unmount). */
+    /** rAF ids for deferred outgoing→1×1 demotion (cancel on deps change / unmount). */
     const clearOutgoingRaf1Ref = useRef<number | null>(null);
     const clearOutgoingRaf2Ref = useRef<number | null>(null);
     /** Per-src frozen box + transform — never reuse the live transform for a leaving frame. */
@@ -281,9 +281,8 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       const prevSrc = prevSrcRef.current;
       const prevEl = layerElBySrcRef.current.get(prevSrc);
       const prevFrozen = frozenBySrcRef.current.get(prevSrc);
-      const prevFromEl =
-        !!(prevEl && prevEl.complete && prevEl.naturalWidth > 0);
-      // Prefer live <img>; fall back to frozen dims so Media Lens / remount still holds.
+      const prevFromEl = !!(prevEl && prevEl.complete && prevEl.naturalWidth > 0);
+      // Prefer live <img>; fall back to frozen dims so remount hosts still hold full-size.
       if (prevSrc && (prevFromEl || prevFrozen?.dims)) {
         holdSrc = prevSrc;
         holdIndex = prevIndexRef.current;
@@ -363,7 +362,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       const prevFrozen = frozenBySrcRef.current.get(prevSrc);
       const prevFromEl = !!(prevEl && prevEl.complete && prevEl.naturalWidth > 0);
 
-      // Outgoing hold: keep last frame full-size until incoming is the visible main.
+      // Outgoing hold: keep last frame full-size until incoming is full-size sharp (then 1×1).
       if (prevSrc && (prevFromEl || prevFrozen?.dims)) {
         const dims = prevFromEl
           ? {
@@ -834,9 +833,8 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       !progressive.fullDecoded &&
       progressive.preloadStage !== 'thumb-only';
 
-    // Drop outgoing hold only after the incoming layer is the visible full-size main.
-    // Shrinking previous to 1×1 any earlier → black stage + one pixel (Media Lens).
-    // useEffect + double rAF: demote only after current has had a chance to paint.
+    // Demote outgoing → 1×1 keep-alive only after incoming is full-size sharp *and* has
+    // painted (double rAF). Same commit demote as 1×1 expand left a black stage every hop.
     useEffect(() => {
       if (!outgoingSrc) return;
       if (hideMainUntilDecoded) return;
@@ -858,6 +856,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
         }
       };
       clearRafs();
+      // Overlap window: current already full-size under outgoing; then shrink previous.
       clearOutgoingRaf1Ref.current = requestAnimationFrame(() => {
         clearOutgoingRaf2Ref.current = requestAnimationFrame(() => {
           clearOutgoingRaf1Ref.current = null;

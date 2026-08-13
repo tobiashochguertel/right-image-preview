@@ -67,8 +67,8 @@ Outgoing hold and neighbor keep-alive order only inside **L1**; do not paper ove
 **Three beats on navigate:**
 
 1. **Immediately:** `currentIndex` advances → filmstrip active border (and strip position) move to the new index; L1 may still show the previous frame via **outgoing hold**.
-2. **While waiting:** as long as outgoing covers the stage and `showSwitchLoader` is true (default), **L4 loading** shows the center spinner. The previous frame must stay **full-size and opaque**; brief overlap with the next frame is fine. **Never** shrink the previous frame to 1×1 before the incoming full-size main has painted (that is the Media Lens “black + one pixel” regression).
-3. **On reveal:** only after incoming is `imageShowReady`, has dims, and its `<img>` is paintable — then **double rAF** so paint can commit — clear `isOutgoing` and demote the previous layer to neighbor **1×1 keep-alive**. Spinner turns **off in the same frame** (no fade).
+2. **While waiting:** as long as outgoing covers the stage and `showSwitchLoader` is true (default), **L4 loading** shows the center spinner. Previous frame stays **full-size opacity 1**; incoming may lay out full-size underneath. **Never** shrink previous to 1×1 before that (black stage + one pixel).
+3. **On reveal:** after incoming is `imageShowReady`, has dims, and its `<img>` is paintable — then **double rAF** (overlap: full-size next under outgoing) — clear `isOutgoing` and demote previous to neighbor **1×1 + opacity 1**. Spinner clears in lockstep (no fade).
 
 ---
 
@@ -100,7 +100,7 @@ Within memory budget, library + host should:
 3. **Pass a stable `preloadMemoryBudgetBytes`** (Tauri available RAM + `suggestPreloadMemoryBudgetBytes`) and width/height estimates so the budget can pick neighbors correctly.
 4. **Keep `preloadDisplayMode="slot"` (default)** for same-DOM promotion; `"decode"` is a memory fallback, not equal “instant.”
 5. **Sensible `preloadRadius` (often 1–2) + slots/budget** so after settle the next image is already display-ready.
-6. **Layer retention + compositor keep-alive**: `DisplayStageLayers` keeps current + neighbor full-`src` imgs under `key={src}`. Non-sharp neighbors paint as **1×1 + opacity 1** (not a full-size translucent plate); current `<img>` while under the thumb underlay is also 1×1 while the underlay uses the full box — so WKWebView/Chrome do not discard decoded bitmaps.
+6. **Layer retention + compositor keep-alive**: `DisplayStageLayers` keeps current + neighbor full-`src` imgs under `key={src}`. Non-sharp neighbors paint as **1×1 + opacity 1** (not full-frame translucent); current `<img>` under the thumb underlay is also 1×1 while the underlay uses the full box. **Outgoing hold stays full-size** until the next full-size main has painted, then shrinks to 1×1 — avoids WKWebView bitmap discard and the “black + one pixel” navigate flash.
 7. **Fast path**: on display-ready, skip dwell/spinner; underlay only until the viewport is drawable.
 
 ---
@@ -176,7 +176,7 @@ Full Tauri memory / props examples: [`media-lens-integration.md`](./media-lens-i
 | Progressive underlay → original / fast-path races | `useProgressiveMainImage.ts` |
 | Fully drawable / atomic reveal / WeakSet fast path | `lib/imagePreviewDecode.ts`, `ImagePreviewInner` |
 | Neighbor layer reuse + 1×1 keep-alive | `parts/DisplayStageLayers.tsx` |
-| Keep-alive strategy | Non-sharp: `1×1` + `opacity: 1` (not full-frame translucent) |
+| Keep-alive strategy | Non-sharp: `1×1` + `opacity: 1`; outgoing / sharp current: full size (`DISPLAY_LAYER_KEEPALIVE_OPACITY` deprecated) |
 | Display-ready pick, settle, panIdle, sticky src | `lib/neighborDisplayPreload.ts`, `useNeighborDisplayPreload.ts` |
 | Byte warm settle | `useNeighborPreload.ts` |
 | Short-press / long-press pacing | `useThumbPacedNavigation.ts`, `useImagePreviewKeyboard.ts` |
@@ -199,7 +199,8 @@ Dwell on N long enough
      ready layers not unmounted during settle pause)
 
 Navigate to N+1
-  → React reuses the same DOM node via key={src} (1×1 → full layout)
+  → outgoing full-size cover; N+1 lays out full-size underneath (may 1×1→full)
+  → double rAF overlap, then shrink previous to 1×1 keep-alive
   → preferFastReveal: skip secondary new Image() probe; drain layout pending race
   → scheduleRevealAfterDecode hits decodeSettled WeakSet → microtask reveal
   → underlay drops; sharp near-instant
@@ -211,16 +212,16 @@ Break any link and you fall back to **cold ≈ 1s** (typical: warm paused by mis
 
 **Problem:** Neighbor layers at `opacity: 0` / `visibility: hidden` often lose decoded bitmaps in WKWebView/Chromium. Strip may have been display-ready, but promote still costs ~0.5–1s `createImageBitmap`; A↔B thrashing pays that each way.
 
-**Approach (`DisplayStageLayers`):**
+**Approach (`DisplayStageLayers`: 1×1 + opacity 1; do not use full-frame ~2% plates):**
 
 | Layer | Layout | Opacity | Notes |
 |-------|--------|---------|-------|
 | Neighbor (not current / not outgoing) | **1×1 CSS px** | `1` | Compositor still paints → keep-alive; invisible; stable `key={src}` |
-| Current while under thumb | Full box (for underlay); **`<img>` 1×1** | `1` | Never `visibility:hidden` right before promote |
-| Current revealed / outgoing hold | Full size | `1` | Normal |
-| Thumb underlay | Cover current box | `1`→`0` | Covers unrevealed main |
+| Current while under thumb | Full box (for underlay); **`<img>` 1×1** | `1` | Never `visibility:hidden` |
+| Current revealed / **outgoing hold** | **Full size** (dims, else `'auto'` — never force 1) | `1` | Outgoing must cover the stage |
+| Thumb underlay | Cover | `1`→`0` | Covers unrevealed current |
 
-On promote, the same `<img>` only changes style (1×1 → natural size) — no `src` reload, no key change. Do **not** keep full frames at ~2% opacity (dark ghost through the frosted overlay).
+On promote, the same `<img>` changes style (1×1 → natural). **Incoming must be full-size sharp and overlap outgoing for ~two frames before previous shrinks to 1×1.** 0.3.10 demoted in the same commit as the 1×1→full expand → black + one pixel every hop.
 
 ### 9.3 Fast path: no second probe, drain races
 

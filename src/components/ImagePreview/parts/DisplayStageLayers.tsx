@@ -12,8 +12,8 @@ export interface DisplayLayerEntry {
   src: string;
   isCurrent: boolean;
   /**
-   * Previous image held **full-size on top** until the incoming current layer is visible.
-   * Only after that may this layer shrink to 1×1 keep-alive — never earlier.
+   * Previous frame held **full-size** (above / covering) until the incoming current layer
+   * has painted full-size sharp. Only then may this layer shrink to 1×1 keep-alive.
    */
   isOutgoing?: boolean;
 }
@@ -40,11 +40,20 @@ export interface DisplayStageLayersProps {
   underlay?: ReactNode;
 }
 
+function fullOrAuto(n: number | undefined): number | 'auto' {
+  return n && n > 0 ? n : 'auto';
+}
+
 /**
  * Independent absolute layers inside the viewport.
  *
- * Contract: outgoing stay **full-size** until current is sharp; only then demote neighbors to
- * **1×1 opaque** keep-alive. Demoting earlier → black stage with a single pixel.
+ * Keep-alive (neighbor / non-sharp): **1×1 CSS px + opacity 1** so the compositor retains
+ * the bitmap without a full-frame translucent ghost.
+ *
+ * Contract (do not regress):
+ * - `isOutgoing` and sharp current always paint **full-size** (dims, else `'auto'` — never 1).
+ * - Shrink previous to 1×1 only after incoming is the visible full-size main (see Inner).
+ * - Brief overlap: outgoing stays full while current is already full underneath, then demote.
  */
 export function DisplayStageLayers({
   layers,
@@ -70,18 +79,23 @@ export function DisplayStageLayers({
         const cssTransform = isCurrent
           ? liveTransform
           : frozen?.cssTransform ?? 'translate(0px, 0px) scale(1)';
+
         const currentSharp =
           isCurrent && !hideCurrentUntilDecoded && imageShowReady;
-        const paintFullFrame = currentSharp || !!isOutgoing;
-        const boxFull = paintFullFrame || (isCurrent && underlay != null);
+        // Full-size bitmap: outgoing cover, or current after reveal.
+        const paintFullImg = currentSharp || !!isOutgoing;
+        // Underlay needs a full box even while the full-res <img> stays 1×1.
+        const boxFull = paintFullImg || (isCurrent && underlay != null);
+
         const fullW = dims?.naturalWidth;
         const fullH = dims?.naturalHeight;
-        const boxW = boxFull && fullW ? fullW : boxFull ? 'auto' : 1;
-        const boxH = boxFull && fullH ? fullH : boxFull ? 'auto' : 1;
-        // Never collapse outgoing / sharp to 1×1 when dims briefly missing.
-        const imgW = paintFullFrame ? (fullW ?? 'auto') : 1;
-        const imgH = paintFullFrame ? (fullH ?? 'auto') : 1;
+        const boxW = boxFull ? fullOrAuto(fullW) : 1;
+        const boxH = boxFull ? fullOrAuto(fullH) : 1;
+        // Never force outgoing / sharp current to 1×1 when dims are briefly missing.
+        const imgW = paintFullImg ? fullOrAuto(fullW) : 1;
+        const imgH = paintFullImg ? fullOrAuto(fullH) : 1;
 
+        // Outgoing stays on top until Inner clears hold — current paints full underneath first.
         let zIndex = 1;
         if (isOutgoing) zIndex = 5;
         else if (currentSharp) zIndex = 4;
@@ -119,7 +133,7 @@ export function DisplayStageLayers({
                 transformOrigin: 'center center',
                 transition: transformTransition,
                 willChange: isCurrent ? 'transform' : undefined,
-                overflow: paintFullFrame ? undefined : 'hidden',
+                overflow: paintFullImg ? undefined : 'hidden',
               }}
             >
               {isCurrent ? underlay : null}
@@ -139,8 +153,8 @@ export function DisplayStageLayers({
                   display: 'block',
                   width: imgW,
                   height: imgH,
-                  maxWidth: paintFullFrame && fullW ? 'none' : undefined,
-                  maxHeight: paintFullFrame && fullH ? 'none' : undefined,
+                  maxWidth: paintFullImg && fullW ? 'none' : undefined,
+                  maxHeight: paintFullImg && fullH ? 'none' : undefined,
                   opacity: 1,
                   pointerEvents: 'none',
                   transition: 'none',

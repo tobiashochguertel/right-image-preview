@@ -68,8 +68,8 @@
 **切图时的三拍同步：**
 
 1. **立刻**：`currentIndex` 推进 → 底片条选中边框（及条带定位）切到新 index；L1 可用上一帧 **outgoing hold** 托底，主图看起来仍可暂留旧图。
-2. **等待揭开**：只要 outgoing 仍盖住舞台，且 `showSwitchLoader` 为真（默认），**L4 Loading** 显示中央 spinner。上一帧须保持**全尺寸全不透明**托底；允许与下一张有短暂重叠。**禁止**在下一张尚未以全尺寸主图层绘出前，就把上一张缩成 1×1（否则会黑屏只剩一点——Media Lens 回归过）。
-3. **揭开瞬间**：incoming 已 `imageShowReady`、有 dims、且 `<img>` 可绘制（再经 **双 rAF** 等一帧绘制）之后，才清除 `isOutgoing`；上一张再降为邻居 **1×1 保活**。spinner 与揭开**同帧**关掉（无淡出）。
+2. **等待揭开**：只要 outgoing 仍盖住舞台，且 `showSwitchLoader` 为真（默认），**L4 Loading** 显示中央 spinner。上一帧须保持**全尺寸 opacity 1** 托底；下一张可先在下层铺成全尺寸。**禁止**在下一张全尺寸主图层绘出前把上一张缩成 1×1（否则黑屏只剩一点）。
+3. **揭开瞬间**：incoming 已 `imageShowReady`、有 dims、`<img>` 可绘制，再经 **双 rAF**（两帧重叠：下层已是全尺寸新图）后才清 `isOutgoing`；上一张再降为邻居 **1×1 + opacity 1** 保活。spinner 与揭开同拍关掉（无淡出）。
 
 ---
 
@@ -101,7 +101,7 @@
 3. **传入稳定的 `preloadMemoryBudgetBytes`**（Tauri 读可用内存 + `suggestPreloadMemoryBudgetBytes`），并尽量提供宽高估算（EXIF / 索引），让预算能正确选邻。
 4. **`preloadDisplayMode="slot"`（默认）**：保留已解码 DOM，切图晋升同一节点；`"decode"` 仅作内存降级，不能指望同等秒开。
 5. **合适的 `preloadRadius`（常见 1～2）+ slots/预算**：停稳后把下一张解进 display-ready 池。
-6. **层复用 + 合成保活**：`DisplayStageLayers` 用 `key={src}` 挂住当前 + 邻居全尺寸图；非 sharp 邻居以 **1×1 CSS 像素 + opacity 1** 保活（不靠半透明大图），被占位盖住的当前 `<img>` 同样 1×1，underlay 仍用全尺寸盒——避免 WKWebView/Chrome 丢弃 `opacity:0` / 隐藏层的解码位图后切图再解 ~0.5–1s。
+6. **层复用 + 合成保活**：`DisplayStageLayers` 用 `key={src}` 挂住当前 + 邻居全尺寸图；非 sharp 邻居以 **1×1 CSS 像素 + opacity 1** 保活（勿用半透明全图）；被占位盖住的当前 `<img>` 同样 1×1，underlay 仍用全尺寸盒。**outgoing 托底必须全尺寸**，直到下一张全尺寸揭开后再缩 1×1——避免 WKWebView/Chrome 丢位图，也避免切图黑屏只剩一点。
 7. **快开路径**：命中 display-ready 时跳过 dwell/spinner，underlay 仅保留到视口可绘制。
 
 ---
@@ -177,7 +177,7 @@
 | 渐进占位 → 原图 / 快开竞态 | `useProgressiveMainImage.ts` |
 | 整图可绘制 / 原子揭开 / WeakSet 快路径 | `lib/imagePreviewDecode.ts`、`ImagePreviewInner` |
 | 邻居层复用 + 1×1 保活 | `parts/DisplayStageLayers.tsx` |
-| 保活策略 | 非 sharp：`1×1` + `opacity: 1`（勿用全图半透明） |
+| 保活策略 | 非 sharp：`1×1` + `opacity: 1`；outgoing / 已揭开当前：全尺寸（`DISPLAY_LAYER_KEEPALIVE_OPACITY` 已弃用） |
 | Display-ready 挑选、settle、panIdle、粘性 src | `lib/neighborDisplayPreload.ts`、`useNeighborDisplayPreload.ts` |
 | 字节预热 settle | `useNeighborPreload.ts` |
 | 短按 / 长按节奏 | `useThumbPacedNavigation.ts`、`useImagePreviewKeyboard.ts` |
@@ -196,10 +196,11 @@
   → settle 到期且 panIdle（邻居允许预热）
   → 邻居 N±1 的全尺寸 <img> 挂载、load + decode 落稳
   → readySrc 记 sticky；条带 phase = display-ready（**蓝条**）
-  → 合成器仍持有该位图（非零透明度保活，且 settle 暂停时不卸已就绪层）
+  → 合成器仍持有该位图（1×1 opaque 保活，且 settle 暂停时不卸已就绪层）
 
 用户切到 N+1
-  → React 以 key={src} 复用同一 DOM 节点（1×1 → 全尺寸布局）
+  → outgoing 全尺寸托底；N+1 先全尺寸铺在下层（可 1×1→全尺寸）
+  → 双 rAF 重叠后再把上一张缩成 1×1 保活
   → preferFastReveal：跳过二次 new Image() 探针；排空 layout 竞态 pending
   → scheduleRevealAfterDecode 命中 decodeSettled WeakSet → 微任务揭开
   → underlay 撤掉，sharp 接近瞬时
@@ -211,16 +212,16 @@
 
 **问题：** 邻居层若使用 `opacity: 0` 或 `visibility: hidden`，WKWebView / Chromium 常把已解码位图丢掉。条带虽曾是 display-ready，切过去仍要 `createImageBitmap` 再解约 0.5–1s；两张来回切也会各吃半秒。
 
-**做法（`DisplayStageLayers`）：**
+**做法（`DisplayStageLayers`：1×1 + opacity 1；勿再对全图用 ~2% 透明度）：**
 
 | 层 | 布局 | 透明度 | 说明 |
 |----|------|--------|------|
 | 邻居（非当前 / 非 outgoing） | **1×1 CSS 像素** | `1` | 合成器仍绘制 → 保活；肉眼不可见；`key={src}` 不变 |
-| 当前且仍被缩略盖住 | 盒全尺寸（给 underlay）；**`<img>` 1×1** | `1` | 不 `visibility:hidden`，避免晋升前丢位图 |
-| 当前已揭开 / outgoing 托底 | 全尺寸 | `1` | 正常显示 |
-| 缩略 underlay | 铺满当前盒 | `1`→`0` | 盖住未揭开的主图 |
+| 当前且仍被缩略盖住 | 盒全尺寸（给 underlay）；**`<img>` 1×1** | `1` | 不 `visibility:hidden` |
+| 当前已揭开 / **outgoing 托底** | **全尺寸**（dims 缺则 `'auto'`，禁止强制 1） | `1` | 托底必须盖住舞台 |
+| 缩略 underlay | 铺满 | `1`→`0` | 盖住未揭开的当前全图层 |
 
-晋升时同一 `<img>` 仅改 style（1×1 → natural 宽高），不重新 `src`、不换 key。勿再用全尺寸 ~2% 透明度保活（易透出「发黑残影」）。
+晋升：同一 `<img>` 改 style（1×1 → natural）；**必须先全尺寸揭开并与 outgoing 重叠至少约两帧，再把上一张缩 1×1**。0.3.10 曾在同一提交里撤托底+拉大下一张，导致次次黑屏一点。
 
 ### 9.3 快开路径：不要二次探针、排空竞态
 

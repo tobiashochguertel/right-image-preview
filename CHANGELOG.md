@@ -9,6 +9,12 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ## [Unreleased]
 
+## [0.3.12] — 2026-08-14
+
+### Changed
+
+- **Keep-alive reworked from 0.3.9 baseline** — non-sharp neighbors use **1×1 + `opacity: 1`** (no full-frame ~2% plates). **Outgoing stay full-size** (dims or `'auto'`, never forced to 1) until incoming is full-size sharp; then **double rAF** overlap before demoting previous to 1×1. Fixes the 0.3.10 failure mode where demote and 1×1→full expand happened in the same paint and every navigate flashed black + one pixel.
+
 ## [0.3.11] — 2026-08-14
 
 ### Fixed
