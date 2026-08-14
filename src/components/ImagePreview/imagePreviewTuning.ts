@@ -51,10 +51,28 @@ export const NAV_HOLD_MIN_STEP_INTERVAL_MS = 220;
 export const NAV_HOLD_MIN_VISIBLE_MS = 300;
 
 /**
- * @deprecated Stage keep-alive is **1×1 + opacity 1** (`DisplayStageLayers`). Kept for hosts
- * that still import this constant; do not use for full-frame translucent plates.
+ * @deprecated Prefer {@link DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_PREV} /
+ * {@link DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_NEXT}. Kept for hosts that still
+ * import this constant; stage layers no longer use translucent full frames.
  */
 export const DISPLAY_LAYER_KEEPALIVE_OPACITY = 0.02;
+
+/**
+ * Keep-alive size for **previous** neighbors (`index < current`): `0` → **1×1 CSS px**.
+ * Outgoing hold / sharp current still use full natural size.
+ */
+export const DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_PREV = 0;
+
+/**
+ * Keep-alive size for **next** neighbors (`index > current`): `0` → **1×1 CSS px**.
+ * Outgoing hold / sharp current still use full natural size.
+ */
+export const DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_NEXT = 0;
+
+/**
+ * @deprecated Prefer {@link DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_NEXT}. Same value for older hosts.
+ */
+export const DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO = DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_NEXT;
 
 // ── Viewport pan clamp (`useImageTransform`, axis-aligned overlap model) ─────
 

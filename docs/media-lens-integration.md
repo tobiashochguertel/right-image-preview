@@ -142,10 +142,30 @@ With current + two neighbors of ~9K: on the order of **0.5 GiB+** decoded before
 
 ---
 
-## 8. npm
+## 8. Install
+
+### 8.1 npm release
 
 ```bash
-npm install right-image-preview@^0.3.2
+npm install right-image-preview@^0.3.12
 ```
 
 Use **0.3.2+** (display-ready underlay + atomic reveal fixes; exports `suggestPreloadMemoryBudgetBytes`).
+
+### 8.2 Local pack (skip npm publish while iterating)
+
+If the host already uses a **repo-root** file dependency (Media Lens does):
+
+```json
+"right-image-preview": "file:../../../jsws/right-image-preview"
+```
+
+then in this repo run:
+
+```bash
+npm run pack:local
+```
+
+That writes `.local-build-at`, stamps `dist/`, copies `.local-pack/…`, and shows a **top-center red badge** like `local v0.3.12 · 2026-08-14 11:54:06`. Restart the host dev/Tauri process (Vite may cache). If `file:` copies instead of linking, also `npm install right-image-preview`.
+
+npm publish clears the stamp — no badge on registry builds.

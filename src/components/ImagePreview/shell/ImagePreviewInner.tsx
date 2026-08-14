@@ -30,6 +30,11 @@ import {
 import { injectGlobalStyle } from '../injectGlobalStyle';
 import { findGroup } from '../lib/imagePreviewFindGroup';
 import { scheduleRevealAfterDecode } from '../lib/imagePreviewDecode';
+import {
+  isLocalPackBuild,
+  LOCAL_PACK_BUILD_AT,
+  PACKAGE_VERSION,
+} from '../lib/localPackBuildInfo';
 import { mergeByteAndDisplayStatus, PRELOAD_DISPLAY_SETTLE_MS } from '../lib/neighborDisplayPreload';
 import {
   resolveDefaultGroupedFlatIndex,
@@ -240,9 +245,16 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     const outgoingSrcRef = useRef<string | null>(null);
     const outgoingDimsRef = useRef<ImageDimensions | null>(null);
     const outgoingIndexRef = useRef(-1);
-    /** rAF ids for deferred outgoing→1×1 demotion (cancel on deps change / unmount). */
-    const clearOutgoingRaf1Ref = useRef<number | null>(null);
-    const clearOutgoingRaf2Ref = useRef<number | null>(null);
+    /** rAF ids — reserved for reveal suppress cleanup only. */
+    const revealSuppressRafRef = useRef<number | null>(null);
+    /**
+     * Last full-size pose of the image currently on stage (dims + zoom/pan CSS).
+     * Captured while that src is stable; locked in `goTo` *before* resetPan/reset so
+     * outgoing hold keeps the real view instead of the post-reset fit pose.
+     */
+    const lastPresentationRef = useRef<LayerPresentation & { src: string } | null>(null);
+    /** After goTo snapshots outgoing, skip overwriting lastPresentation with reset transform. */
+    const presentationCaptureLockRef = useRef(false);
     /** Per-src frozen box + transform — never reuse the live transform for a leaving frame. */
     const frozenBySrcRef = useRef(new Map<string, LayerPresentation>());
     const [frozenEpoch, setFrozenEpoch] = useState(0);
@@ -269,6 +281,25 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       [currentImage.src, slotRenderEntries],
     );
 
+    // Track the live full pose while parked on one src (for outgoing hold).
+    // Only while src is stable — never on the navigate frame (would clobber the leaving snap).
+    if (
+      !presentationCaptureLockRef.current &&
+      prevSrcRef.current === currentImage.src &&
+      imageDims &&
+      imageDims.naturalWidth > 0 &&
+      imageDims.naturalHeight > 0
+    ) {
+      lastPresentationRef.current = {
+        src: currentImage.src,
+        dims: {
+          naturalWidth: imageDims.naturalWidth,
+          naturalHeight: imageDims.naturalHeight,
+        },
+        cssTransform: transform.cssTransform,
+      };
+    }
+
     /**
      * Same-frame outgoing capture: the first render after `src` changes must already mark the
      * previous image as outgoing, with its transform frozen — the live transform parent must
@@ -281,24 +312,33 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       const prevSrc = prevSrcRef.current;
       const prevEl = layerElBySrcRef.current.get(prevSrc);
       const prevFrozen = frozenBySrcRef.current.get(prevSrc);
+      const snap = lastPresentationRef.current;
+      const snapForPrev = snap && snap.src === prevSrc ? snap : null;
       const prevFromEl = !!(prevEl && prevEl.complete && prevEl.naturalWidth > 0);
-      // Prefer live <img>; fall back to frozen dims so remount hosts still hold full-size.
-      if (prevSrc && (prevFromEl || prevFrozen?.dims)) {
+      // Prefer last live pose (zoom/pan); then frozen; then <img> natural size.
+      if (prevSrc && (snapForPrev || prevFrozen?.dims || prevFromEl)) {
         holdSrc = prevSrc;
         holdIndex = prevIndexRef.current;
-        holdDims = prevFromEl
-          ? (imageDims ?? {
-              naturalWidth: prevEl!.naturalWidth,
-              naturalHeight: prevEl!.naturalHeight,
-            })
-          : { ...prevFrozen!.dims };
+        holdDims = snapForPrev
+          ? { ...snapForPrev.dims }
+          : prevFrozen?.dims
+            ? { ...prevFrozen.dims }
+            : {
+                naturalWidth: prevEl!.naturalWidth,
+                naturalHeight: prevEl!.naturalHeight,
+              };
+        const cssTransform =
+          snapForPrev?.cssTransform ??
+          prevFrozen?.cssTransform ??
+          transform.cssTransform;
         outgoingSrcRef.current = holdSrc;
         outgoingDimsRef.current = holdDims;
         outgoingIndexRef.current = holdIndex;
-        if (holdDims && !frozenBySrcRef.current.has(prevSrc)) {
+        if (holdDims) {
+          // Always overwrite — neighbor-era freeze must not keep a stale fit pose.
           frozenBySrcRef.current.set(prevSrc, {
             dims: { ...holdDims },
-            cssTransform: transform.cssTransform,
+            cssTransform,
           });
         }
       } else if (outgoingSrcRef.current && outgoingSrcRef.current !== currentImage.src) {
@@ -353,6 +393,16 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     }
     const underlayElRef = useRef<HTMLImageElement | null>(null);
 
+    // Cold open from gallery: seed layout from host EXIF before decode so the stage box
+    // has a real aspect (avoids underlay-in-collapsed-box → tall thin strip).
+    useLayoutEffect(() => {
+      const w = Number(currentImage.exif?.width);
+      const h = Number(currentImage.exif?.height);
+      if (Number.isFinite(w) && Number.isFinite(h) && w > 1 && h > 1) {
+        onImageLoad({ naturalWidth: w, naturalHeight: h });
+      }
+    }, [currentImage.src, currentImage.exif?.width, currentImage.exif?.height, onImageLoad]);
+
     useLayoutEffect(() => {
       if (prevSrcRef.current === currentImage.src) return;
 
@@ -360,23 +410,31 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       const prevIndex = prevIndexRef.current;
       const prevEl = layerElBySrcRef.current.get(prevSrc);
       const prevFrozen = frozenBySrcRef.current.get(prevSrc);
+      const snap = lastPresentationRef.current;
+      const snapForPrev = snap && snap.src === prevSrc ? snap : null;
       const prevFromEl = !!(prevEl && prevEl.complete && prevEl.naturalWidth > 0);
 
-      // Outgoing hold: keep last frame full-size until incoming is full-size sharp (then 1×1).
-      if (prevSrc && (prevFromEl || prevFrozen?.dims)) {
-        const dims = prevFromEl
-          ? {
-              naturalWidth: prevEl!.naturalWidth,
-              naturalHeight: prevEl!.naturalHeight,
-            }
-          : { ...prevFrozen!.dims };
+      // Outgoing hold: full-size + frozen zoom/pan until incoming is laid out full-size.
+      if (prevSrc && (snapForPrev || prevFrozen?.dims || prevFromEl)) {
+        const dims = snapForPrev
+          ? { ...snapForPrev.dims }
+          : prevFrozen?.dims
+            ? { ...prevFrozen.dims }
+            : {
+                naturalWidth: prevEl!.naturalWidth,
+                naturalHeight: prevEl!.naturalHeight,
+              };
+        const cssTransform =
+          snapForPrev?.cssTransform ??
+          prevFrozen?.cssTransform ??
+          transform.cssTransform;
         outgoingSrcRef.current = prevSrc;
         outgoingDimsRef.current = dims;
         outgoingIndexRef.current = prevIndex;
         setOutgoingSrc(prevSrc);
         setOutgoingIndex(prevIndex);
         setOutgoingDims(dims);
-        freezePresentation(prevSrc, dims, transform.cssTransform);
+        freezePresentation(prevSrc, dims, cssTransform);
       } else if (!outgoingSrcRef.current) {
         outgoingSrcRef.current = null;
         outgoingDimsRef.current = null;
@@ -389,6 +447,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
 
       prevSrcRef.current = currentImage.src;
       prevIndexRef.current = currentIndex;
+      presentationCaptureLockRef.current = false;
       setSuppressTransformForSrcSwitch(true);
 
       const el = layerElBySrcRef.current.get(currentImage.src);
@@ -436,8 +495,12 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       if (!el || !el.complete || el.naturalWidth <= 0) return;
       setPaceMainPainted(true);
       onImageLoad({ naturalWidth: el.naturalWidth, naturalHeight: el.naturalHeight });
-      scheduleRevealAfterDecode(el, onMainImgDecoded, IMAGE_DECODE_TIMEOUT_MS);
-    }, [currentImage.src, onImageLoad, onMainImgDecoded]);
+      if (preferFastReveal) {
+        onMainImgDecoded();
+      } else {
+        scheduleRevealAfterDecode(el, onMainImgDecoded, IMAGE_DECODE_TIMEOUT_MS);
+      }
+    }, [currentImage.src, onImageLoad, onMainImgDecoded, preferFastReveal]);
 
     const bindLayerRef = useCallback(
       (src: string, isCurrent: boolean) => (el: HTMLImageElement | null) => {
@@ -446,19 +509,21 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
         if (isCurrent && el && el.complete && el.naturalWidth > 0) {
           setPaceMainPainted(true);
           onImageLoad({ naturalWidth: el.naturalWidth, naturalHeight: el.naturalHeight });
-          scheduleRevealAfterDecode(el, onMainImgDecoded, IMAGE_DECODE_TIMEOUT_MS);
+          if (preferFastReveal) onMainImgDecoded();
+          else scheduleRevealAfterDecode(el, onMainImgDecoded, IMAGE_DECODE_TIMEOUT_MS);
         }
       },
-      [onImageLoad, onMainImgDecoded],
+      [onImageLoad, onMainImgDecoded, preferFastReveal],
     );
 
     const onCurrentLayerLoad = useCallback(
       (img: HTMLImageElement) => {
         setPaceMainPainted(true);
         onImageLoad({ naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight });
-        scheduleRevealAfterDecode(img, onMainImgDecoded, IMAGE_DECODE_TIMEOUT_MS);
+        if (preferFastReveal) onMainImgDecoded();
+        else scheduleRevealAfterDecode(img, onMainImgDecoded, IMAGE_DECODE_TIMEOUT_MS);
       },
-      [onImageLoad, onMainImgDecoded],
+      [onImageLoad, onMainImgDecoded, preferFastReveal],
     );
 
     // ── Group info ──────────────────────────────────────────────────────────
@@ -471,6 +536,43 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       (idx: number) => {
         if (images.length === 0) return;
         const clamped = Math.max(0, Math.min(images.length - 1, idx));
+        if (clamped === currentIndex) return;
+
+        // Snapshot the leaving frame *before* resetPan/reset — otherwise outgoing hold
+        // freezes the post-reset fit pose (or worse, races into 1×1 keep-alive).
+        const leaving = images[currentIndex];
+        const leavingSrc = leaving?.src;
+        const leavingEl = leavingSrc ? layerElBySrcRef.current.get(leavingSrc) : undefined;
+        const snap = lastPresentationRef.current;
+        const dims =
+          (snap && snap.src === leavingSrc ? snap.dims : null) ??
+          imageDims ??
+          (leavingEl && leavingEl.complete && leavingEl.naturalWidth > 0
+            ? {
+                naturalWidth: leavingEl.naturalWidth,
+                naturalHeight: leavingEl.naturalHeight,
+              }
+            : null);
+        const cssTransform =
+          snap && snap.src === leavingSrc
+            ? snap.cssTransform
+            : transform.cssTransform;
+        if (leavingSrc && dims) {
+          presentationCaptureLockRef.current = true;
+          lastPresentationRef.current = {
+            src: leavingSrc,
+            dims: { ...dims },
+            cssTransform,
+          };
+          freezePresentation(leavingSrc, dims, cssTransform);
+          outgoingSrcRef.current = leavingSrc;
+          outgoingDimsRef.current = dims;
+          outgoingIndexRef.current = currentIndex;
+          setOutgoingSrc(leavingSrc);
+          setOutgoingIndex(currentIndex);
+          setOutgoingDims(dims);
+        }
+
         if (!isIndexControlled) setCurrentIndex(clamped);
         setImageLoadError(false);
         onIndexChange?.(clamped);
@@ -480,7 +582,11 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
         if (switchImageResetTransform) resetOrientation();
       },
       [
-        images.length,
+        images,
+        currentIndex,
+        imageDims,
+        transform.cssTransform,
+        freezePresentation,
         isIndexControlled,
         onIndexChange,
         reset,
@@ -802,12 +908,16 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     // ── Derived ─────────────────────────────────────────────────────────────
     const atMinStop = mode === 'native' && nativePercent <= sortedStops[0];
     const atMaxStop = mode === 'native' && nativePercent >= sortedStops[sortedStops.length - 1];
-    const ready     = imageDims !== null && containerSize !== null;
+    const ready =
+      imageDims !== null &&
+      containerSize !== null &&
+      containerSize.width > 1 &&
+      containerSize.height > 1;
 
     // ── Prevent the "shrink on first load" animation bug ─────────────────────
     // When ready flips from false→true, keep opacity 0 for one frame so transform
-    // settles, then reveal. Across navigations with an outgoing hold, keep the stage
-    // visible (previous frame covers the gap) and only suppress transform easing.
+    // settles at fit (never animate 100%→fit). Across navigations with an outgoing
+    // hold, keep the stage visible and only suppress transform easing.
     useEffect(() => {
       if (!ready) {
         setImageShowReady(false);
@@ -816,15 +926,21 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       // Layout may have already armed outgoingSrcRef for this src change.
       if (outgoingSrcRef.current) {
         setImageShowReady(true);
-        const id = requestAnimationFrame(() => setSuppressTransformForSrcSwitch(false));
-        return () => cancelAnimationFrame(id);
+        setSuppressTransformForSrcSwitch(true);
+        // Keep easing off for the whole outgoing hold (promote keep-alive→full must be instant).
+        return;
       }
+      setSuppressTransformForSrcSwitch(true);
       setImageShowReady(false);
-      const id = requestAnimationFrame(() => {
+      let id2 = 0;
+      const id1 = requestAnimationFrame(() => {
         setImageShowReady(true);
-        setSuppressTransformForSrcSwitch(false);
+        id2 = requestAnimationFrame(() => setSuppressTransformForSrcSwitch(false));
       });
-      return () => cancelAnimationFrame(id);
+      return () => {
+        cancelAnimationFrame(id1);
+        if (id2) cancelAnimationFrame(id2);
+      };
       // Intentionally omit `outgoingSrc`: clearing the hold must not blank the stage.
     }, [ready, currentImage.src]);
 
@@ -833,47 +949,40 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       !progressive.fullDecoded &&
       progressive.preloadStage !== 'thumb-only';
 
-    // Demote outgoing → 1×1 keep-alive only after incoming is full-size sharp *and* has
-    // painted (double rAF). Same commit demote as 1×1 expand left a black stage every hop.
-    useEffect(() => {
+    // Drop outgoing as soon as the incoming layer can own the stage.
+    // Display-ready: do not wait for progressive fullDecoded / createImageBitmap — that gap
+    // was ~0.2–0.3s with the previous frame still visible after N+1 had already sized up.
+    useLayoutEffect(() => {
       if (!outgoingSrc) return;
-      if (hideMainUntilDecoded) return;
-      if (!imageShowReady) return;
       if (!imageDims || imageDims.naturalWidth <= 0) return;
       const el = layerElBySrcRef.current.get(currentImage.src);
-      const incomingPaintable = !!(el && el.complete && el.naturalWidth > 0);
-      if (!incomingPaintable && !paceMainPainted) return;
+      const incomingOk = !!(el && el.complete && el.naturalWidth > 0);
+      if (!incomingOk && !paceMainPainted) return;
 
-      let cancelled = false;
-      const clearRafs = () => {
-        if (clearOutgoingRaf1Ref.current != null) {
-          cancelAnimationFrame(clearOutgoingRaf1Ref.current);
-          clearOutgoingRaf1Ref.current = null;
-        }
-        if (clearOutgoingRaf2Ref.current != null) {
-          cancelAnimationFrame(clearOutgoingRaf2Ref.current);
-          clearOutgoingRaf2Ref.current = null;
-        }
-      };
-      clearRafs();
-      // Overlap window: current already full-size under outgoing; then shrink previous.
-      clearOutgoingRaf1Ref.current = requestAnimationFrame(() => {
-        clearOutgoingRaf2Ref.current = requestAnimationFrame(() => {
-          clearOutgoingRaf1Ref.current = null;
-          clearOutgoingRaf2Ref.current = null;
-          if (cancelled) return;
-          if (outgoingSrcRef.current !== outgoingSrc) return;
-          outgoingSrcRef.current = null;
-          outgoingDimsRef.current = null;
-          outgoingIndexRef.current = -1;
-          setOutgoingSrc(null);
-          setOutgoingIndex(-1);
-          setOutgoingDims(null);
-        });
-      });
+      if (preferFastReveal) {
+        // Retained decoded DOM — flip progressive + drop hold in this layout pass.
+        // Do not wait on imageShowReady / hideMainUntilDecoded (those added the visible lag).
+        onMainImgDecoded();
+      } else {
+        if (!imageShowReady) return;
+        if (hideMainUntilDecoded) return;
+      }
+
+      if (outgoingSrcRef.current !== outgoingSrc) return;
+      outgoingSrcRef.current = null;
+      outgoingDimsRef.current = null;
+      outgoingIndexRef.current = -1;
+      setOutgoingSrc(null);
+      setOutgoingIndex(-1);
+      setOutgoingDims(null);
+      setSuppressTransformForSrcSwitch(true);
+      const id = requestAnimationFrame(() => setSuppressTransformForSrcSwitch(false));
+      revealSuppressRafRef.current = id;
       return () => {
-        cancelled = true;
-        clearRafs();
+        if (revealSuppressRafRef.current != null) {
+          cancelAnimationFrame(revealSuppressRafRef.current);
+          revealSuppressRafRef.current = null;
+        }
       };
     }, [
       outgoingSrc,
@@ -883,6 +992,8 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       currentImage.src,
       paceMainPainted,
       progressive.fullDecoded,
+      preferFastReveal,
+      onMainImgDecoded,
     ]);
 
     // Current main image counts as ready once the full src is usable.
@@ -954,8 +1065,9 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       !progressive.fullDecoded;
 
     /** Same window as thumb-on-main / image switch: no `transform` easing (avoids shrink/zoom pop). */
+    const outgoingHolding = !!holdSrc && holdSrc !== currentImage.src;
     const suppressTransformTransition =
-      thumbHoldingMainArea || suppressTransformForSrcSwitch;
+      thumbHoldingMainArea || suppressTransformForSrcSwitch || outgoingHolding;
 
     /**
      * Waiting for the *current* main to be the visible sharp frame.
@@ -963,7 +1075,6 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
      * must not hide the L4 spinner during that gap (users otherwise see a stuck previous
      * frame with no feedback).
      */
-    const outgoingHolding = !!holdSrc && holdSrc !== currentImage.src;
     const awaitingMainReveal = outgoingHolding || hideMainUntilDecoded;
 
     /** Progressive: spinner over thumb underlay when not already covered by awaitingMainReveal. */
@@ -1081,6 +1192,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
             {progressive.preloadStage !== 'thumb-only' && (
               <DisplayStageLayers
                 layers={displayLayers}
+                currentIndex={currentIndex}
                 currentAlt={currentImage.alt ?? ''}
                 liveDims={imageDims}
                 liveTransform={transform.cssTransform}
@@ -1089,6 +1201,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                 suppressTransformTransition={suppressTransformTransition}
                 isPanning={isPanning || minimapDragging}
                 imageShowReady={imageShowReady}
+                forceCurrentAboveOutgoing={preferFastReveal && imageShowReady}
                 bindLayerRef={bindLayerRef}
                 onCurrentLoad={onCurrentLayerLoad}
                 onCurrentError={() => {
@@ -1112,7 +1225,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                         inset: 0,
                         width: '100%',
                         height: '100%',
-                        objectFit: 'fill',
+                        objectFit: 'contain',
                         pointerEvents: 'none',
                         display: 'block',
                         opacity: holdSrc
@@ -1369,6 +1482,36 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
               </div>
             )}
           </div>
+
+          {/* Above all floors — local pack only (file: / pack:local). */}
+          {isLocalPackBuild ? (
+            <div
+              data-rip-local-pack-badge=""
+              aria-hidden
+              title="right-image-preview local pack build time"
+              style={{
+                position: 'absolute',
+                top: 10,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 50,
+                pointerEvents: 'none',
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                fontSize: 11,
+                lineHeight: 1.3,
+                fontWeight: 500,
+                letterSpacing: '0.02em',
+                color: 'rgba(255, 220, 220, 0.9)',
+                background: 'rgba(140, 36, 36, 0.42)',
+                padding: '3px 8px',
+                borderRadius: 3,
+                whiteSpace: 'nowrap',
+                userSelect: 'none',
+              }}
+            >
+              {`local v${PACKAGE_VERSION} · ${LOCAL_PACK_BUILD_AT}`}
+            </div>
+          ) : null}
         </div>
       </div>
     );

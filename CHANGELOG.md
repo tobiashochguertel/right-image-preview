@@ -9,6 +9,16 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ## [Unreleased]
 
+### Added
+
+- **`npm run pack:local`** — builds into `.local-pack/right-image-preview/` for host `file:` installs (no npm publish needed for Media Lens iteration). Local packs show a top-center badge `local vX.Y.Z · YYYY-MM-DD HH:mm:ss`; npm publish builds have no badge.
+
+### Fixed
+
+- **Navigate hold keeps zoom/pan** — snapshot the leaving frame in `goTo` *before* `resetPan`/`reset`, and only demote outgoing→1×1 after the incoming `<img>` is laid out at full size (`getBoundingClientRect` ≥ 8px), not merely when decode flags flip (avoids black + one-pixel flash).
+- **Cold gallery open tall thin strip** — current layer keeps full geometry once dims exist (do not 1×1 the current img under underlay); seed layout from `exif.width/height` on open; underlay uses `objectFit: contain`.
+- **Cold open 100%→fit flash** — in fit mode do not use `scale: 1` before the viewport is measured; gate current-layer opacity on `imageShowReady` and suppress transform easing on first reveal.
+
 ## [0.3.12] — 2026-08-14
 
 ### Changed

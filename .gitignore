@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+.local-pack/
+.local-build-at
 
 # Local large-JPG fixtures for Demo 6 — private; never commit
 test-images/

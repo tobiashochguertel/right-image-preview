@@ -123,12 +123,18 @@ export function useProgressiveMainImage({
     const dwell = effectiveDwellMsRef.current;
     const elapsed = t0 == null ? 0 : performance.now() - t0;
     const wait = Math.max(0, dwell - elapsed);
-    revealTimeoutRef.current = window.setTimeout(() => {
+    const finish = () => {
       revealTimeoutRef.current = null;
       revealCompletedRef.current = true;
       setFullDecoded(true);
       onStageChangeRef.current?.('full-ready');
-    }, wait);
+    };
+    // Fast-reveal (dwell=0): finish sync so outgoing can drop in the same layout pass.
+    if (wait === 0) {
+      finish();
+      return;
+    }
+    revealTimeoutRef.current = window.setTimeout(finish, wait);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- onStageChangeRef, effectiveDwellMsRef
   }, [clearRevealTimeout]);
 

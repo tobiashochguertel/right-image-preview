@@ -44,6 +44,20 @@
 
 ---
 
+## 本地联调（不 publish）
+
+改库后频繁在 Media Lens 验证时，不必每次 `npm publish`：
+
+```bash
+npm run pack:local
+```
+
+产物目录：`.local-pack/right-image-preview/`（已 gitignore）。宿主用 `file:` 依赖指向该目录，详见 [`media-lens-integration.zh-CN.md`](./media-lens-integration.zh-CN.md) §8.2。本地包预览顶部会显示带秒级时间戳的 `local v…` 角标，便于确认装的是哪一次打包。
+
+正式发版仍走下文「发布清单」（本地 `npm publish` → tag）。
+
+---
+
 ## 发布清单
 
 **优先顺序：先本地 `npm publish`，再 push tag。**  

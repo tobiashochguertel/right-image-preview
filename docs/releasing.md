@@ -44,6 +44,20 @@ If your npm account has **"Require 2FA for write actions"** enabled, `npm publis
 
 ---
 
+## Local pack (no publish)
+
+While iterating against Media Lens, skip `npm publish`:
+
+```bash
+npm run pack:local
+```
+
+Output: `.local-pack/right-image-preview/` (gitignored). Point the host at it with a `file:` dependency — see [`media-lens-integration.md`](./media-lens-integration.md) §8.2. Local packs show a top `local v…` badge with a second-precision build time.
+
+Official releases still follow the checklist below (local `npm publish` → tag).
+
+---
+
 ## Release Checklist
 
 **Preferred order: local `npm publish` first, then push the tag.**  

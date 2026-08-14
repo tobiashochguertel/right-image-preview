@@ -82,6 +82,11 @@ export default defineConfig({
   // GitHub Pages serves the site under https://<user>.github.io/<repo>/
   // Set base to the repo name so all asset paths resolve correctly.
   base: '/right-image-preview/',
+  define: {
+    // Demo / vitest: no local-pack badge unless RIP_LOCAL_BUILD_AT is set.
+    __RIP_LOCAL_BUILD_AT__: JSON.stringify(process.env.RIP_LOCAL_BUILD_AT ?? ''),
+    __RIP_PACKAGE_VERSION__: JSON.stringify(process.env.RIP_PACKAGE_VERSION ?? '0.0.0-dev'),
+  },
   plugins: [react(), serveLocalTestImages()],
   test: {
     globals: true,

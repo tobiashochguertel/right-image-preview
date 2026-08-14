@@ -142,8 +142,34 @@ const budget = suggestPreloadMemoryBudgetBytes(available);
 
 ## 8. 安装
 
+### 8.1 npm 正式版
+
 ```bash
-npm install right-image-preview@^0.3.2
+npm install right-image-preview@^0.3.12
 ```
 
 请使用 **0.3.2+**（含 display-ready 占位与整图原子揭开修复；已导出 `suggestPreloadMemoryBudgetBytes`）。
+
+### 8.2 本地联调（免每次 npm publish）
+
+Media Lens 当前若使用：
+
+```json
+"right-image-preview": "file:../../../jsws/right-image-preview"
+```
+
+（指向**仓库根目录**）也可以。在库仓库执行：
+
+```bash
+npm run pack:local
+```
+
+会：
+
+1. 写入 `.local-build-at`（带秒级时间）并打进 `dist/`
+2. 同步一份到 `.local-pack/right-image-preview/`
+3. 预览**最顶层正中**显示红色角标，例如：`local v0.3.12 · 2026-08-14 11:52:03`
+
+然后在 Media Lens：**重启 dev / Tauri**（Vite 常会缓存 `node_modules`）。若 `file:` 是拷贝而非链接，再执行一次 `npm install right-image-preview`。
+
+看得到角标 = 确认用的是这次本地包；正式 `npm publish` 会清掉时间戳，无角标。

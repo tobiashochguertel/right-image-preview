@@ -1,4 +1,8 @@
 import type { ReactNode } from 'react';
+import {
+  DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_NEXT,
+  DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_PREV,
+} from '../imagePreviewTuning';
 import type { ImageDimensions } from '../useImageTransform';
 
 export interface LayerPresentation {
@@ -13,20 +17,22 @@ export interface DisplayLayerEntry {
   isCurrent: boolean;
   /**
    * Previous frame held **full-size** (above / covering) until the incoming current layer
-   * has painted full-size sharp. Only then may this layer shrink to 1×1 keep-alive.
+   * has painted full-size sharp. Only then may this layer shrink to keep-alive size.
    */
   isOutgoing?: boolean;
 }
 
 export interface DisplayStageLayersProps {
   layers: DisplayLayerEntry[];
+  /** Flat gallery index of the current image — used to pick prev vs next keep-alive size. */
+  currentIndex: number;
   currentAlt: string;
   /** Live dims / transform for the current image only. */
   liveDims: ImageDimensions | null;
   liveTransform: string;
   /** Per-src frozen presentation; outgoing / kept neighbors must not share the live transform. */
   frozenBySrc: ReadonlyMap<string, LayerPresentation>;
-  /** When true, current full-res stays under the minimap underlay (1×1 img until sharp). */
+  /** When true, current full-res stays under the minimap underlay until sharp. */
   hideCurrentUntilDecoded: boolean;
   suppressTransformTransition: boolean;
   isPanning: boolean;
@@ -36,27 +42,36 @@ export interface DisplayStageLayersProps {
   onCurrentLoad: (img: HTMLImageElement) => void;
   onCurrentError: () => void;
   onNeighborLoad: (index: number, el: HTMLImageElement) => void;
-  /** Progressive underlay — only mounted on the current layer, inside its transformed box. */
+  /**
+   * When true, promote current above outgoing as soon as dims are ready (display-ready fast path)
+   * without waiting for progressive fullDecoded — avoids ~0.2–0.3s with old frame still on top.
+   */
+  forceCurrentAboveOutgoing?: boolean;
+  /** Optional minimap / placeholder underlay rendered under the current sharp img. */
   underlay?: ReactNode;
 }
 
-function fullOrAuto(n: number | undefined): number | 'auto' {
-  return n && n > 0 ? n : 'auto';
+function hasBothDims(dims: ImageDimensions | null | undefined): dims is ImageDimensions {
+  return !!(
+    dims &&
+    dims.naturalWidth > 1 &&
+    dims.naturalHeight > 1
+  );
+}
+
+function keepAlivePx(natural: number, ratio: number): number {
+  return Math.max(1, Math.round(natural * ratio));
 }
 
 /**
  * Independent absolute layers inside the viewport.
  *
- * Keep-alive (neighbor / non-sharp): **1×1 CSS px + opacity 1** so the compositor retains
- * the bitmap without a full-frame translucent ghost.
- *
- * Contract (do not regress):
- * - `isOutgoing` and sharp current always paint **full-size** (dims, else `'auto'` — never 1).
- * - Shrink previous to 1×1 only after incoming is the visible full-size main (see Inner).
- * - Brief overlap: outgoing stays full while current is already full underneath, then demote.
+ * Keep-alive **neighbors**: prev / next → 1×1 CSS px + opacity 1.
+ * **Current** / **outgoing**: full natural size when dims are known.
  */
 export function DisplayStageLayers({
   layers,
+  currentIndex,
   currentAlt,
   liveDims,
   liveTransform,
@@ -70,35 +85,72 @@ export function DisplayStageLayers({
   onCurrentError,
   onNeighborLoad,
   underlay = null,
+  forceCurrentAboveOutgoing = false,
 }: DisplayStageLayersProps) {
   return (
     <>
       {layers.map(({ src, index, isCurrent, isOutgoing }) => {
         const frozen = frozenBySrc.get(src);
-        const dims = isCurrent ? liveDims : frozen?.dims ?? null;
+        // Prefer live dims; fall back to frozen so the first navigate paint is already
+        // full natural size while useImageTransform catches up.
+        const dims = isCurrent ? liveDims ?? frozen?.dims ?? null : frozen?.dims ?? null;
         const cssTransform = isCurrent
           ? liveTransform
           : frozen?.cssTransform ?? 'translate(0px, 0px) scale(1)';
+        const dimsReady = hasBothDims(dims);
+
+        const keepRatio =
+          index < currentIndex
+            ? DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_PREV
+            : DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_NEXT;
 
         const currentSharp =
           isCurrent && !hideCurrentUntilDecoded && imageShowReady;
-        // Full-size bitmap: outgoing cover, or current after reveal.
-        const paintFullImg = currentSharp || !!isOutgoing;
-        // Underlay needs a full box even while the full-res <img> stays 1×1.
-        const boxFull = paintFullImg || (isCurrent && underlay != null);
+        // Current keeps full geometry once dims exist (underlay covers until sharp).
+        // Neighbors use keep-alive size (ratio × natural), not full sharp.
+        const paintFullImg = !!isOutgoing || currentSharp || (isCurrent && dimsReady);
+        const needsStageFillBox = isCurrent && !dimsReady && underlay != null;
+        const boxFull = paintFullImg || needsStageFillBox || (isCurrent && underlay != null && dimsReady);
+        const keepAliveSized = !paintFullImg && !needsStageFillBox && dimsReady;
 
-        const fullW = dims?.naturalWidth;
-        const fullH = dims?.naturalHeight;
-        const boxW = boxFull ? fullOrAuto(fullW) : 1;
-        const boxH = boxFull ? fullOrAuto(fullH) : 1;
-        // Never force outgoing / sharp current to 1×1 when dims are briefly missing.
-        const imgW = paintFullImg ? fullOrAuto(fullW) : 1;
-        const imgH = paintFullImg ? fullOrAuto(fullH) : 1;
+        let boxW: number | string = 1;
+        let boxH: number | string = 1;
+        if (needsStageFillBox) {
+          boxW = '100%';
+          boxH = '100%';
+        } else if (boxFull && dimsReady) {
+          boxW = dims.naturalWidth;
+          boxH = dims.naturalHeight;
+        } else if (keepAliveSized) {
+          boxW = keepAlivePx(dims.naturalWidth, keepRatio);
+          boxH = keepAlivePx(dims.naturalHeight, keepRatio);
+        } else if (boxFull) {
+          boxW = 'auto';
+          boxH = 'auto';
+        }
 
-        // Outgoing stays on top until Inner clears hold — current paints full underneath first.
+        const imgW = paintFullImg && dimsReady
+          ? dims.naturalWidth
+          : paintFullImg
+            ? 'auto'
+            : keepAliveSized
+              ? keepAlivePx(dims.naturalWidth, keepRatio)
+              : 1;
+        const imgH = paintFullImg && dimsReady
+          ? dims.naturalHeight
+          : paintFullImg
+            ? 'auto'
+            : keepAliveSized
+              ? keepAlivePx(dims.naturalHeight, keepRatio)
+              : 1;
+
+        // When current is sharp (or display-ready force), above outgoing so uncover is instant.
         let zIndex = 1;
-        if (isOutgoing) zIndex = 5;
-        else if (currentSharp) zIndex = 4;
+        const currentOnTop =
+          currentSharp ||
+          (forceCurrentAboveOutgoing && isCurrent && dimsReady && imageShowReady);
+        if (currentOnTop) zIndex = 6;
+        else if (isOutgoing) zIndex = 5;
         else if (isCurrent) zIndex = 3;
         else if (frozen) zIndex = 2;
 
@@ -106,6 +158,10 @@ export function DisplayStageLayers({
           isCurrent && !isPanning && !suppressTransformTransition && imageShowReady
             ? 'transform 0.3s ease'
             : 'none';
+
+        const useLiveTransform = (boxFull || keepAliveSized) && !needsStageFillBox;
+        // Hide current until fit scale is settled (imageShowReady). Avoids native-100% flash.
+        const layerOpacity = isCurrent && !imageShowReady ? 0 : 1;
 
         return (
           <div
@@ -120,6 +176,7 @@ export function DisplayStageLayers({
               justifyContent: 'center',
               zIndex,
               pointerEvents: 'none',
+              opacity: layerOpacity,
             }}
           >
             <div
@@ -127,13 +184,13 @@ export function DisplayStageLayers({
                 position: 'relative',
                 width: boxW,
                 height: boxH,
-                maxWidth: boxFull && fullW ? 'none' : undefined,
-                maxHeight: boxFull && fullH ? 'none' : undefined,
-                transform: boxFull ? cssTransform : undefined,
+                maxWidth: needsStageFillBox ? '100%' : dimsReady ? 'none' : undefined,
+                maxHeight: needsStageFillBox ? '100%' : dimsReady ? 'none' : undefined,
+                transform: useLiveTransform ? cssTransform : undefined,
                 transformOrigin: 'center center',
                 transition: transformTransition,
                 willChange: isCurrent ? 'transform' : undefined,
-                overflow: paintFullImg ? undefined : 'hidden',
+                overflow: paintFullImg || needsStageFillBox || keepAliveSized ? undefined : 'hidden',
               }}
             >
               {isCurrent ? underlay : null}
@@ -153,8 +210,8 @@ export function DisplayStageLayers({
                   display: 'block',
                   width: imgW,
                   height: imgH,
-                  maxWidth: paintFullImg && fullW ? 'none' : undefined,
-                  maxHeight: paintFullImg && fullH ? 'none' : undefined,
+                  maxWidth: (paintFullImg || keepAliveSized) && dimsReady ? 'none' : undefined,
+                  maxHeight: (paintFullImg || keepAliveSized) && dimsReady ? 'none' : undefined,
                   opacity: 1,
                   pointerEvents: 'none',
                   transition: 'none',

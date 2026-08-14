@@ -414,7 +414,10 @@ export function useImageTransform(options: UseImageTransformOptions): UseImageTr
   let scale = 1;
   let fitEquivalentNativePercent: number | undefined;
 
-  if (imageDims && containerSize) {
+  const containerReady =
+    !!containerSize && containerSize.width > 1 && containerSize.height > 1;
+
+  if (imageDims && containerReady) {
     // Normalise to 0-359 for the swap check (rotation may be negative or > 360).
     const normDeg = ((rotation % 360) + 360) % 360;
     const isSwapped = normDeg === 90 || normDeg === 270;
@@ -424,6 +427,10 @@ export function useImageTransform(options: UseImageTransformOptions): UseImageTr
     const fitScale = computeFitScale(fitDims, containerSize);
     fitEquivalentNativePercent = fitScale * 100;
     scale = mode === 'fit' ? fitScale : nativePercent / 100;
+  } else if (mode === 'fit' && imageDims && !containerReady) {
+    // EXIF/dims often arrive before ResizeObserver. scale=1 would flash native 100% then
+    // jump to fit — keep scale 0 until the viewport is measured.
+    scale = 0;
   }
 
   const effectiveTx = mode === 'fit' ? 0 : translateX;
