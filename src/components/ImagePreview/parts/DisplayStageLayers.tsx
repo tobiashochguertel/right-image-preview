@@ -42,11 +42,6 @@ export interface DisplayStageLayersProps {
   onCurrentLoad: (img: HTMLImageElement) => void;
   onCurrentError: () => void;
   onNeighborLoad: (index: number, el: HTMLImageElement) => void;
-  /**
-   * When true, promote current above outgoing as soon as dims are ready (display-ready fast path)
-   * without waiting for progressive fullDecoded — avoids ~0.2–0.3s with old frame still on top.
-   */
-  forceCurrentAboveOutgoing?: boolean;
   /** Optional minimap / placeholder underlay rendered under the current sharp img. */
   underlay?: ReactNode;
 }
@@ -59,15 +54,16 @@ function hasBothDims(dims: ImageDimensions | null | undefined): dims is ImageDim
   );
 }
 
-function keepAlivePx(natural: number, ratio: number): number {
+function keepAliveCropPx(natural: number, ratio: number): number {
   return Math.max(1, Math.round(natural * ratio));
 }
 
 /**
  * Independent absolute layers inside the viewport.
  *
- * Keep-alive **neighbors**: prev / next → 1×1 CSS px + opacity 1.
- * **Current** / **outgoing**: full natural size when dims are known.
+ * Keep-alive **neighbors**: full-natural `<img>` clipped to a small crop window (no CSS
+ * scale, **no fit transform** — avoids a viewport-tall “strip” of 1:1 pixels).
+ * **Current** / **outgoing**: full natural size + transform when dims are known.
  */
 export function DisplayStageLayers({
   layers,
@@ -85,8 +81,9 @@ export function DisplayStageLayers({
   onCurrentError,
   onNeighborLoad,
   underlay = null,
-  forceCurrentAboveOutgoing = false,
 }: DisplayStageLayersProps) {
+  const hasOutgoing = layers.some((l) => l.isOutgoing);
+
   return (
     <>
       {layers.map(({ src, index, isCurrent, isOutgoing }) => {
@@ -107,11 +104,11 @@ export function DisplayStageLayers({
         const currentSharp =
           isCurrent && !hideCurrentUntilDecoded && imageShowReady;
         // Current keeps full geometry once dims exist (underlay covers until sharp).
-        // Neighbors use keep-alive size (ratio × natural), not full sharp.
         const paintFullImg = !!isOutgoing || currentSharp || (isCurrent && dimsReady);
         const needsStageFillBox = isCurrent && !dimsReady && underlay != null;
         const boxFull = paintFullImg || needsStageFillBox || (isCurrent && underlay != null && dimsReady);
-        const keepAliveSized = !paintFullImg && !needsStageFillBox && dimsReady;
+        // Neighbor keep-alive: clip window only — bitmap stays natural size.
+        const keepAliveCropped = !paintFullImg && !needsStageFillBox && dimsReady;
 
         let boxW: number | string = 1;
         let boxH: number | string = 1;
@@ -121,36 +118,32 @@ export function DisplayStageLayers({
         } else if (boxFull && dimsReady) {
           boxW = dims.naturalWidth;
           boxH = dims.naturalHeight;
-        } else if (keepAliveSized) {
-          boxW = keepAlivePx(dims.naturalWidth, keepRatio);
-          boxH = keepAlivePx(dims.naturalHeight, keepRatio);
+        } else if (keepAliveCropped) {
+          // Square-ish clip from ratio; with ratio 0 → 1×1. Do not use a tall natural-height
+          // window or the stage will show a vertical strip of 1:1 pixels.
+          boxW = keepAliveCropPx(dims.naturalWidth, keepRatio);
+          boxH = keepAliveCropPx(dims.naturalHeight, keepRatio);
         } else if (boxFull) {
           boxW = 'auto';
           boxH = 'auto';
         }
 
-        const imgW = paintFullImg && dimsReady
+        // Keep-alive: never shrink the img — only the overflow box crops it.
+        const imgW = (paintFullImg || keepAliveCropped) && dimsReady
           ? dims.naturalWidth
           : paintFullImg
             ? 'auto'
-            : keepAliveSized
-              ? keepAlivePx(dims.naturalWidth, keepRatio)
-              : 1;
-        const imgH = paintFullImg && dimsReady
+            : 1;
+        const imgH = (paintFullImg || keepAliveCropped) && dimsReady
           ? dims.naturalHeight
           : paintFullImg
             ? 'auto'
-            : keepAliveSized
-              ? keepAlivePx(dims.naturalHeight, keepRatio)
-              : 1;
+            : 1;
 
-        // When current is sharp (or display-ready force), above outgoing so uncover is instant.
+        // While outgoing holds, it stays on top — current prepares underneath.
         let zIndex = 1;
-        const currentOnTop =
-          currentSharp ||
-          (forceCurrentAboveOutgoing && isCurrent && dimsReady && imageShowReady);
-        if (currentOnTop) zIndex = 6;
-        else if (isOutgoing) zIndex = 5;
+        if (isOutgoing) zIndex = 5;
+        else if (currentSharp && !hasOutgoing) zIndex = 6;
         else if (isCurrent) zIndex = 3;
         else if (frozen) zIndex = 2;
 
@@ -159,8 +152,10 @@ export function DisplayStageLayers({
             ? 'transform 0.3s ease'
             : 'none';
 
-        const useLiveTransform = (boxFull || keepAliveSized) && !needsStageFillBox;
-        // Hide current until fit scale is settled (imageShowReady). Avoids native-100% flash.
+        // Critical: keep-alive must NOT reuse the fit/pan transform. Applying fit-scale (or
+        // worse, scale(1)) to a natural-size bitmap makes the viewport clip a tall “strip”
+        // (~window width) of the previous photo after demote.
+        const useLiveTransform = boxFull && !needsStageFillBox && !keepAliveCropped;
         const layerOpacity = isCurrent && !imageShowReady ? 0 : 1;
 
         return (
@@ -190,7 +185,7 @@ export function DisplayStageLayers({
                 transformOrigin: 'center center',
                 transition: transformTransition,
                 willChange: isCurrent ? 'transform' : undefined,
-                overflow: paintFullImg || needsStageFillBox || keepAliveSized ? undefined : 'hidden',
+                overflow: keepAliveCropped ? 'hidden' : undefined,
               }}
             >
               {isCurrent ? underlay : null}
@@ -210,8 +205,8 @@ export function DisplayStageLayers({
                   display: 'block',
                   width: imgW,
                   height: imgH,
-                  maxWidth: (paintFullImg || keepAliveSized) && dimsReady ? 'none' : undefined,
-                  maxHeight: (paintFullImg || keepAliveSized) && dimsReady ? 'none' : undefined,
+                  maxWidth: (paintFullImg || keepAliveCropped) && dimsReady ? 'none' : undefined,
+                  maxHeight: (paintFullImg || keepAliveCropped) && dimsReady ? 'none' : undefined,
                   opacity: 1,
                   pointerEvents: 'none',
                   transition: 'none',

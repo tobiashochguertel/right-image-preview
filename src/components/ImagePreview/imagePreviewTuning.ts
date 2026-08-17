@@ -58,14 +58,17 @@ export const NAV_HOLD_MIN_VISIBLE_MS = 300;
 export const DISPLAY_LAYER_KEEPALIVE_OPACITY = 0.02;
 
 /**
- * Keep-alive size for **previous** neighbors (`index < current`): `0` → **1×1 CSS px**.
- * Outgoing hold / sharp current still use full natural size.
+ * Keep-alive **crop window** for **previous** neighbors (`index < current`), as a fraction of
+ * natural size. The `<img>` stays at full natural pixels; only the box is clipped
+ * (`overflow: hidden`) — not CSS-scaled. Keep layers also **drop the fit transform**
+ * (otherwise natural-resolution pixels get clipped by the viewport into a tall strip).
+ * `0` → 1×1 CSS px window (recommended).
  */
 export const DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_PREV = 0;
 
 /**
- * Keep-alive size for **next** neighbors (`index > current`): `0` → **1×1 CSS px**.
- * Outgoing hold / sharp current still use full natural size.
+ * Keep-alive **crop window** for **next** neighbors (`index > current`).
+ * Same semantics as {@link DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_PREV}.
  */
 export const DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_NEXT = 0;
 

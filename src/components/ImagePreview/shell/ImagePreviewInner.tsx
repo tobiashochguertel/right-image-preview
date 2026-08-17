@@ -245,7 +245,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     const outgoingSrcRef = useRef<string | null>(null);
     const outgoingDimsRef = useRef<ImageDimensions | null>(null);
     const outgoingIndexRef = useRef(-1);
-    /** rAF ids — reserved for reveal suppress cleanup only. */
+    /** rAF ids — reveal suppress cleanup only. */
     const revealSuppressRafRef = useRef<number | null>(null);
     /**
      * Last full-size pose of the image currently on stage (dims + zoom/pan CSS).
@@ -949,23 +949,22 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       !progressive.fullDecoded &&
       progressive.preloadStage !== 'thumb-only';
 
-    // Drop outgoing as soon as the incoming layer can own the stage.
-    // Display-ready: do not wait for progressive fullDecoded / createImageBitmap — that gap
-    // was ~0.2–0.3s with the previous frame still visible after N+1 had already sized up.
+    // Atomic uncover: outgoing stays on top until incoming is ready, then clear outgoing in
+    // the same layout pass so the next paint shows new full + old 1×1 together (no lag where
+    // the new frame is already up and the old full frame still peeks for ~0.x s).
     useLayoutEffect(() => {
       if (!outgoingSrc) return;
-      if (!imageDims || imageDims.naturalWidth <= 0) return;
+      if (!imageShowReady) return;
+      if (!imageDims || imageDims.naturalWidth <= 1 || imageDims.naturalHeight <= 1) return;
       const el = layerElBySrcRef.current.get(currentImage.src);
-      const incomingOk = !!(el && el.complete && el.naturalWidth > 0);
-      if (!incomingOk && !paceMainPainted) return;
+      const incomingOk = !!(el && el.complete && el.naturalWidth > 1);
+      if (!incomingOk) return;
 
       if (preferFastReveal) {
-        // Retained decoded DOM — flip progressive + drop hold in this layout pass.
-        // Do not wait on imageShowReady / hideMainUntilDecoded (those added the visible lag).
+        // Sync dwell=0 fullDecoded + demote in one React batch → one paint swap.
         onMainImgDecoded();
-      } else {
-        if (!imageShowReady) return;
-        if (hideMainUntilDecoded) return;
+      } else if (hideMainUntilDecoded) {
+        return;
       }
 
       if (outgoingSrcRef.current !== outgoingSrc) return;
@@ -990,7 +989,6 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       imageShowReady,
       imageDims,
       currentImage.src,
-      paceMainPainted,
       progressive.fullDecoded,
       preferFastReveal,
       onMainImgDecoded,
@@ -1201,7 +1199,6 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                 suppressTransformTransition={suppressTransformTransition}
                 isPanning={isPanning || minimapDragging}
                 imageShowReady={imageShowReady}
-                forceCurrentAboveOutgoing={preferFastReveal && imageShowReady}
                 bindLayerRef={bindLayerRef}
                 onCurrentLoad={onCurrentLayerLoad}
                 onCurrentError={() => {
