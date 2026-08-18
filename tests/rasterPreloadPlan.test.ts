@@ -71,7 +71,7 @@ describe('buildRasterPreloadPlan', () => {
     expect(plan.map((item) => item.resourceKey)).toEqual(['b']);
   });
 
-  it('keeps a fixed Screen core while a smaller image-stage viewport extends the Browse ring', () => {
+  it('uses only Screen when the small image-stage viewport can fit every candidate', () => {
     const rows: ImageItem[] = Array.from({ length: 31 }, (_, index) => ({
       id: String(index),
       src: `/${index}.jpg`,
@@ -103,13 +103,40 @@ describe('buildRasterPreloadPlan', () => {
     const browseCount = (plan: typeof small) =>
       plan.snapshot.browseForwardIndexes.length + plan.snapshot.browseBackwardIndexes.length;
 
-    expect(screenCount(small)).toBe(5);
+    expect(screenCount(small)).toBe(candidates.length);
     expect(screenCount(large)).toBe(5);
-    expect(browseCount(small)).toBeGreaterThan(browseCount(large));
+    expect(browseCount(small)).toBe(0);
+    expect(browseCount(large)).toBeGreaterThan(0);
     expect(large.snapshot.screenForwardIndexes.length).toBeGreaterThanOrEqual(3);
     expect(large.snapshot.screenBackwardIndexes.length).toBeGreaterThanOrEqual(2);
     expect(large.snapshot.browseForwardIndexes.length +
       large.snapshot.browseBackwardIndexes.length).toBeGreaterThan(0);
+  });
+
+  it('shrinks the Screen core to one neighbour per side under full-screen pressure', () => {
+    const rows: ImageItem[] = Array.from({ length: 21 }, (_, index) => ({
+      id: String(index),
+      src: `/${index}.jpg`,
+      exif: { width: 7000, height: 4000 },
+    }));
+    const plan = planRasterNeighborLods({
+      candidates: buildRasterPreloadPlan({
+        images: rows,
+        currentIndex: 10,
+        direction: 1,
+        range: 'auto',
+        maxCount: 20,
+      }),
+      viewport: { width: 2560, height: 1440, dpr: 2 },
+      budgetBytes: 150 * 1024 * 1024,
+      reservedBytes: 0,
+      maxTextureSize: 16_384,
+    });
+
+    expect(plan.snapshot.screenForwardIndexes).toEqual([11]);
+    expect(plan.snapshot.screenBackwardIndexes).toEqual([9]);
+    expect(plan.snapshot.browseForwardIndexes.length +
+      plan.snapshot.browseBackwardIndexes.length).toBeGreaterThan(0);
   });
 
   it('keeps each direction as a contiguous Screen core followed by a Browse ring', () => {

@@ -202,11 +202,31 @@ export function planRasterNeighborLods({
     backward: candidates.filter((candidate) => candidate.side === 'backward')
       .sort((a, b) => a.distance - b.distance),
   } as const;
+  const totalScreenBytes = candidates.reduce(
+    (sum, candidate) => sum + costs.get(candidate.resourceKey)!.screen,
+    0,
+  );
+  const representativeScreenBytes = percentile(
+    candidates.map((candidate) => costs.get(candidate.resourceKey)!.screen),
+    0.75,
+  );
+  // When all candidate Screen textures fit, Browse has no visual benefit: use
+  // only Screen. Otherwise P75 guards the core size against a run of larger
+  // images without letting one unusually tiny image inflate the estimate.
+  const estimatedScreenCapacity = representativeScreenBytes > 0
+    ? Math.floor(budgetLeft / representativeScreenBytes)
+    : 0;
+  const targetScreenCount = totalScreenBytes <= budgetLeft
+    ? candidates.length
+    : Math.min(
+        candidates.length,
+        Math.max(2, Math.min(5, estimatedScreenCapacity)),
+      );
   const screenCursor = { forward: 0, backward: 0 };
   const screenBlocked = { forward: false, backward: false };
   const admitScreen = (side: RasterPreloadSource['side']) => {
     if (screenBlocked[side]) return;
-    const candidate = bySide[side][screenCursor[side]++];
+    const candidate = bySide[side][screenCursor[side]];
     if (!candidate) {
       screenBlocked[side] = true;
       return;
@@ -220,13 +240,22 @@ export function planRasterNeighborLods({
     }
     state.set(candidate.resourceKey, 'screen');
     admissionOrder.set(candidate.resourceKey, nextAdmissionOrder++);
+    screenCursor[side] += 1;
     used += cost;
   };
-  // The active direction gets the final third candidate, preserving the
-  // intended 3-forward / 2-backward, otherwise near-even, Screen core.
-  for (let distance = 0; distance < RASTER_SCREEN_FORWARD_MIN; distance += 1) {
-    admitScreen('forward');
-    if (distance < RASTER_SCREEN_BACKWARD_MIN) admitScreen('backward');
+  // Expand from the active image outwards on both sides. A tie is resolved in
+  // favour of the active navigation direction, so a five-item core is 3/2.
+  while (state.size < targetScreenCount) {
+    const forwardCount = screenCursor.forward;
+    const backwardCount = screenCursor.backward;
+    const preferred: RasterPreloadSource['side'] =
+      forwardCount <= backwardCount ? 'forward' : 'backward';
+    const alternative: RasterPreloadSource['side'] =
+      preferred === 'forward' ? 'backward' : 'forward';
+    const before = state.size;
+    admitScreen(preferred);
+    if (state.size === before) admitScreen(alternative);
+    if (state.size === before) break;
   }
 
   const coverageCursor = { ...screenCursor };
@@ -322,4 +351,14 @@ export function estimateRasterTextureBytes(
   const limit = Math.max(1, maxTextureSize);
   const scale = Math.min(1, limit / Math.max(fitted.width, fitted.height));
   return Math.max(4, Math.round(fitted.width * scale) * Math.round(fitted.height * scale) * 4);
+}
+
+function percentile(values: readonly number[], ratio: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.ceil(sorted.length * ratio) - 1),
+  );
+  return sorted[index];
 }

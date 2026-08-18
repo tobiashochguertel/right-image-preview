@@ -30,7 +30,7 @@
 | **导航小地图** | 主图溢出视口时右下角缩略图 + 可拖视口框；可通过 `showMinimap` 关闭 |
 | **缩略图条** | `showThumbnails` 开启底部横向缩略图（默认关）。`thumbnailsScope="group"`（默认）分组时仅当前组；`"flat"` 为整段扁平序列（过长时窗口虚拟化） |
 | **嵌入式模式** | `presentation="contained"` 填满宿主容器；仅聚焦时响应键盘 |
-| **Browse/Screen/Full 分档** | 邻图数量按实时图片舞台 DIV × DPR 与真实纹理预算动态计算；预算允许时以导航方向前 3 / 后 2 个连续 Screen 形成固定核心，核心外从近到远连续铺固定 Browse 环。当前张停稳 300ms 后才升级 Full |
+| **Browse/Screen/Full 分档** | 邻图数量按实时图片舞台 DIV × DPR 与真实纹理预算动态计算；若全部候选的 Screen 都能放下则全部使用 Screen，否则连续核心会随压力在前后各 1 张至前 3 / 后 2 张之间动态变化，核心外从近到远连续铺固定 Browse 环。当前张停稳 300ms 后才升级 Full |
 | **无队列长按导航** | ←/→ 第一张立即切换；`holdRepeatDelayMs` 控制进入连续切换的门槛，`holdMinVisibleMs` 控制每张真正呈现后的最短展示时间；松开立即停止 |
 | **控件密度** | `chrome="minimal"` 空闲时控件完全隐藏 |
 | **浏览器全屏** | 工具栏切换 + ref `requestFullscreen` / `exitFullscreen`；Esc 先退出全屏 |

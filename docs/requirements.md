@@ -270,7 +270,7 @@
 
 - [x] `preloadRadius` / `preloadMemoryBudgetBytes` / 动态 Browse 与 Screen LOD
 - [x] Raster Screen LOD 邻图缓存 + 当前图延迟 Full LOD；长按期间可取消
-- [x] 浏览器预算回退 + Tauri 硬件预算 helper；按图片舞台 DIV × DPR 动态规划连续的 Browse/Screen 环，正常预算下 Screen 前 3 / 后 2 为底线
+- [x] 浏览器预算回退 + Tauri 硬件预算 helper；按图片舞台 DIV × DPR 和 P75 Screen 成本动态规划连续 Browse/Screen 环：小视口可全部 Screen，压力高时可降至前后各 1，正常预算下为前 3 / 后 2
 - [x] `display-ready` 以 GPU fence 完成且 texture 驻留为准；命中则直接绘制
 - [x] 文档：字节 ready ≠ 可秒切；预算可由宿主硬件信息覆盖
 

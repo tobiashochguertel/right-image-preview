@@ -270,7 +270,7 @@
 
 - [x] `preloadRadius` / `preloadMemoryBudgetBytes` / dynamic Browse and Screen LODs
 - [x] Raster Screen-LOD neighbor cache plus delayed, cancellable current-only Full LOD
-- [x] Browser fallback plus Tauri hardware-budget helper; image-stage DIV × DPR dynamically plans contiguous Browse/Screen bands with a three-ahead / two-behind Screen floor under normal budget
+- [x] Browser fallback plus Tauri hardware-budget helper; image-stage DIV × DPR and P75 Screen cost dynamically plan contiguous Browse/Screen bands: all Screen for small stages, one each side under pressure, and three-ahead / two-behind under normal budget
 - [x] `display-ready` requires a completed GPU fence and a resident texture; hits draw immediately
 - [x] Docs: byte-ready is not instant reveal; hosts may override the budget from hardware data
 

@@ -30,7 +30,7 @@ Open the interactive demo in your browser (toggle **EN / 中文** in the top-rig
 | **Navigation minimap** | Corner thumbnail + draggable viewport frame when the image overflows; optional via `showMinimap` |
 | **Thumbnail strip** | `showThumbnails` shows a bottom horizontal thumb nav (off by default). `thumbnailsScope="group"` (default) lists the current group when grouped; `"flat"` lists the full flat sequence (window-virtualized when long) |
 | **Contained / embedded mode** | `presentation="contained"` fills a host pane; keyboard only while focused |
-| **Browse/Screen/Full LODs** | Neighbor counts follow the live image-stage DIV × DPR and the real texture budget. The nearest three ahead / two behind form a fixed contiguous Screen core when affordable; a fixed contiguous Browse ring expands outward from it. Only the settled current image promotes to Full after 300ms |
+| **Browse/Screen/Full LODs** | Neighbor counts follow the live image-stage DIV × DPR and the real texture budget. If every candidate Screen fits, all are Screen; otherwise a contiguous core dynamically ranges from one each side under pressure to three ahead / two behind, with a fixed Browse ring outside it. Only the settled current image promotes to Full after 300ms |
 | **Queue-free hold navigation** | ←/→ steps once immediately; `holdRepeatDelayMs` gates automatic continuation and `holdMinVisibleMs` controls each actually-presented frame's dwell; release stops immediately |
 | **Chrome density** | `chrome="minimal"` fades idle controls to fully hidden |
 | **Browser fullscreen** | Toolbar toggle + ref `requestFullscreen` / `exitFullscreen`; Esc exits FS first |

@@ -48,7 +48,7 @@ canvas backing store 使用 CSS viewport × DPR。缩放、平移、旋转、翻
 
 WebGL Raster stage 在整个 Viewer Shell 生命周期内常驻，包括当前资源切到 SVG、GIF 或 Video 时。非 Raster 激活时 Canvas 使用 `visibility: hidden` 进入休眠，不绘制、不参与交互，但保留 context、pipeline 和 texture cache；切回 Raster 后显式重绘缓存 texture，不依赖 `preserveDrawingBuffer` 的旧帧。Video 播放和动画图片展示期间不启动新的 Raster 解码/上传，已经驻留的 texture 不会因此清空。context loss 仍是唯一需要整体重建 GPU 资源的路径。
 
-Raster 图片之间导航时复用同一个 context 与 cache；资源键变化只触发纹理选择/加载，不能通过 React `key` 卸载 stage。这里的 viewport 严格指承载图片的 stage DIV，而不是屏幕或应用窗口；`ResizeObserver` 读取其 CSS box，再乘 WebView 实际 DPR 得到 Screen backing box。窗口拖动、侧栏伸缩、contained/fullscreen 变化都会重新规划。`preloadRadius="auto"` 在预算允许时先建立导航方向 3 张、反方向 2 张连续 Screen；核心外按距离连续准入固定 Browse，形成无空洞的紫罗兰环。两侧数量在相等时优先导航方向，但整体始终近似均衡；不会跳过中间图片，也不会把 Browse 自动升级为 Screen；没有固定总数量。
+Raster 图片之间导航时复用同一个 context 与 cache；资源键变化只触发纹理选择/加载，不能通过 React `key` 卸载 stage。这里的 viewport 严格指承载图片的 stage DIV，而不是屏幕或应用窗口；`ResizeObserver` 读取其 CSS box，再乘 WebView 实际 DPR 得到 Screen backing box。窗口拖动、侧栏伸缩、contained/fullscreen 变化都会重新规划。`preloadRadius="auto"` 按该 backing box 估算每张 Screen bytes：若全部候选都能放下则全部为 Screen；否则使用 P75 Screen 成本确定连续核心，压力高时前后各 1 张，常规条件可达导航方向 3 张、反方向 2 张，核心外才按距离连续准入固定 Browse，形成无空洞的紫罗兰环。两侧数量在相等时优先导航方向，但整体始终近似均衡；不会跳过中间图片，也不会把 Browse 自动升级为 Screen；没有固定总数量。
 
 Browse/Screen 请求带 viewport generation。尺寸级别改变时，旧 Screen 若仍达到新 Browse 目标则改为柔和紫罗兰色 Browse 继续复用，否则回收；尚未运行的旧尺寸队列会取消，已经进入 `createImageBitmap`、浏览器无法中断的任务在完成后删除 texture，不允许重新写回 cache。蓝色因此表示“驻留且足以覆盖当前图片 stage DIV × DPR”，紫罗兰表示“驻留且可立即显示的中等细节”。
 

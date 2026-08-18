@@ -26,7 +26,7 @@ For a 100 CSS-pixel-wide stage at DPR 1.5, Screen needs about 150 source pixels 
 - Screen: covers image-stage DIV × DPR; under a normal budget the floor is three forward and two backward.
 - Full: current-only, delayed by `fullResolutionSettleMs`, and cancellable while navigating.
 
-Counts are not fixed. The planner estimates each RGBA8 texture, establishes a fixed contiguous Screen core first, then expands a fixed contiguous Browse ring from that core. A green hole therefore cannot appear between ready blue/violet items, and Browse is never automatically promoted to Screen. Smaller stages keep the same nearest Screen core while their budget reaches farther with Browse. Demo 6 exposes the live DIV, DPR, backing pixels, directional counts, and indexes.
+Counts are not fixed. The planner estimates each RGBA8 texture. If every candidate Screen texture fits, every candidate is Screen; otherwise its contiguous Screen core scales from one item on each side under pressure through the normal three-ahead/two-behind case, then a fixed contiguous Browse ring expands from that core. A green hole therefore cannot appear between ready blue/violet items, and Browse is never automatically promoted to Screen. Demo 6 exposes the live DIV, DPR, backing pixels, directional counts, and indexes.
 
 ## Status bars
 
