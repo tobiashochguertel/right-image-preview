@@ -8,7 +8,7 @@
 
 Open the interactive demo in your browser (toggle **EN / 中文** in the top-right). No install required.
 
-> A dependency-free React image preview component with Lightroom-style discrete zoom stops, multi-group navigation, flip/rotate, keyboard shortcuts, and auto-fading controls.
+> A dependency-free React media preview component. In v0.4 beta, static Raster main content uses WebGL2 while SVG, animated images, and video use dedicated native-browser modules behind one Viewer Shell.
 
 ---
 
@@ -16,8 +16,11 @@ Open the interactive demo in your browser (toggle **EN / 中文** in the top-rig
 
 | Feature | Description |
 |---------|-------------|
+| **WebGL2 static Raster** | JPEG, static PNG/WebP, AVIF, and similar main content uses canvas + GPU textures, without a second full DOM Raster renderer |
+| **Media dispatch** | Dedicated SVG, GIF/APNG/Animated WebP, video, and unknown modules; toolbar actions follow each module's capabilities |
+| **Multi-host sources** | Exported `MediaSource` supports URL, Blob, and ArrayBuffer bytes from web, VS Code Webview, or Tauri hosts |
 | **Fit / Native zoom modes** | `fit` displays the image fully within the viewport (contain); `native` uses the image's original pixel dimensions as 100% baseline |
-| **Discrete zoom stops** | Zoom in/out only jumps between configured stops (default: 10 %–200 %); override with **`stops`** |
+| **Discrete zoom stops** | Zoom in/out only jumps between configured stops (default: 5 %–200 %); override with **`stops`** |
 | **Zoom field input** | Type a positive %; values are **clamped to the max configured stop** (toolbar only; ref API unchanged) |
 | **Multi-image / multi-group** | Supports a flat image list or images organized into folder-like groups |
 | **Flip & Rotate** | Horizontal/vertical flip and 90° CW/CCW rotation with CSS animation |
@@ -27,7 +30,8 @@ Open the interactive demo in your browser (toggle **EN / 中文** in the top-rig
 | **Navigation minimap** | Corner thumbnail + draggable viewport frame when the image overflows; optional via `showMinimap` |
 | **Thumbnail strip** | `showThumbnails` shows a bottom horizontal thumb nav (off by default). `thumbnailsScope="group"` (default) lists the current group when grouped; `"flat"` lists the full flat sequence (window-virtualized when long) |
 | **Contained / embedded mode** | `presentation="contained"` fills a host pane; keyboard only while focused |
-| **Neighbor preload** | `preloadRadius` byte-prefetches neighbors; `preloadDisplaySlots` keeps decode-ready offscreen layers (host-sized from memory). `display-ready` uses fast reveal (underlay until viewport drawable); byte-ready alone does not |
+| **Browse/Screen/Full LODs** | Neighbor counts follow the live image-stage DIV × DPR and the real texture budget. The nearest three ahead / two behind form a fixed contiguous Screen core when affordable; a fixed contiguous Browse ring expands outward from it. Only the settled current image promotes to Full after 300ms |
+| **Queue-free hold navigation** | ←/→ steps once immediately; `holdRepeatDelayMs` gates automatic continuation and `holdMinVisibleMs` controls each actually-presented frame's dwell; release stops immediately |
 | **Chrome density** | `chrome="minimal"` fades idle controls to fully hidden |
 | **Browser fullscreen** | Toolbar toggle + ref `requestFullscreen` / `exitFullscreen`; Esc exits FS first |
 | **Controlled index** | `index` + `onIndexChange`; ref `goTo(index)` |
@@ -80,6 +84,14 @@ import { ImagePreview } from 'right-image-preview';
   onClose={() => setOpen(false)}
 />
 
+// Blob / bytes / Webview URI / Tauri asset URL
+<ImagePreview
+  src="stable-photo-id"
+  source={{ type: 'blob', blob: photoBlob }}
+  kind="raster"
+  visible={open}
+/>
+
 // Multiple images
 <ImagePreview
   images={[
@@ -120,6 +132,8 @@ import { ImagePreview } from 'right-image-preview';
 />
 ```
 
+See [rendering architecture](./docs/rendering-architecture.md) for host integration, texture-cache behavior, and context recovery.
+
 ---
 
 ## API
@@ -131,6 +145,8 @@ import { ImagePreview } from 'right-image-preview';
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `src` | `string` | — | Single image URL (ignored when `images` or non-empty `groupedImages` is provided) |
+| `source` | `MediaSource` | — | URL / Blob / bytes input; takes precedence over `src` for loading |
+| `kind` | `MediaKind` | sniffed | Explicit `raster` / `svg` / `animated-image` / `video` / `unknown` hint |
 | `minimapSrc` | `string` | — | Single-image only: minimap tile URL (defaults to main `src`); ignored if `minimap` is set |
 | `minimap` | `React.ReactNode` | — | Single-image only: custom minimap content (overrides `minimapSrc`) |
 | `images` | `ImageItem[]` | — | Flat image list (over `src`); ignored when non-empty `groupedImages` is set (dev may warn if both are passed); per-item `minimapSrc` / `minimap` supported |
@@ -138,7 +154,7 @@ import { ImagePreview } from 'right-image-preview';
 | `visible` | `boolean` | `true` | Controls visibility |
 | `defaultGroupedSelection` | `{ defaultGroupIndex, defaultIndexInGroup }` | — | Initial image in `groupedImages` mode (group index counts only non-empty groups); overrides `defaultIndex` |
 | `defaultIndex` | `number` | `0` | Initial index in the flattened list; ignored when `defaultGroupedSelection` is set with groups |
-| `stops` | `number[]` | `[10,25,50,75,100,125,150,175,200]` | Discrete zoom stops in % (ascending); raise the cap by passing a longer list |
+| `stops` | `number[]` | `[5,10,20,35,50,75,100,125,150,175,200]` | Discrete zoom stops in % (ascending); raise the cap by passing a longer list |
 | `initialMode` | `'fit' \| 'native'` | `'fit'` | Initial zoom mode |
 | `initialNativePercent` | `number` | first stop | Initial native percent when `initialMode='native'` |
 | `firstZoomInStrategy` | `'above-fit' \| 'first-stop' \| 'hundred'` | `'above-fit'` | Which stop to land on when zooming in from Fit for the first time |

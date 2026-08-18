@@ -5,6 +5,67 @@ import { describe, expect, it, vi } from 'vitest';
 import { ImagePreview } from '../src/components/ImagePreview';
 import type { ImagePreviewRef } from '../src/components/ImagePreview/types';
 
+vi.mock('../src/components/ImagePreview/renderers/raster-webgl/WebGLRasterStage', async () => {
+  const { useEffect } = await import('react');
+
+  interface MockRasterSource {
+    flatIndex?: number;
+  }
+
+  interface MockRasterProps {
+    active: boolean;
+    knownSize?: { width: number; height: number };
+    preloadSources?: readonly MockRasterSource[];
+    onDimensions(width: number, height: number): void;
+    onPhaseChange(phase: 'display-ready'): void;
+    onPresented(): void;
+    onError(error: Error): void;
+    onPreloadStateChange?(
+      source: MockRasterSource,
+      phase: 'display-ready',
+    ): void;
+  }
+
+  return {
+    WebGLRasterStage: ({
+      active,
+      knownSize,
+      preloadSources,
+      onDimensions,
+      onPhaseChange,
+      onPresented,
+      onError,
+      onPreloadStateChange,
+    }: MockRasterProps) => {
+      useEffect(() => {
+        if (!active) return;
+        onDimensions(knownSize?.width ?? 800, knownSize?.height ?? 600);
+        onPhaseChange('display-ready');
+        onPresented();
+        preloadSources?.forEach((source) => {
+          onPreloadStateChange?.(source, 'display-ready');
+        });
+      }, [
+        active,
+        knownSize?.height,
+        knownSize?.width,
+        onDimensions,
+        onPhaseChange,
+        onPreloadStateChange,
+        onPresented,
+        preloadSources,
+      ]);
+
+      return (
+        <canvas
+          data-rip-raster-canvas=""
+          onClick={() => onError(new Error('mock Raster failure'))}
+        />
+      );
+    },
+  };
+});
+
 // jsdom doesn't load images, so naturalWidth/Height are 0 by default.
 // We patch Image prototype to return predictable dimensions.
 function mockImageLoad(naturalWidth = 800, naturalHeight = 600) {
@@ -132,8 +193,6 @@ describe('ImagePreview component', () => {
   describe('zoom via toolbar', () => {
     it('shows fit-equivalent percentage in zoom slot when in fit mode', async () => {
       render(<ImagePreview src={SINGLE_SRC} visible initialMode="fit" {...ZH} />);
-      const img = screen.getByRole('dialog').querySelector('img')!;
-      fireEvent.load(img);
       await waitFor(() => {
         expect(screen.getByRole('toolbar').textContent).toMatch(/\d+%/);
       });
@@ -355,8 +414,8 @@ describe('ImagePreview component', () => {
           {...ZH}
         />,
       );
-      const img = screen.getByRole('dialog').querySelector('img')!;
-      fireEvent.error(img);
+      const canvas = screen.getByRole('dialog').querySelector('canvas')!;
+      fireEvent.click(canvas);
       expect(onImageError).toHaveBeenCalledWith(0, SINGLE_SRC);
     });
 
@@ -369,8 +428,8 @@ describe('ImagePreview component', () => {
           {...ZH}
         />,
       );
-      const img = screen.getByRole('dialog').querySelector('img')!;
-      fireEvent.error(img);
+      const canvas = screen.getByRole('dialog').querySelector('canvas')!;
+      fireEvent.click(canvas);
       expect(screen.getByTestId('err-fallback')).toBeInTheDocument();
     });
 
@@ -560,7 +619,7 @@ describe('ImagePreview component', () => {
         />,
       );
       await waitFor(() => {
-        expect(onPreloadIndexesChange).toHaveBeenCalledWith([0, 2]);
+        expect(onPreloadIndexesChange).toHaveBeenCalledWith([2, 0]);
       });
     });
 
@@ -613,9 +672,6 @@ describe('ImagePreview component', () => {
             visible
             defaultIndex={1}
             preloadRadius={1}
-            preloadDisplaySlots={2}
-            preloadDisplayMode="decode"
-            preloadDisplaySettleMs={0}
             progressiveMain
             onPreloadStatusChange={onPreloadStatusChange}
             {...ZH}

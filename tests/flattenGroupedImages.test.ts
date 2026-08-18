@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   flattenGroupedImages,
   resolveDefaultGroupedFlatIndex,
+  resolvePreviewImages,
 } from '../src/components/ImagePreview/flattenGroupedImages';
 
 describe('resolveDefaultGroupedFlatIndex', () => {
@@ -28,5 +29,18 @@ describe('resolveDefaultGroupedFlatIndex', () => {
     const grouped = [{ name: 'a', images: [{ src: '1' }] }];
     expect(resolveDefaultGroupedFlatIndex(grouped, { defaultGroupIndex: 99, defaultIndexInGroup: 0 })).toBe(0);
     expect(resolveDefaultGroupedFlatIndex(grouped, { defaultGroupIndex: 0, defaultIndexInGroup: 99 })).toBe(0);
+  });
+});
+
+describe('resolvePreviewImages MediaSource', () => {
+  it('accepts a source-only single media input and carries host hints', () => {
+    const source = { type: 'bytes' as const, data: new ArrayBuffer(3), mimeType: 'image/jpeg' };
+    const { images } = resolvePreviewImages({ source, kind: 'raster', mimeType: 'image/jpeg' });
+    expect(images).toEqual([expect.objectContaining({
+      src: 'media-source',
+      source,
+      kind: 'raster',
+      mimeType: 'image/jpeg',
+    })]);
   });
 });

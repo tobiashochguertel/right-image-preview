@@ -183,13 +183,13 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
       'Ten photos in three folders, like a trip album. The bottom thumbnail strip lists **only the current folder** (default `thumbnailsScope="group"`) — when you jump to another folder (double-chevron or PageUp/Down), the strip swaps to that group’s images. For a cross-folder strip use `thumbnailsScope="flat"` (see Demo 5). The badge’s second line starts with which folder you are in (e.g. (1/3)), then the folder name. The counter between the arrows is only your place inside that folder (e.g. 2/3).',
     demo3Title: 'Demo 3 · Thumbnail first, full image after',
     demo3Desc:
-      'Each item uses a small low-res preview (`minimapSrc`) so you see a stretched image right away instead of a long empty wait. When the full file is ready, the viewer holds briefly, then crossfades to the sharp picture. Approximate file size is in each label. Neighbor preload is off by default; Demo 5 turns on `preloadRadius`.',
+      'Each item uses a small low-res preview (`minimapSrc`) so you see a stretched image right away instead of a long empty wait. When the full file is ready, it replaces the preview. Approximate file size is in each label. v0.4 uses adaptive neighbor texture preload by default; Demo 5 pins `preloadRadius={1}` for a bounded example.',
     demo4Title: 'Demo 4 · EXIF + delete (host-owned list)',
     demo4Desc:
       'Toolbar “i” toggles EXIF; the trash button (or Delete / Backspace) removes the current image. Metadata is on `ImageItem.exif`. Deleting calls `onDeleteImage(index, item)` — this demo filters by `item.id`, so the count drops and focus moves to the next (or previous) photo. Empty fields are hidden; the third photo starts with no EXIF.',
     demo5Title: 'Demo 5 · Contained workspace + flat strip + preload',
     demo5Desc:
-      'Embedded preview (`presentation="contained"`) fills the centre pane while a fake sidebar stays usable. Uses controlled `index`, `showThumbnails` + `thumbnailsScope="flat"`, `preloadRadius={1}`, `preloadDisplaySlots={2}` (display-ready decode; fast reveal keeps minimap underlay until the viewport main image is drawable), `showThumbnailPreloadStatus`, and `chrome="minimal"`. **Blue** bar = display-ready; **green** = byte-ready / session-warm. Click the preview to focus it before using arrow keys.',
+      'Embedded preview (`presentation="contained"`) fills the centre pane while a fake sidebar stays usable. Uses controlled `index`, `showThumbnails` + `thumbnailsScope="flat"`, `preloadRadius={1}`, `showThumbnailPreloadStatus`, and `chrome="minimal"`. **Blue** = decoded texture still GPU-resident; **green** = real original-download progress or a completed original request. Click the preview to focus it before using arrow keys.',
     demo5SidebarTitle: 'Sidebar',
     demo5ShowPreview: 'Show preview',
     demo5HidePreview: 'Hide preview',
@@ -197,11 +197,11 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo5PreloadHint: 'Neighbor preload indexes',
     demo6Title: 'Demo 6 · Local large JPGs (dev only, gitignored)',
     demo6Desc:
-      'Reads every original under gitignored `./test-images` that has a matching file in `thumbs/` (Vite middleware). After dwelling, neighbors with a **blue** strip bar (display-ready) should promote the retained decoded layer — sharp near-instantly (sidebar: path + underlay/sharp ms). Toggle slots off to force every nav to cold. New JPGs: run `bash scripts/generate-test-image-thumbs.sh`.',
+      'Reads every original under gitignored `./test-images` that has a matching file in `thumbs/` (Vite middleware). A partial green bar is transfer progress; full green means the original completed once; **blue** means its decoded texture is still GPU-resident and should switch near-instantly. Toggle preload off to force every nav cold. New JPGs: run `bash scripts/generate-test-image-thumbs.sh`.',
     demo6SidebarTitle: 'Local large files',
     demo6HowTo:
-      'Wait for brightest green on ± neighbors, then ←/→. Expect path=fast with sharp ≪ cold (~1s). Cold also holds blur ~800ms after decode.',
-    demo6HowToShort: 'Wait for green on ±, then ←/→ · hover for detail',
+      'Wait for blue on a ± neighbor, then ←/→. Full green means downloaded/cache-likely, but may still need decode/upload.',
+    demo6HowToShort: 'Wait for blue on ±, then ←/→ · hover for detail',
     demo6Missing:
       'No usable `./test-images` (need originals + matching files under thumbs/). Local only — never commit that folder. After adding JPGs: `bash scripts/generate-test-image-thumbs.sh`.',
     demo6GridHint: 'Click a card to open that index · scroll for more',
@@ -211,7 +211,7 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo6MeterHint:
       'fast + sharp≪200ms = retained layer. cold ≈1s = full decode. Wait for next=display-ready before ←/→.',
     demo6HistoryTitle: 'Recent',
-    demo6PoolTitle: 'RAM (est.)',
+    demo6PoolTitle: 'GPU textures',
     demo6PoolModeOn: 'Preload ON',
     demo6PoolModeOff: 'Preload OFF',
     demo6PoolNow: 'Now',
@@ -219,9 +219,9 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo6PoolCurrent: 'current',
     demo6PoolNeighbors: 'neighbors',
     demo6PoolExtra: 'Extra (preload cost)',
-    demo6PoolCap: 'Demo fake budget',
+    demo6PoolCap: 'Auto cache budget',
     demo6PoolHint:
-      'RGBA w×h×4 estimates, not Task Manager. “Extra” is what weaker PCs pay for fast ←/→. Demo fake budget is NOT a library default — Media Lens should pass preloadMemoryBudgetBytes from Tauri.',
+      'Resident WebGL texture bytes reported by the cache. The total is bounded by the automatic display tier (4K: 512 MiB); a host may override preloadMemoryBudgetBytes.',
     demo6PoolHintShort: 'hover: how to read',
     photosBadge: (n) => `${n} photos`,
     thumbAria: (label) => `Open photo: ${label}`,
@@ -301,13 +301,13 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
       '旅行相册场景，共 3 个文件夹 · 10 张图片。底部缩略图条（默认 `thumbnailsScope="group"`）**只展示当前文件夹**内的图片；跳转到下一组（双箭头或 PageUp/Down）后，条带会换成该组的缩略图。跨组全序列请用 `thumbnailsScope="flat"`（见 Demo 5）。信息条第二行先显示当前第几组、共几组（如 (1/3)），再跟文件夹名称。工具栏中间的序号只表示当前文件夹内第几张（如 2/3）。',
     demo3Title: 'Demo 3 · 先缩略占位，再切高清',
     demo3Desc:
-      '每张图先用较小的低清预览（`minimapSrc`）铺满画面，减少长时间黑屏等待。全尺寸就绪后短暂停留，再淡入清晰画面。标签中标注约略文件大小。相邻预加载默认关闭；Demo 5 开启了 `preloadRadius`。',
+      '每张图先用较小的低清预览（`minimapSrc`）铺满画面，减少长时间黑屏等待；完整纹理就绪后立即替换。标签中标注约略文件大小。v0.4 默认使用动态邻图 texture 预加载；Demo 5 用 `preloadRadius={1}` 展示固定边界。',
     demo4Title: 'Demo 4 · EXIF + 删除（宿主维护列表）',
     demo4Desc:
       '工具栏「i」开关 EXIF；垃圾桶（或 Delete / Backspace）删除当前图。元数据在 `ImageItem.exif`。删除回调为 `onDeleteImage(index, item)` — 本 Demo 按 `item.id` 更新列表，张数减一并跳到下一张（若已是最后一张则上一张）。空字段不显示；第三张默认无 EXIF。',
     demo5Title: 'Demo 5 · 嵌入工作区 + 扁平缩略图条 + 预加载',
     demo5Desc:
-      '嵌入式预览（`presentation="contained"`）填满中央工作区，假侧栏仍可操作。使用受控 `index`、`showThumbnails` + `thumbnailsScope="flat"`、`preloadRadius={1}`、`preloadDisplaySlots={2}`（display-ready 解码；快开仍保留 minimap 占位直到视口主图可绘制）、`showThumbnailPreloadStatus` 与 `chrome="minimal"`。**蓝条** = display-ready；**绿条** = 字节就绪 / 会话曾加载。请先点击预览再按方向键。',
+      '嵌入式预览（`presentation="contained"`）填满中央工作区，假侧栏仍可操作。使用受控 `index`、`showThumbnails` + `thumbnailsScope="flat"`、`preloadRadius={1}`、`showThumbnailPreloadStatus` 与 `chrome="minimal"`。**蓝条** = 已解码 texture 仍驻留 GPU；**绿条** = 原图真实下载进度或曾完整下载。请先点击预览再按方向键。',
     demo5SidebarTitle: '侧栏',
     demo5ShowPreview: '显示预览',
     demo5HidePreview: '隐藏预览',
@@ -315,11 +315,11 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo5PreloadHint: '相邻预加载下标',
     demo6Title: 'Demo 6 · 本地大图 JPG（仅开发，已 gitignore）',
     demo6Desc:
-      '中间件读取 `./test-images` 中**带同名 thumbs/** 的全部原图。停稳后邻居出现**蓝条**（display-ready）时，应复用已解码层接近秒开清晰（侧栏：path + underlay/sharp 毫秒）。关掉 slots 可强制每次都走 cold。新增 JPG 后执行：`bash scripts/generate-test-image-thumbs.sh`。',
+      '中间件读取 `./test-images` 中**带同名 thumbs/** 的全部原图。绿条未满表示原图传输进度，满绿表示曾完整下载；**蓝条**表示已解码 texture 仍驻留 GPU，应接近瞬时切换。关掉预热可强制每次走 cold。新增 JPG 后执行：`bash scripts/generate-test-image-thumbs.sh`。',
     demo6SidebarTitle: '本地大图',
     demo6HowTo:
-      '等 ± 邻居最深绿后 ←/→。期望 path=fast 且 sharp 远小于 cold（~1s）。cold 在解码后再多停约 800ms 模糊。',
-    demo6HowToShort: '等绿条后 ←/→ · 悬停看说明',
+      '等 ± 邻居出现蓝条后 ←/→。满绿只表示已下载、很可能走缓存，仍可能需要解码/上传。',
+    demo6HowToShort: '等 ± 蓝条后 ←/→ · 悬停看说明',
     demo6Missing:
       '未找到可用的 `./test-images`（需原图 + thumbs/ 下同名缩略图）。仅本机使用，切勿提交该目录。新增后：`bash scripts/generate-test-image-thumbs.sh`。',
     demo6GridHint: '点卡片打开对应 index · 可滚动',
@@ -329,7 +329,7 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo6MeterHint:
       'fast 且 sharp≪200ms = 层复用成功。cold ≈1s = 整图解码。先等 next=display-ready 再切。',
     demo6HistoryTitle: '最近几次',
-    demo6PoolTitle: '内存（估算）',
+    demo6PoolTitle: 'GPU 纹理实占',
     demo6PoolModeOn: '预热：开',
     demo6PoolModeOff: '预热：关',
     demo6PoolNow: '现在',
@@ -337,9 +337,9 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo6PoolCurrent: '当前',
     demo6PoolNeighbors: '邻居',
     demo6PoolExtra: '预热多占',
-    demo6PoolCap: 'Demo 模拟预算',
+    demo6PoolCap: '自动缓存预算',
     demo6PoolHint:
-      'RGBA 宽×高×4 估算，非任务管理器。「预热多占」是弱机为快切多付的内存。Demo 模拟预算不是组件默认——Media Lens 应由 Tauri 传入 preloadMemoryBudgetBytes。',
+      '这里读取 WebGL cache 回报的实际驻留 texture 字节数。总量受显示器自动档位限制（4K 为 512 MiB）；宿主仍可用 preloadMemoryBudgetBytes 覆盖。',
     demo6PoolHintShort: '悬停：怎么看',
     photosBadge: (n) => `${n} 张`,
     thumbAria: (label) => `预览图片：${label}`,

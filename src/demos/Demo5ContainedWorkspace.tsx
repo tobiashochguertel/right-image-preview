@@ -129,7 +129,6 @@ export function Demo5ContainedWorkspace({
               index={index}
               onIndexChange={setIndex}
               preloadRadius={1}
-              preloadDisplaySlots={2}
               preloadMemoryBudgetBytes={96 * 1024 * 1024}
               onPreloadIndexesChange={setPreloadLog}
               showThumbnails

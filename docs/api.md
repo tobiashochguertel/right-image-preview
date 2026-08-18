@@ -11,8 +11,12 @@
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `src` | `string` | — | Single image URL (ignored when `images` or non-empty `groupedImages` is provided) |
+| `source` | `MediaSource` | — | Single-media URL / Blob / bytes; takes precedence over `src` for loading |
+| `kind` | `MediaKind` | — | Explicit host media kind; wins over sniffing, MIME, and extensions |
+| `mimeType` | `string` | — | Optional single-media MIME hint |
 | `alt` | `string` | — | Alt text for single image |
 | `minimapSrc` | `string` | — | Single-image only: optional minimap image URL (defaults to `src`); ignored when `minimap` is set |
+| `minimapSource` | `MediaSource` | — | Single-media progressive/minimap source; takes precedence over `minimapSrc` |
 | `minimap` | `React.ReactNode` | — | Single-image only: optional custom minimap content (overrides `minimapSrc`) |
 | `images` | `ImageItem[]` | — | Flat list; when provided without non-empty `groupedImages`, `src`/`alt` are ignored; if both `images` and non-empty `groupedImages` are set, `images` is ignored (dev `console.warn`) |
 | `groupedImages` | `ImageGroup[]` | — | Folder-style groups; each group’s `images` are concatenated in order; takes precedence over `images` and `src`; ←/→ and hold navigate the **flat** sequence (cross groups); toolbar gains prev/next-group (and PageUp/PageDown) for jumping to a group’s first image |
@@ -24,7 +28,7 @@
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `stops` | `NativePercent[]` | `[10,25,50,75,100,125,150,175,200]` | Discrete zoom stop list (ascending, at least 1 item); pass a custom list for a higher max |
+| `stops` | `NativePercent[]` | `[5,10,20,35,50,75,100,125,150,175,200]` | Discrete zoom stop list (ascending, at least 1 item); pass a custom list for a higher max |
 | `initialMode` | `'fit' \| 'native'` | `'fit'` | Initial zoom mode |
 | `initialNativePercent` | `number` | first stop | Initial percentage when `initialMode='native'` |
 | `firstZoomInStrategy` | `'above-fit' \| 'first-stop' \| 'hundred'` | `'above-fit'` | Which stop to land on when zooming in from Fit for the first time |
@@ -58,21 +62,27 @@
 | `showThumbnails` | `boolean` | `false` | Bottom horizontal thumbnail strip inside the overlay; hidden when ≤ 1 navigable image |
 | `thumbnailsScope` | `'group' \| 'flat'` | `'group'` | Which images appear in the strip when `showThumbnails` is true; see table below |
 | `presentation` | `'overlay' \| 'contained'` | `'overlay'` | `overlay` fullscreen dialog; `contained` fills a positioned host |
-| `preloadRadius` | `number` | `1` | Neighbor full-`src` byte preload radius; `0` = off. Does **not** alone skip progressive |
-| `preloadDisplaySlots` | `number` | `0` | Max neighbors kept **display-ready**. `0` + budget → ceiling 6; budget decides fill count |
-| `preloadDisplaySettleMs` | `number` | `600` | Debounce after navigation before warming **neighbors** (rapid ←/→ cancels). Does not delay current main decode |
-| `holdMinVisibleMs` | `number` | `NAV_HOLD_MIN_VISIBLE_MS` | Hold ←/→: after the first immediate step, each image must show **presented** stage content (thumb underlay or full original) for this many ms before another step, and only if still held. Layout/meta alone does not start the clock. Release cancels the pending timer (no queue). Omit to use the library default. |
-| `preloadMemoryBudgetBytes` | `number` | — | Neighbor decoded-byte budget (excludes current main). Prefer this from Tauri; props stay fixed while browsing |
-| `estimateDecodedBytes` | `(item) => number` | EXIF w×h×4 or 12MP guess | Size estimate for budget |
-| `preloadDisplayMode` | `'slot' \| 'decode'` | `'slot'` | `'slot'` = offscreen imgs (C); `'decode'` = decode-only fallback (B) |
+| `preloadRadius` | `number \| 'auto'` | `'auto'` | `'auto'` walks outward by navigation priority and admits textures until the GPU budget is full; a number is a hard flat-index radius; `0` disables |
+| `preloadMaxCount` | `number` | `128` | Safety ceiling for auto candidates; actual resident count is decided by uploaded texture bytes and budget |
+| `holdRepeatDelayMs` | `number` | `NAV_HOLD_REPEAT_DELAY_MS` (300) | The first ←/→ step remains immediate; the first automatic continuation is allowed only after the press has remained held for this long. Independent from the per-image dwell. |
+| `holdMinVisibleMs` | `number` | `NAV_HOLD_MIN_VISIBLE_MS` (200) | During automatic continuation, each image must be reported **presented** by its renderer and then remain visible for this many ms. Layout, download, or decode alone does not start the clock. Release cancels the single timer (no queue); `0` continues on the next event-loop turn after presentation. |
+| `fullResolutionSettleMs` | `number` | `300` | Delay after the current Raster Screen LOD is presented before Full LOD begins. Navigation or an active hold cancels it; `0` promotes immediately in the background. Current image only. |
+| `preloadMemoryBudgetBytes` | `number` | browser display tier | Raster GPU texture-cache budget; an explicit value always wins. Tauri hosts should collect RAM/platform GPU guidance, call `suggestRasterHardwareTextureBudgetBytes`, and pass the result. Browse/Screen counts are independently planned from the live image-stage DIV × DPR and item dimensions. |
 | `onPreloadIndexesChange` | `(indexes: number[]) => void` | — | Optional debug hook for planned preload indexes |
-| `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | Phases include `display-ready` (exact: decode settled — fast reveal; underlay until viewport drawable). Byte `ready` ≠ instant reveal |
-| `showThumbnailPreloadStatus` | `boolean` | `false` | Strip edges: **blue** = neighbor slot **and** decode settled; gray/green progress while loading; **green** = byte ready / session-warm; **current tile has no bar** |
-| `showSwitchLoader` | `boolean` | `true` | Center ring spinner while switching images (outgoing hold / waiting for next drawable main). `false` hides it only |
+| `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | Reports true original-transfer progress when available and GPU residency; evicted `display-ready` entries downgrade to `warm` |
+| `onRasterPreloadPlanChange` | `(snapshot: RasterPreloadPlanSnapshot) => void` | — | Development diagnostics: live image-stage DIV, DPR, backing pixels, budget, and directional Screen/Browse indexes |
+| `showThumbnailPreloadStatus` | `boolean` | `false` | Strip edges: **blue** = planned/resident Screen texture; **violet** = planned/resident Browse texture; planned transfers use their true available percentage; **green** = original-only transfer/completion or an evicted texture; **current tile has no bar** |
+| `showSwitchLoader` | `boolean` | `true` | Center spinner while the active media awaits `display-ready`; it closes in the display commit. `false` hides it only |
 | `chrome` | `'default' \| 'minimal'` | `'default'` | `minimal` fades idle chrome to 0% |
 | `index` | `number` | — | Controlled flat index |
 | `toolbarExtra` | `ReactNode` | — | Extra content at the end of the toolbar |
 | `language` | `string` | `'en'` | UI locale: built-in `en` and `zh` (primary subtag match, e.g. `zh-CN` → `zh`) |
+
+Download-progress semantics: URL originals are consumed through streaming `fetch`. When the response exposes `Content-Length`, `NeighborPreloadEntry.progress` is the real `loadedBytes / totalBytes` ratio. Updates are throttled to roughly each additional 1% or 200 ms, with an unconditional final event. A planned Screen/Browse item keeps a blue/violet progress bar through transfer and decode, using that true ratio; unknown-length transfers use the same target color for their animated indeterminate segment rather than a fabricated one-third fill. Green remains for original-only transfer/completion. `loadedBytes` / `totalBytes` remain available to hosts.
+
+Full green means the original request completed during this Viewer lifetime, so a browser/WebView HTTP-cache hit is likely but not guaranteed. Blue additionally requires a completed upload fence and a texture that is still GPU-resident. GPU eviction or WebGL context loss automatically downgrades blue to full green while retaining the completed-download record.
+
+`NeighborPreloadEntry.textureBytes` / `textureWidth` / `textureHeight` report actual resident cache data for diagnostics; do not estimate a Screen LOD as original `width × height × 4`. `browse-ready` (violet) is immediately drawable medium detail; `display-ready` (blue) covers the current image-stage DIV × DPR. On resize an old Screen may be reused as Browse, while stale queued/in-flight work cannot overwrite the new plan.
 
 #### `arrows` values
 
@@ -96,10 +106,9 @@ Tile image: `ImageItem.minimapSrc` if set, otherwise `src`. Layout: few tiles �
 
 #### Neighbor preload notes
 
-- **Byte preload** (`preloadRadius`): `Image()` fetch only. Strip phase `ready` / `warm` means bytes likely cached — **not** enough to skip {@link progressiveMain}.
-- **Display-ready** (`preloadDisplaySlots` > 0): load + `decode()` (and offscreen `<img>` when `preloadDisplayMode="slot"`). Phase `display-ready` is exact; navigating there uses fast reveal (no artificial dwell / centre spinner) while **keeping** the `minimapSrc` underlay until the viewport main image is drawable. Neighbor warm-up is debounced by {@link preloadDisplaySettleMs} (default 600ms) so rapid scrubbing does not decode every hop.
-- **Memory**: the library does not read device RAM. Hosts (e.g. Tauri) should pass `preloadMemoryBudgetBytes` (see `suggestPreloadMemoryBudgetBytes`) and ideally width/height estimates. **Media Lens checklist:** [`media-lens-integration.md`](./media-lens-integration.md).
-- **Fallback**: `preloadDisplayMode="decode"` keeps the same short-circuit contract without retaining compositor layers.
+- v0.4 Raster decodes neighbors through a bounded priority queue and warms GPU textures directly. A foreground lane is reserved for the current image.
+- The v0.3 DOM slot/decode, outgoing-frame, and 1×1 keep-alive APIs have been removed; Raster no longer depends on offscreen `<img>` retention.
+- Browsers expose no “free VRAM” API. The component uses `screen.width × screen.height × devicePixelRatio²` only to select the conservative display tier above; this is not VRAM detection. Hosts such as Tauri may override `preloadMemoryBudgetBytes` with device-aware policy and should ideally provide dimensions. See [rendering architecture](./rendering-architecture.md).
 
 #### `presentation` notes
 
@@ -131,11 +140,20 @@ Tile image: `ImageItem.minimapSrc` if set, otherwise `src`. Layout: few tiles �
 interface ImageItem {
   id?: string; // stable key (e.g. file path); prefer over name for identity
   src: string;
+  source?: MediaSource;
+  kind?: 'raster' | 'svg' | 'animated-image' | 'video' | 'unknown';
+  mimeType?: string;
   alt?: string;
   name?: string; // filename shown in the info badge
   minimapSrc?: string; // navigation minimap URL; defaults to src; ignored if minimap is set
+  minimapSource?: MediaSource;
   minimap?: React.ReactNode; // custom minimap body; overrides minimapSrc
 }
+
+type MediaSource =
+  | { type: 'url'; href: string }
+  | { type: 'blob'; blob: Blob; mimeType?: string }
+  | { type: 'bytes'; data: ArrayBuffer; mimeType?: string };
 
 interface ImageGroup {
   id?: string; // optional stable key for the folder / album

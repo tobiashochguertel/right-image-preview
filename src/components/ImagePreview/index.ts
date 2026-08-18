@@ -25,7 +25,6 @@ export type {
   NeighborPreloadEntry,
   NeighborPreloadPhase,
   NeighborPreloadStatusMap,
-  PreloadDisplayMode,
   PresentationMode,
   ThumbnailsScope,
   WheelStrategy,
@@ -35,14 +34,40 @@ export type {
   ZoomState,
 } from './types';
 export {
-  defaultEstimateDecodedBytes,
-  rgbaDecodedBytes,
-  pickDisplaySlotIndexes,
-  resolvePreloadDisplaySlotCeiling,
-  suggestPreloadMemoryBudgetBytes,
-  DEFAULT_DISPLAY_SLOTS_WHEN_BUDGET_ONLY,
-  PRELOAD_DISPLAY_SETTLE_MS,
-  SUGGESTED_PRELOAD_BUDGET_FRACTION_OF_AVAILABLE,
-} from './lib/neighborDisplayPreload';
-export { NAV_HOLD_MIN_VISIBLE_MS } from './imagePreviewTuning';
+  NAV_HOLD_MIN_VISIBLE_MS,
+  NAV_HOLD_REPEAT_DELAY_MS,
+} from './imagePreviewTuning';
 export type { Rotation } from './useImageTransform';
+export {
+  RASTER_FULL_RESOLUTION_SETTLE_MS,
+  RASTER_BROWSE_LOD_SCALE,
+  RASTER_SCREEN_LOD_OVERSAMPLE,
+  fitRasterToScreenLod,
+  rgbaTextureBytes,
+  scaleRasterLodBox,
+} from './renderers/raster-webgl/rasterLod';
+export type {
+  RasterNeighborLod,
+  RasterPreloadPlanSnapshot,
+} from './renderers/raster-webgl/rasterPreloadPlan';
+export {
+  RASTER_TEXTURE_BUDGET_HD_BYTES,
+  RASTER_TEXTURE_BUDGET_FHD_BYTES,
+  RASTER_TEXTURE_BUDGET_QHD_BYTES,
+  RASTER_TEXTURE_BUDGET_4K_BYTES,
+  RASTER_TEXTURE_BUDGET_ABOVE_4K_BYTES,
+  detectRasterTextureBudgetBytes,
+  suggestRasterHardwareTextureBudgetBytes,
+  suggestRasterTextureBudgetBytes,
+} from './renderers/raster-webgl/rasterMemoryBudget';
+export type { RasterHardwareProfile } from './renderers/raster-webgl/rasterMemoryBudget';
+export type { MediaKind } from './core/media-kind';
+export type { MediaSource } from './core/media-source';
+export type {
+  MediaCapabilities,
+  MediaError,
+  MediaPresentationPhase,
+  MediaPresentationState,
+  MediaViewState,
+  ViewerCommand,
+} from './core/media-contract';

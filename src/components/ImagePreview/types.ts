@@ -1,3 +1,7 @@
+import type { MediaKind } from './core/media-kind';
+import type { MediaSource } from './core/media-source';
+import type { RasterPreloadPlanSnapshot } from './renderers/raster-webgl/rasterPreloadPlan';
+
 export type ZoomMode = 'fit' | 'native';
 
 /** Native zoom percentage: 100 means 1 CSS pixel = 1 image pixel. */
@@ -90,6 +94,15 @@ export interface ImageItem {
    */
   id?: string;
   src: string;
+  /**
+   * Renderer-neutral media input. When present it is used for decode/playback while
+   * `src` remains the legacy display/cache identity and DOM-thumbnail fallback.
+   */
+  source?: MediaSource;
+  /** Host-provided kind wins over MIME, extension, and byte sniffing. */
+  kind?: MediaKind;
+  /** Optional content type hint, for example `image/jpeg` or `video/mp4`. */
+  mimeType?: string;
   alt?: string;
   /** Filename displayed in the info bar above the toolbar. */
   name?: string;
@@ -98,6 +111,8 @@ export interface ImageItem {
    * Defaults to {@link src}. Ignored when {@link minimap} is set.
    */
   minimapSrc?: string;
+  /** Renderer-neutral progressive/minimap source. Takes precedence over `minimapSrc`. */
+  minimapSource?: MediaSource;
   /**
    * Optional custom minimap content (e.g. `<img />`). When set, replaces the default minimap image;
    * layout still follows the main image’s natural aspect ratio, rotation, and flips. Overrides {@link minimapSrc}.
@@ -193,43 +208,48 @@ export type NeighborPreloadPhase =
   | 'loading'
   | 'ready'
   | 'warm'
+  /** Browse LOD is decoded, uploaded, fence-ready, and immediately drawable. */
+  | 'browse-ready'
   /**
-   * Full `src` loaded **and** `decode()` settled in a display preload slot —
-   * navigating here uses fast reveal (no dwell/spinner; underlay until viewport drawable).
+   * Raster Screen LOD decoded for the current image-stage DIV × DPR, uploaded,
+   * GPU-fence ready, and still retained in the texture cache.
    */
   | 'display-ready'
   | 'error';
 
 export interface NeighborPreloadEntry {
   phase: NeighborPreloadPhase;
+  /** Planned texture tier while the original is transferring/decoding. */
+  targetLod?: 'browse' | 'screen';
   /**
-   * 0–1 fill when byte progress is known (`loading` / `ready` only).
-   * Omitted while loading without % → UI shows a ⅓ green fill until `ready`.
+   * True 0–1 transfer fill when the server exposes Content-Length.
+   * Omitted for an indeterminate transfer (for example, no exposed Content-Length).
    */
   progress?: number;
+  /** Bytes received by the full-original request when known. */
+  loadedBytes?: number;
+  /** Full response bytes when Content-Length is exposed. */
+  totalBytes?: number;
+  /** Actual resident GPU texture bytes for this resource when display-ready. */
+  textureBytes?: number;
+  /** Largest resident texture dimensions, useful for diagnostics. */
+  textureWidth?: number;
+  textureHeight?: number;
 }
 
 /**
  * Flat-index → status for the thumbnail strip / host debug.
- * - `loading` / `ready`: byte-level neighbor preload (HTTP cache likely for `ready`).
- * - `display-ready`: neighbor load+decode settled — navigating here uses fast reveal
- *   (no artificial placeholder dwell / spinner; minimap underlay stays until the viewport
- *   main `<img>` is drawable). Slot layers paint **1×1 opaque** so WKWebView does
- *   not discard decoded bitmaps (`opacity: 0` / full-frame translucent ghosts are avoided).
- * - `warm`: bytes succeeded earlier this session, outside the window (not display-ready).
+ * - `loading` / `ready`: byte-level original request (HTTP cache likely for `ready`).
+ * - `browse-ready`: a lower-cost immediately drawable neighbor texture is resident.
+ * - `display-ready`: current-viewport Screen texture is fence-ready and resident.
+ * - `warm`: bytes or a texture succeeded earlier but the GPU texture is not currently
+ *   guaranteed resident; navigation may need another decode/upload.
  */
 export type NeighborPreloadStatusMap = Readonly<Record<number, NeighborPreloadEntry>>;
 
 /**
- * How neighbor **display** preload keeps decoded bitmaps.
- * - `'slot'` (default): retained stage `<img>` + `decode()` + 1×1 opaque keep-alive.
- * - `'decode'`: `Image()` + `decode()` only, no retained layer (approach B fallback).
- */
-export type PreloadDisplayMode = 'slot' | 'decode';
-
-/**
- * Stages for the optional progressive main-image pipeline (`minimapSrc` thumbnail
- * underlay until the full `src` has loaded in the DOM). Used by {@link ImagePreviewProps.onMainImageLoadStageChange}.
+ * Renderer-neutral presentation stages exposed by
+ * {@link ImagePreviewProps.onMainImageLoadStageChange}.
  */
 export type MainImageLoadStage =
   | 'inactive'
@@ -254,11 +274,19 @@ export interface ImagePreviewProps {
   // ── Data ──────────────────────────────────────────────────────────────────
   /** Single image shorthand. Ignored when `images` or non-empty `groupedImages` is provided. */
   src?: string;
+  /** Renderer-neutral single-media source. Takes precedence over `src` for loading. */
+  source?: MediaSource;
+  /** Explicit single-media kind. Takes precedence over sniffing. */
+  kind?: MediaKind;
+  /** Optional MIME hint for the single-media source. */
+  mimeType?: string;
   alt?: string;
   /**
    * Single-image minimap URL (only when using `src`, not `images`). Same as {@link ImageItem.minimapSrc}.
    */
   minimapSrc?: string;
+  /** Renderer-neutral single-media preview/minimap source. */
+  minimapSource?: MediaSource;
   /**
    * Single-image custom minimap node (only when using `src`). Same as {@link ImageItem.minimap}.
    */
@@ -298,7 +326,8 @@ export interface ImagePreviewProps {
   /**
    * Discrete native-percent zoom stops.
    * Must be sorted ascending and contain at least one value.
-   * Default: [10, 25, 50, 75, 100, 125, 150, 175, 200] (max 200 % — higher ratios are usually too soft for preview).
+   * Default: [5, 10, 20, 35, 50, 75, 100, 125, 150, 175, 200]
+   * (max 200 % — higher ratios are usually too soft for preview).
    */
   stops?: NativePercent[];
   /** Initial zoom mode. Default: 'fit'. */
@@ -413,29 +442,24 @@ export interface ImagePreviewProps {
   presentation?: PresentationMode;
 
   /**
-   * Preload full `src` for neighbors within this flat-index radius of the current image.
-   * Default `1` (current ±1). Pass `0` to disable neighbor byte preload.
-   * Byte preload alone does **not** skip {@link progressiveMain}; see {@link preloadDisplaySlots}.
+   * Raster texture warm-up range. `'auto'` walks outward in navigation-priority order and
+   * admits textures one at a time until the GPU budget is reached. A number is a hard
+   * flat-index radius; `0` disables GPU neighbor preload. Default: `'auto'`.
    */
-  preloadRadius?: number;
+  preloadRadius?: number | 'auto';
 
   /**
-   * Max number of **neighbor** images to keep display-ready (decoded) at once.
-   * `0` (default) — no display-ready pool **unless** {@link preloadMemoryBudgetBytes} is set
-   * (then a ceiling of 6 applies and the budget decides how many fill).
-   * `2` ≈ keep current±1 when they fall inside {@link preloadRadius}.
-   * Ignored when {@link preloadRadius} is `0`.
+   * Safety ceiling for `'auto'` preload candidates. Actual retained count is usually lower
+   * and is decided by uploaded texture bytes plus {@link preloadMemoryBudgetBytes}.
+   * Default: `128`.
    */
-  preloadDisplaySlots?: number;
+  preloadMaxCount?: number;
 
   /**
-   * Debounce (ms) after navigation before starting **neighbor** display-ready preload.
-   * Further ←/→ within this window cancels the pending warm-up so rapid scrubbing does not
-   * decode dozens of full originals. Default `600`. Does **not** delay decoding the current
-   * main image — after a long stay on N, one click to N+1 still aims for instant sharp when
-   * that neighbor was already warmed.
+   * Time the initial ←/→ key/pointer press must remain held before automatic continuation
+   * may start. The first step is always immediate. Default: `300`.
    */
-  preloadDisplaySettleMs?: number;
+  holdRepeatDelayMs?: number;
 
   /**
    * While holding ←/→ (keyboard or side arrows): after the **first** immediate step, each
@@ -448,24 +472,18 @@ export interface ImagePreviewProps {
   holdMinVisibleMs?: number;
 
   /**
-   * Decoded-bitmap byte budget for **neighbor** display-ready slots (not including the current
-   * main image). With {@link estimateDecodedBytes}, the viewer picks the nearest neighbors that
-   * fit. Props can stay fixed while browsing mixed-size folders — slot count adapts per index.
-   * When set and {@link preloadDisplaySlots} is `0`, a default ceiling of 6 is used.
+   * Delay before the current Raster image upgrades from viewport-sized Screen LOD to
+   * Full LOD. Navigation or an active ←/→ hold cancels the pending upgrade so rapidly
+   * skipped images are never fully decoded. Default: `300`.
+   */
+  fullResolutionSettleMs?: number;
+
+  /**
+   * GPU texture-cache byte budget. The current Raster texture is protected; neighbors are
+   * evicted by preload priority and then approximate LRU. When omitted, a physical-display
+   * heuristic uses 192/256/384/512/768 MiB tiers (4K = 512 MiB).
    */
   preloadMemoryBudgetBytes?: number;
-
-  /**
-   * Estimate decoded size for budget capping. Default: EXIF width×height×4 when present,
-   * else a conservative 12 MP RGBA guess.
-   */
-  estimateDecodedBytes?: (item: ImageItem) => number;
-
-  /**
-   * Display-preload strategy. Default: `'slot'` (offscreen imgs). Use `'decode'` to fall back
-   * to decode-only short-circuit without keeping compositor layers.
-   */
-  preloadDisplayMode?: PreloadDisplayMode;
 
   /**
    * Optional hook listing flat indexes currently targeted by neighbor preload (for tests / debug).
@@ -474,18 +492,20 @@ export interface ImagePreviewProps {
   onPreloadIndexesChange?: (indexes: number[]) => void;
 
   /**
-   * Optional hook for neighbor preload phase / progress (byte + display-ready).
-   * `display-ready` means decode settled — navigating there uses fast reveal (underlay until
-   * the viewport main image is drawable; not a blank stage).
+   * Optional hook for neighbor preload phase / progress.
+   * `display-ready` means the upload fence completed and the texture remains GPU-resident;
+   * navigating there atomically selects the sharp texture without a loading spinner.
    * Built-in strip bars also need {@link showThumbnailPreloadStatus}.
    */
   onPreloadStatusChange?: (status: NeighborPreloadStatusMap) => void;
 
+  /** Development/diagnostic snapshot of the viewport-driven Raster LOD planner. */
+  onRasterPreloadPlanChange?: (snapshot: RasterPreloadPlanSnapshot) => void;
+
   /**
    * When true, thumbnail tiles show bottom-edge indicators for preload status. Default: `false`.
-   * **Blue** = neighbor in the active slot window **and** decode settled (instant-switch).
-   * Being a neighbor alone is never enough — still-loading neighbors stay gray/green progress.
-   * **Green** = byte-ready / session-warm (cache hint only, not guaranteed instant).
+   * **Blue** = neighbor texture is GPU-resident and display-ready (instant switch).
+   * **Green** = byte/session warm or an evicted texture (not guaranteed instant).
    * The **current** thumbnail has no preload bar (active border is enough).
    */
   showThumbnailPreloadStatus?: boolean;
@@ -518,24 +538,11 @@ export interface ImagePreviewProps {
   /**
    * When true (default) and the current item has {@link ImageItem.minimapSrc} and no custom
    * {@link ImageItem.minimap}, the main view uses that URL as a stretched placeholder after the
-   * full image dimensions are known (background preload), keeps the centre loading spinner until
-   * the full `src` has loaded and decoded in the DOM, then reveals the sharp image without
-   * changing the corner minimap.
+   * full image is ready, uploads it as a WebGL Preview texture, and then replaces it atomically
+   * with the Screen texture. It does not mount a main-stage `<img>`.
    */
   progressiveMain?: boolean;
-  /**
-   * Minimum time (ms) the low-res {@link ImageItem.minimapSrc} placeholder stays visible in the
-   * main area after the full `src` is ready to show. Lets users see a deliberate “small/blurry
-   * first, then sharp” beat even when the full image loads from cache. Default matches internal
-   * tuning (~160 ms). Only applies when the progressive pipeline is active.
-   */
-  progressivePlaceholderMinMs?: number;
-  /**
-   * Opacity crossfade duration (ms) when revealing the full main image over the thumbnail
-   * placeholder. `0` (default) switches instantly to avoid any double-exposure flash.
-   */
-  progressiveFadeMs?: number;
-  /** Optional hook for tests, analytics, or debugging the progressive pipeline. */
+  /** Optional renderer-neutral hook for tests, analytics, or debugging presentation readiness. */
   onMainImageLoadStageChange?: (stage: MainImageLoadStage) => void;
 
   /**

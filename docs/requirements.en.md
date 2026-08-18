@@ -266,9 +266,30 @@
 - [x] Controlled `index` + `toolbarExtra` + ref `goTo`
 - [x] Demo 5: `showThumbnails` + `thumbnailsScope="flat"`
 
-## Stage 16 — Display-ready neighbor preload
+## Stage 16 — GPU-resident neighbor preload
 
-- [x] `preloadDisplaySlots` / `preloadMemoryBudgetBytes` / `estimateDecodedBytes` / `preloadDisplayMode`
-- [x] Exact `display-ready` (load + `decode`); hit uses fast reveal (no dwell/spinner; underlay until viewport drawable)
-- [x] Default `'slot'` (offscreen); `'decode'` is B fallback
-- [x] Docs: byte `ready` ≠ instant reveal; slot/memory budget is host-owned
+- [x] `preloadRadius` / `preloadMemoryBudgetBytes` / dynamic Browse and Screen LODs
+- [x] Raster Screen-LOD neighbor cache plus delayed, cancellable current-only Full LOD
+- [x] Browser fallback plus Tauri hardware-budget helper; image-stage DIV × DPR dynamically plans contiguous Browse/Screen bands with a three-ahead / two-behind Screen floor under normal budget
+- [x] `display-ready` requires a completed GPU fence and a resident texture; hits draw immediately
+- [x] Docs: byte-ready is not instant reveal; hosts may override the budget from hardware data
+
+## Stage 17 — v0.4 WebGL-first media rendering architecture
+
+The Phase 0/1 design and execution baseline is documented in
+[`v0.4-webgl-migration-plan.zh-CN.md`](./v0.4-webgl-migration-plan.zh-CN.md), with the
+bilingual architecture in [`rendering-architecture.md`](./rendering-architecture.md).
+
+- [x] Preserve the existing v0.3.12 tag and record test/build/size baselines
+- [x] Confirm WebGL2-only static raster rendering with no full DOM Raster fallback
+- [x] Design Shell/Core, MediaSource, dispatcher, and command ↔ viewState boundaries
+- [x] Add URL / Blob / bytes `MediaSource` and header-aware `MediaKind` detection
+- [x] Wire the Shell command slot and media capabilities while retaining one navigation/UI implementation
+- [x] Build `renderers/raster-webgl/` with GPU fences, progressive textures, priority prefetch, LRU, and context recovery
+- [x] Add independent `svg/`, `animated/`, `video/`, and `unknown/` renderers with capabilities
+- [x] Change the low default zoom stops to 5 / 10 / 20 / 35 / 50 / 75%, retaining the existing stops through 200%
+- [x] Thumbnail status semantics: blue = currently GPU-resident texture; green = true original transfer / completed download; evicted blue downgrades to green
+- [x] Stream URL originals with true byte progress; use an indeterminate indicator when Content-Length is unavailable instead of a fabricated ratio
+- [x] Remove the DOM Raster keep-alive/outgoing/slot/decode layer machine and related APIs
+- [x] First migration of main rendering, navigation, zoom/pan/rotate/flip, tests, bilingual architecture/API docs, and beta API
+- [ ] Compare performance and memory with v0.3.12 and fast-images-viewer

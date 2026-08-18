@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   ImagePreview,
-  defaultEstimateDecodedBytes,
-  pickDisplaySlotIndexes,
-  rgbaDecodedBytes,
+  detectRasterTextureBudgetBytes,
+  rgbaTextureBytes,
   type ImageItem,
   type MainImageLoadStage,
   type NeighborPreloadStatusMap,
+  type RasterPreloadPlanSnapshot,
 } from '../components/ImagePreview';
 import { gridStyle, sectionDescStyle, sectionHeadStyle } from './demoStyles';
 import type { DemoStrings } from './demoLocale';
@@ -19,18 +19,11 @@ import { ThumbCard } from './shared';
  */
 const MANIFEST_URL = '/__local_test_images__/manifest.json';
 
-const DEMO_SLOTS = 2;
-/**
- * Demo-only stand-in for `preloadMemoryBudgetBytes`.
- * Real hosts (Media Lens) must NOT hardcode this — read available RAM via Tauri and pass
- * `suggestPreloadMemoryBudgetBytes(availableBytes)` (or your own policy).
- */
-const DEMO_BUDGET_BYTES = 256 * 1024 * 1024;
-const DEMO_RADIUS = 2;
 /** Fixed workspace chrome — avoids layout jump when image aspect / sidebar text changes. */
 const DEMO6_WORKSPACE_H = 560;
 const DEMO6_SIDEBAR_W = 300;
 const DEMO6_HISTORY_MAX_H = 120;
+const DEMO6_CONSOLE_SAMPLE_DELAY_MS = 800;
 
 type NavPath = 'fast-reveal' | 'cold';
 
@@ -59,7 +52,14 @@ function bytesForSrc(src: string | undefined, dimBySrc: DimCache): number | null
   if (!src) return null;
   const dim = dimBySrc[src];
   if (!dim) return null;
-  return rgbaDecodedBytes(dim.w, dim.h);
+  return rgbaTextureBytes(dim.w, dim.h);
+}
+
+function splitRelativeIndexes(indexes: readonly number[], currentIndex: number) {
+  return {
+    next: indexes.filter((value) => value > currentIndex),
+    prev: indexes.filter((value) => value < currentIndex),
+  };
 }
 
 export function Demo6LocalLarge({
@@ -76,17 +76,24 @@ export function Demo6LocalLarge({
   /** When off: no display-ready pool — every ←/→ is cold progressive (easier A/B). */
   const [slotsOn, setSlotsOn] = useState(true);
   const [preloadStatus, setPreloadStatus] = useState<NeighborPreloadStatusMap>({});
+  const [lodPlan, setLodPlan] = useState<RasterPreloadPlanSnapshot | null>(null);
   const [dimBySrc, setDimBySrc] = useState<DimCache>({});
   const [lastTiming, setLastTiming] = useState<NavTiming | null>(null);
   const [history, setHistory] = useState<NavTiming[]>([]);
+  const [autoCacheBudgetBytes] = useState(detectRasterTextureBudgetBytes);
 
   const navStartRef = useRef(0);
   const underlayAtRef = useRef<number | null>(null);
   const pathForNavRef = useRef<NavPath>('cold');
   const indexRef = useRef(0);
   const statusRef = useRef(preloadStatus);
-  statusRef.current = preloadStatus;
   const dimProbeRef = useRef(new Set<string>());
+  const diagnosticTimersRef = useRef(new Set<number>());
+  const lastScheduledDiagnosticIndexRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    statusRef.current = preloadStatus;
+  }, [preloadStatus]);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,7 +128,7 @@ export function Demo6LocalLarge({
   useEffect(() => {
     const want = new Set<string>();
     for (const [k, entry] of Object.entries(preloadStatus)) {
-      if (entry?.phase !== 'display-ready') continue;
+      if (entry?.phase !== 'display-ready' && entry?.phase !== 'browse-ready') continue;
       const src = images[Number(k)]?.src;
       if (src) want.add(src);
     }
@@ -148,7 +155,7 @@ export function Demo6LocalLarge({
     }
   }, [preloadStatus, images, index, dimBySrc]);
 
-  const beginNav = (nextIndex: number) => {
+  const beginNav = useCallback((nextIndex: number) => {
     indexRef.current = nextIndex;
     setIndex(nextIndex);
     navStartRef.current = performance.now();
@@ -156,9 +163,9 @@ export function Demo6LocalLarge({
     const phase = statusRef.current[nextIndex]?.phase;
     pathForNavRef.current = phase === 'display-ready' ? 'fast-reveal' : 'cold';
     setLastTiming(null);
-  };
+  }, []);
 
-  const onStage = (stage: MainImageLoadStage) => {
+  const onStage = useCallback((stage: MainImageLoadStage) => {
     const t0 = navStartRef.current;
     if (t0 <= 0) return;
     if (stage === 'thumbnail-placeholder' && underlayAtRef.current == null) {
@@ -174,32 +181,24 @@ export function Demo6LocalLarge({
       setLastTiming(row);
       setHistory((h) => [row, ...h].slice(0, 8));
     }
-  };
+  }, []);
 
   const activeNeighborIndexes = useMemo(() => {
     if (!slotsOn) return [] as number[];
-    return pickDisplaySlotIndexes({
-      currentIndex: index,
-      radius: DEMO_RADIUS,
-      images,
-      maxSlots: DEMO_SLOTS,
-      budgetBytes: DEMO_BUDGET_BYTES,
-      estimateBytes: (item) => {
-        const dim = dimBySrc[item.src];
-        if (dim) return rgbaDecodedBytes(dim.w, dim.h);
-        return defaultEstimateDecodedBytes(item);
-      },
-    });
-  }, [slotsOn, index, images, dimBySrc]);
+    return Object.entries(preloadStatus)
+      .filter(([key, entry]) =>
+        Number(key) !== index &&
+        (entry?.phase === 'display-ready' || entry?.phase === 'browse-ready'))
+      .map(([key]) => Number(key))
+      .filter(Number.isFinite);
+  }, [slotsOn, index, preloadStatus]);
 
   const ramView = useMemo(() => {
     const curSrc = images[index]?.src;
-    const currentBytes = bytesForSrc(curSrc, dimBySrc);
+    const currentBytes = preloadStatus[index]?.textureBytes ?? bytesForSrc(curSrc, dimBySrc);
     let neighborsBytes = 0;
     for (const idx of activeNeighborIndexes) {
-      const src = images[idx]?.src;
-      const b = bytesForSrc(src, dimBySrc);
-      if (b != null) neighborsBytes += b;
+      neighborsBytes += preloadStatus[idx]?.textureBytes ?? 0;
     }
     const withPreload = !slotsOn
       ? currentBytes
@@ -218,7 +217,105 @@ export function Demo6LocalLarge({
       withoutPreload,
       extra,
     };
-  }, [images, index, dimBySrc, activeNeighborIndexes, slotsOn]);
+  }, [images, index, dimBySrc, activeNeighborIndexes, slotsOn, preloadStatus]);
+
+  const screenPlan = useMemo(() => splitRelativeIndexes([
+    ...(lodPlan?.screenForwardIndexes ?? []),
+    ...(lodPlan?.screenBackwardIndexes ?? []),
+  ], index), [lodPlan, index]);
+  const browsePlan = useMemo(() => splitRelativeIndexes([
+    ...(lodPlan?.browseForwardIndexes ?? []),
+    ...(lodPlan?.browseBackwardIndexes ?? []),
+  ], index), [lodPlan, index]);
+  const residentLods = useMemo(() => {
+    const screen: number[] = [];
+    const browse: number[] = [];
+    Object.entries(preloadStatus).forEach(([key, entry]) => {
+      const flatIndex = Number(key);
+      if (!Number.isFinite(flatIndex) || flatIndex === index) return;
+      if (entry?.phase === 'display-ready') screen.push(flatIndex);
+      if (entry?.phase === 'browse-ready') browse.push(flatIndex);
+    });
+    return {
+      screen: splitRelativeIndexes(screen, index),
+      browse: splitRelativeIndexes(browse, index),
+    };
+  }, [preloadStatus, index]);
+  const diagnosticSnapshot = useMemo(() => ({
+    sampledIndex: index,
+    imageName: images[index]?.name ?? images[index]?.alt ?? images[index]?.src ?? null,
+    preloadEnabled: slotsOn,
+    memory: {
+      nowBytes: ramView.withPreload,
+      now: ramView.withPreload == null ? null : formatBytes(ramView.withPreload),
+      currentBytes: ramView.currentBytes,
+      current: ramView.currentBytes == null ? null : formatBytes(ramView.currentBytes),
+      neighborBytes: ramView.neighborsBytes,
+      neighbors: formatBytes(ramView.neighborsBytes),
+      neighborIndexes: ramView.neighborIndexes,
+      ifOffBytes: ramView.withoutPreload,
+      ifOff: ramView.withoutPreload == null ? null : formatBytes(ramView.withoutPreload),
+      extraBytes: ramView.extra,
+      extra: formatBytes(ramView.extra),
+      budgetBytes: autoCacheBudgetBytes,
+      budget: formatBytes(autoCacheBudgetBytes),
+    },
+    viewport: lodPlan?.viewport ?? null,
+    planned: {
+      screen: screenPlan,
+      browse: browsePlan,
+    },
+    resident: residentLods,
+    nearbyPhases: {
+      prev: preloadStatus[index - 1]?.phase ?? null,
+      current: preloadStatus[index]?.phase ?? null,
+      next: preloadStatus[index + 1]?.phase ?? null,
+    },
+  }), [
+    index,
+    images,
+    slotsOn,
+    ramView,
+    autoCacheBudgetBytes,
+    lodPlan?.viewport,
+    screenPlan,
+    browsePlan,
+    residentLods,
+    preloadStatus,
+  ]);
+  const diagnosticSnapshotRef = useRef(diagnosticSnapshot);
+
+  useEffect(() => {
+    diagnosticSnapshotRef.current = diagnosticSnapshot;
+  }, [diagnosticSnapshot]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || available !== true || images.length === 0) return;
+    if (lastScheduledDiagnosticIndexRef.current === index) return;
+    lastScheduledDiagnosticIndexRef.current = index;
+    const requestedIndex = index;
+    const timer = window.setTimeout(() => {
+      diagnosticTimersRef.current.delete(timer);
+      const sampled = diagnosticSnapshotRef.current;
+      console.info(
+        `[Demo 6 GPU diagnostics]\n${JSON.stringify({
+          navigation: {
+            requestedIndex,
+            sampledIndex: sampled.sampledIndex,
+            sampleDelayMs: DEMO6_CONSOLE_SAMPLE_DELAY_MS,
+            sampledSameVisit: requestedIndex === sampled.sampledIndex,
+          },
+          ...sampled,
+        }, null, 2)}`,
+      );
+    }, DEMO6_CONSOLE_SAMPLE_DELAY_MS);
+    diagnosticTimersRef.current.add(timer);
+  }, [available, images.length, index]);
+
+  useEffect(() => () => {
+    diagnosticTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    diagnosticTimersRef.current.clear();
+  }, []);
 
   if (!import.meta.env.DEV) {
     return null;
@@ -238,6 +335,14 @@ export function Demo6LocalLarge({
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+  };
+
+  const diagnosticLine: CSSProperties = {
+    minHeight: 16,
+    lineHeight: '16px',
+    whiteSpace: 'normal',
+    overflowWrap: 'anywhere',
+    wordBreak: 'break-word',
   };
 
   return (
@@ -458,8 +563,21 @@ export function Demo6LocalLarge({
                 </div>
 
                 <div style={{ ...line, color: '#666', fontSize: 10 }}>
-                  {t.demo6PoolCap} {formatBytes(DEMO_BUDGET_BYTES)} · slots{' '}
-                  {slotsOn ? DEMO_SLOTS : 0}
+                  {t.demo6PoolCap} {formatBytes(autoCacheBudgetBytes)}
+                </div>
+                <div style={{ ...diagnosticLine, color: '#aab2c3', fontSize: 10 }}>
+                  viewport{' '}
+                  {lodPlan
+                    ? `${Math.round(lodPlan.viewport.cssWidth)}×${Math.round(lodPlan.viewport.cssHeight)} CSS · DPR ${lodPlan.viewport.dpr.toFixed(2)} · ${lodPlan.viewport.pixelWidth}×${lodPlan.viewport.pixelHeight} px`
+                    : '—'}
+                </div>
+                <div style={{ ...diagnosticLine, color: '#6ea8ff', fontSize: 10 }}>
+                  Screen LOD · next {screenPlan.next.length} [{screenPlan.next.join(', ')}]
+                  {' · '}prev {screenPlan.prev.length} [{screenPlan.prev.join(', ')}]
+                </div>
+                <div style={{ ...diagnosticLine, color: '#c084fc', fontSize: 10 }}>
+                  Browse LOD · next {browsePlan.next.length} [{browsePlan.next.join(', ')}]
+                  {' · '}prev {browsePlan.prev.length} [{browsePlan.prev.join(', ')}]
                 </div>
               </div>
 
@@ -584,13 +702,11 @@ export function Demo6LocalLarge({
                   visible
                   index={index}
                   onIndexChange={beginNav}
-                  preloadRadius={DEMO_RADIUS}
-                  preloadDisplaySlots={slotsOn ? DEMO_SLOTS : 0}
-                  preloadMemoryBudgetBytes={slotsOn ? DEMO_BUDGET_BYTES : undefined}
+                  preloadRadius={slotsOn ? 'auto' : 0}
                   onPreloadStatusChange={setPreloadStatus}
+                  onRasterPreloadPlanChange={setLodPlan}
                   onMainImageLoadStageChange={onStage}
                   progressiveMain
-                  progressivePlaceholderMinMs={800}
                   showThumbnails
                   showThumbnailPreloadStatus
                   thumbnailsScope="flat"

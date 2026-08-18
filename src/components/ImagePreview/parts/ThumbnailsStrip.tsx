@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ImageItem } from '../types';
+import { MediaSourceImage } from '../core/MediaSourceImage';
+import type { MediaSource } from '../core/media-source';
 import {
   THUMBNAIL_STRIP_ACTIVE_BORDER_PX,
   THUMBNAIL_STRIP_BOTTOM_INSET_PX,
   THUMBNAIL_STRIP_GAP_PX,
   THUMBNAIL_STRIP_HEIGHT_PX,
-  THUMBNAIL_STRIP_INACTIVE_OPACITY,
   THUMBNAIL_STRIP_PADDING_X_PX,
   THUMBNAIL_STRIP_PADDING_Y_PX,
   THUMBNAIL_STRIP_RADIUS_PX,
@@ -13,10 +14,13 @@ import {
   shouldVirtualizeThumbnailStrip,
   thumbnailStripTileStridePx,
 } from '../imagePreviewTuning';
-import {
-  NEIGHBOR_PRELOAD_INDETERMINATE_PROGRESS,
-} from '../useNeighborPreload';
+import { injectGlobalStyle } from '../injectGlobalStyle';
 import type { NeighborPreloadStatusMap } from '../types';
+
+injectGlobalStyle(
+  'rip-thumbnail-preload-indeterminate',
+  '@keyframes _rip_thumbnail_preload{0%{transform:translateX(-110%)}100%{transform:translateX(310%)}}',
+);
 
 export interface ThumbnailStripEntry {
   /** Flat index in the full preview list. */
@@ -38,8 +42,11 @@ export interface ThumbnailsStripProps {
   onUserActivity?(): void;
 }
 
-function thumbSrc(item: ImageItem): string {
-  return item.minimapSrc ?? item.src;
+function thumbSource(item: ImageItem): MediaSource {
+  return item.minimapSource ?? item.source ?? {
+    type: 'url',
+    href: item.minimapSrc ?? item.src,
+  };
 }
 
 function itemKey(item: ImageItem, flatIndex: number): string {
@@ -50,27 +57,24 @@ function itemKey(item: ImageItem, flatIndex: number): string {
  * Display-ready (decode settled — can switch over immediately).
  * Blue is **not** “neighbor window”; only neighbors that finished decode get this color.
  */
-const PRELOAD_BAR_DISPLAY_READY = '#3b82f6';
-const PRELOAD_BAR_GRAY = 'rgba(140, 150, 165, 0.55)';
-/**
- * Session-warm outside the window: HTTP cache likely, not guaranteed.
- * Lighter solid green — same family as byte-ready, weaker confidence.
- */
-const PRELOAD_BAR_LIGHT_GREEN = 'rgba(62, 207, 106, 0.45)';
+const PRELOAD_BAR_DISPLAY_READY = '#60a5fa';
+const PRELOAD_BAR_BROWSE_READY = '#c084fc';
+const PRELOAD_BAR_GRAY = 'rgba(226, 232, 240, 0.32)';
 /** Byte-level ready / in-progress fill (cache likely — not instant-switch). */
-const PRELOAD_BAR_DARK_GREEN = '#2db85a';
+const PRELOAD_BAR_DARK_GREEN = '#34d399';
 const GLASS_BG = 'rgba(6, 10, 20, 0.55)';
 /** Match tile `borderRadius` so the bar sits on the straight bottom edge. */
 const PRELOAD_BAR_INSET_X = 4;
-const PRELOAD_BAR_HEIGHT = 2;
+const PRELOAD_BAR_HEIGHT = 3;
 
 function preloadFillRatio(
   entry: NeighborPreloadStatusMap[number] | undefined,
-): number | null {
+): number | 'indeterminate' | null {
   if (!entry) return null;
   if (
     entry.phase === 'ready' ||
     entry.phase === 'warm' ||
+    entry.phase === 'browse-ready' ||
     entry.phase === 'display-ready'
   ) {
     return 1;
@@ -79,7 +83,7 @@ function preloadFillRatio(
   if (typeof entry.progress === 'number' && Number.isFinite(entry.progress)) {
     return Math.max(0, Math.min(1, entry.progress));
   }
-  return NEIGHBOR_PRELOAD_INDETERMINATE_PROGRESS;
+  return 'indeterminate';
 }
 
 export function ThumbnailsStrip({
@@ -168,8 +172,20 @@ export function ThumbnailsStrip({
     const fill = active ? null : preloadFillRatio(preloadStatus?.[flatIndex]);
     const phase = active ? undefined : preloadStatus?.[flatIndex]?.phase;
     const isWarm = phase === 'warm';
+    const isBrowseReady = phase === 'browse-ready';
     const isDisplayReady = phase === 'display-ready';
-    const barFillColor = isDisplayReady ? PRELOAD_BAR_DISPLAY_READY : PRELOAD_BAR_DARK_GREEN;
+    const isBrowseLoading = phase === 'loading' && preloadStatus?.[flatIndex]?.targetLod === 'browse';
+    const isScreenLoading = phase === 'loading' && preloadStatus?.[flatIndex]?.targetLod === 'screen';
+    const isIndeterminate = fill === 'indeterminate';
+    const barFillColor = isDisplayReady
+      ? PRELOAD_BAR_DISPLAY_READY
+      : isBrowseReady
+        ? PRELOAD_BAR_BROWSE_READY
+        : isScreenLoading
+          ? PRELOAD_BAR_DISPLAY_READY
+          : isBrowseLoading
+            ? PRELOAD_BAR_BROWSE_READY
+        : PRELOAD_BAR_DARK_GREEN;
     return (
       <button
         key={itemKey(item, flatIndex)}
@@ -189,18 +205,21 @@ export function ThumbnailsStrip({
           padding: 0,
           border:
             active
-              ? `${THUMBNAIL_STRIP_ACTIVE_BORDER_PX}px solid #cdd5e0`
+              ? `${THUMBNAIL_STRIP_ACTIVE_BORDER_PX}px solid rgba(239, 246, 255, 0.96)`
               : `${THUMBNAIL_STRIP_ACTIVE_BORDER_PX}px solid transparent`,
           borderRadius: 4,
           background: 'rgba(0, 0, 0, 0.35)',
           cursor: 'pointer',
-          opacity: active ? 1 : THUMBNAIL_STRIP_INACTIVE_OPACITY,
-          transition: 'opacity 0.15s ease',
+          opacity: 1,
+          boxShadow: active
+            ? '0 0 0 1px rgba(96, 165, 250, 0.55), 0 0 10px rgba(96, 165, 250, 0.24)'
+            : 'none',
+          transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
           overflow: 'hidden',
         }}
       >
-        <img
-          src={thumbSrc(item)}
+        <MediaSourceImage
+          source={thumbSource(item)}
           alt=""
           draggable={false}
           loading="lazy"
@@ -219,12 +238,20 @@ export function ThumbnailsStrip({
             data-preload-bar={phase ?? 'loading'}
             title={
               isDisplayReady
-                ? 'Display-ready (blue): decoded — can switch immediately'
+                ? 'GPU-ready (blue): instant switch'
+                : isBrowseReady
+                  ? 'GPU Browse-ready (violet): instant medium-detail switch'
+                  : isScreenLoading
+                    ? `Preparing Screen LOD: ${Math.round((preloadStatus?.[flatIndex]?.progress ?? 0) * 100)}%`
+                    : isBrowseLoading
+                      ? `Preparing Browse LOD: ${Math.round((preloadStatus?.[flatIndex]?.progress ?? 0) * 100)}%`
                 : isWarm
-                  ? 'Session-warm (green): loaded earlier; cache likely, not guaranteed'
+                  ? 'Original cached (green)'
                   : phase === 'ready'
-                    ? 'Byte-ready (green): bytes in window; cache likely, not instant-switch'
-                    : 'Preloading…'
+                    ? 'Original cached (green)'
+                    : preloadStatus?.[flatIndex]?.totalBytes
+                      ? `Downloading: ${Math.round((preloadStatus[flatIndex]!.progress ?? 0) * 100)}%`
+                      : 'Downloading: unknown total'
             }
             style={{
               position: 'absolute',
@@ -232,22 +259,23 @@ export function ThumbnailsStrip({
               right: PRELOAD_BAR_INSET_X,
               bottom: 0,
               height: PRELOAD_BAR_HEIGHT,
-              background: isWarm ? PRELOAD_BAR_LIGHT_GREEN : PRELOAD_BAR_GRAY,
+              background: PRELOAD_BAR_GRAY,
               pointerEvents: 'none',
               overflow: 'hidden',
             }}
           >
-            {!isWarm && (
-              <span
-                style={{
-                  display: 'block',
-                  height: '100%',
-                  width: `${fill * 100}%`,
-                  background: barFillColor,
-                  transition: 'width 0.2s ease',
-                }}
-              />
-            )}
+            <span
+              style={{
+                display: 'block',
+                height: '100%',
+                width: isIndeterminate ? '32%' : `${Number(fill) * 100}%`,
+                background: barFillColor,
+                transition: isIndeterminate ? undefined : 'width 0.2s ease',
+                animation: isIndeterminate
+                  ? '_rip_thumbnail_preload 1.1s ease-in-out infinite'
+                  : undefined,
+              }}
+            />
           </span>
         )}
       </button>

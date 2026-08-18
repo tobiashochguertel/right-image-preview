@@ -11,8 +11,12 @@
 | Prop | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `src` | `string` | — | 单张图片 URL（`images` 或非空 `groupedImages` 优先） |
+| `source` | `MediaSource` | — | 单媒体 URL / Blob / bytes；存在时优先于 `src` 负责实际加载 |
+| `kind` | `MediaKind` | — | 宿主明确指定媒体类型；优先于 sniff / MIME / 扩展名 |
+| `mimeType` | `string` | — | 单媒体 MIME 提示 |
 | `alt` | `string` | — | 单张图片 alt |
 | `minimapSrc` | `string` | — | 仅单图：小地图图片 URL（默认同 `src`）；若设 `minimap` 则忽略 |
+| `minimapSource` | `MediaSource` | — | 单媒体渐进预览 / minimap 图源；优先于 `minimapSrc` |
 | `minimap` | `React.ReactNode` | — | 仅单图：自定义小地图内容（覆盖 `minimapSrc`） |
 | `images` | `ImageItem[]` | — | 扁平多图；无非空 `groupedImages` 时 `src`/`alt` 被忽略；若与非空 `groupedImages` 同时传入则忽略 `images`（开发环境 `console.warn`） |
 | `groupedImages` | `ImageGroup[]` | — | 文件夹式分组；各组 `images` 按顺序拼接；优先于 `images`/`src`；←/→ 与按住连切沿**扁平列表跨组**；工具栏上一组/下一组（及 PageUp/PageDown）跳到组首 |
@@ -24,7 +28,7 @@
 
 | Prop | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `stops` | `NativePercent[]` | `[10,25,50,75,100,125,150,175,200]` | 离散档位列表（升序，至少 1 项）；需要更高上限请传入自定义列表 |
+| `stops` | `NativePercent[]` | `[5,10,20,35,50,75,100,125,150,175,200]` | 离散档位列表（升序，至少 1 项）；需要更高上限请传入自定义列表 |
 | `initialMode` | `'fit' \| 'native'` | `'fit'` | 初始缩放模式 |
 | `initialNativePercent` | `number` | 第一档 | `initialMode='native'` 时的初始百分比 |
 | `firstZoomInStrategy` | `'above-fit' \| 'first-stop' \| 'hundred'` | `'above-fit'` | 从 Fit 首次放大时的落档策略 |
@@ -58,21 +62,27 @@
 | `showThumbnails` | `boolean` | `false` | 预览层内底部横向缩略图条；可导航图片 ≤ 1 时自动隐藏 |
 | `thumbnailsScope` | `'group' \| 'flat'` | `'group'` | `showThumbnails` 为 true 时条带展示范围；见下表 |
 | `presentation` | `'overlay' \| 'contained'` | `'overlay'` | `overlay` 全屏对话框；`contained` 填满已定位宿主 |
-| `preloadRadius` | `number` | `1` | 相邻主图**字节**预加载半径；`0` 关闭。单独开启不会跳过渐进占位 |
-| `preloadDisplaySlots` | `number` | `0` | display-ready 邻居上限。`0` 且提供预算时上限为 6，实际张数由预算决定 |
-| `preloadDisplaySettleMs` | `number` | `600` | 切图后防抖：停稳这么久才开始预热**邻居**（连切会取消未启动的预热）。**不**延迟当前主图解码 |
-| `holdMinVisibleMs` | `number` | `NAV_HOLD_MIN_VISIBLE_MS` | 按住 ←/→：第一次立即切一张；之后每张需主区域**已呈现**可看位图（缩略 underlay 或无缩略时的原图）满此时长，且仍按住才再切。仅有布局尺寸不计时。松开取消定时器，**不堆积**步进。不传则用库默认值。 |
-| `preloadMemoryBudgetBytes` | `number` | — | **邻居**解码字节预算（不含当前主图）。推荐由 Tauri 传入；浏览中 props 可固定 |
-| `estimateDecodedBytes` | `(item) => number` | EXIF 宽×高×4 或 12MP 估算 | 预算用体积估算 |
-| `preloadDisplayMode` | `'slot' \| 'decode'` | `'slot'` | `'slot'` = 离屏 img（C）；`'decode'` = 仅 decode（B 降级） |
+| `preloadRadius` | `number \| 'auto'` | `'auto'` | `'auto'` 按导航优先级向外逐张准入，直到 GPU 预算满；数字为扁平下标硬半径；`0` 关闭 |
+| `preloadMaxCount` | `number` | `128` | auto 候选安全上限；实际驻留数量由上传后的 texture 字节数与预算决定 |
+| `holdRepeatDelayMs` | `number` | `NAV_HOLD_REPEAT_DELAY_MS`（300） | ←/→ 按下时第一张仍立即切换；只有持续按住达到此时长后，才允许第一次自动续播。它与每张图片的最短展示时长互相独立。 |
+| `holdMinVisibleMs` | `number` | `NAV_HOLD_MIN_VISIBLE_MS`（200） | 自动续播时，每张需由当前 renderer 回报主区域**已呈现**，再实际展示满此时长，且仍按住才切下一张。仅有布局尺寸、下载完成或 decode 完成都不计时。松开取消唯一的定时器，**不堆积**步进；`0` 表示呈现后下一事件循环即可继续。 |
+| `fullResolutionSettleMs` | `number` | `300` | 当前 Raster 的 Screen LOD 呈现后，停稳多久才开始 Full LOD。继续导航或仍在长按会取消；`0` 表示 Screen 就绪后立即后台升级。只升级当前张。 |
+| `preloadMemoryBudgetBytes` | `number` | 浏览器按显示器分档 | Raster GPU texture cache 预算；显式值始终优先。Tauri 宿主应以 `sysinfo`/平台 GPU budget 调用 `suggestRasterHardwareTextureBudgetBytes` 后传入。Screen/Browse 数量另按实时图片舞台 DIV × DPR 和单图尺寸动态计算。 |
 | `onPreloadIndexesChange` | `(indexes: number[]) => void` | — | 可选：当前计划预加载的扁平下标 |
-| `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | 含 `display-ready`（decode 完成，切图快开：无 dwell/转圈，占位保留到可绘制）。字节 `ready` ≠ 可秒开 |
-| `showThumbnailPreloadStatus` | `boolean` | `false` | 底片条：**蓝** = 邻居槽位内且已 decode；加载中灰/绿进度；**绿** = 字节就绪 / 会话 warm；**当前张无底条** |
-| `showSwitchLoader` | `boolean` | `true` | 切图等待下一张可绘制时显示中央圆环 Loading；`false` 只隐藏转圈，不影响托底 / 揭开时机 |
+| `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | 回报可获得的原图真实下载进度与 GPU 驻留状态；texture 被回收后由 `display-ready` 降为 `warm` |
+| `onRasterPreloadPlanChange` | `(snapshot: RasterPreloadPlanSnapshot) => void` | — | 开发诊断：实时回报图片舞台 DIV、DPR、backing pixels、预算与 Screen/Browse 各方向索引 |
+| `showThumbnailPreloadStatus` | `boolean` | `false` | 缩略图条：**蓝** = Screen 计划/驻留；**柔和紫罗兰** = Browse 计划/驻留；计划中的条按真实下载百分比填充；**绿** = 仅原图下载历史或 texture 已回收；**当前张无底条** |
+| `showSwitchLoader` | `boolean` | `true` | 当前媒体等待 `display-ready` 时显示中央圆环，并在完整纹理提交时关闭；`false` 只隐藏转圈 |
 | `chrome` | `'default' \| 'minimal'` | `'default'` | `minimal` 空闲时控件完全隐藏 |
 | `index` | `number` | — | 受控扁平下标 |
 | `toolbarExtra` | `ReactNode` | — | 工具栏末尾自定义内容 |
 | `language` | `string` | `'en'` | 界面语言：内置 `en`、`zh`（按主语言子标签匹配，如 `zh-CN` → `zh`） |
+
+下载进度语义：URL 原图通过流式 `fetch` 接收。响应暴露 `Content-Length` 时，`NeighborPreloadEntry.progress` 是 `loadedBytes / totalBytes` 的真实 0–1 比例；约每增加 1% 或间隔 200ms 回报一次，完成事件必达。已被规划为 Screen/Browse 的项目在下载与解码期间分别显示蓝/紫条，且使用这项真实比例；未知总长时显示相同目标颜色的流动不确定进度，而不是虚构的 1/3。没有 GPU LOD 计划的纯原图请求才使用绿条。`loadedBytes` / `totalBytes` 可供宿主展示详细字节数。
+
+满绿只表示本次 Viewer 生命周期内原图请求曾完整完成，后续大概率命中浏览器/WebView HTTP 缓存，但不是强保证；蓝色必须同时满足 texture 上传 fence 完成且仍驻留 GPU cache。GPU 回收或 WebGL context loss 后蓝色自动降为满绿，完整下载记录仍保留。
+
+`NeighborPreloadEntry.textureBytes` / `textureWidth` / `textureHeight` 是 cache 回报的真实驻留纹理数据，可用于诊断；不要再用原图 `width × height × 4` 估算 Screen LOD。`browse-ready`（柔和紫罗兰）表示可瞬时绘制的中等细节纹理，`display-ready`（蓝）表示足够覆盖当前图片舞台 DIV × DPR。视口改变时旧 Screen 可降级复用为 Browse；旧尺寸任务不会重新覆盖新计划。
 
 #### `arrows` 取值说明
 
@@ -96,10 +106,9 @@
 
 #### 相邻预加载说明
 
-- **字节预热**（`preloadRadius`）：仅 `Image()` 拉取。条带上的 `ready` / `warm` 表示字节可能已缓存——**不足以**跳过渐进主图。
-- **Display-ready**（`preloadDisplaySlots` > 0）：load + `decode()`（`preloadDisplayMode="slot"` 时还有离屏 `<img>`）。`display-ready` 为确切状态；切到该项走快开（无人工占位停留 / 无中央 loading），**仍保留** `minimapSrc` 占位直到视口主图可绘制。邻居预热受 `preloadDisplaySettleMs`（默认 600ms）防抖：连切不会为每一跳解码。
-- **内存**：组件不读设备内存。宿主（如 Tauri）应传入 `preloadMemoryBudgetBytes`（可用 `suggestPreloadMemoryBudgetBytes`），并尽量提供宽高。**Media Lens 接入清单：** [`media-lens-integration.zh-CN.md`](./media-lens-integration.zh-CN.md)。
-- **降级**：`preloadDisplayMode="decode"` 保持同一短路契约，但不常驻合成层。
+- v0.4 Raster 使用有界优先队列解码相邻图并直接预热 GPU texture；当前图有保留通道，不会排在邻图之后。
+- v0.3 的 DOM slot/decode、outgoing 与 1×1 keep-alive API 已删除；Raster 不再依赖离屏 `<img>` 保活。
+- 浏览器没有“剩余显存”API。组件以 `screen.width × screen.height × devicePixelRatio²` 估算物理像素并选择上述保守档位；这不是显存检测。Tauri 等能获得设备信息的宿主可显式传入 `preloadMemoryBudgetBytes` 覆盖，并尽量提供原图宽高。详见[渲染架构](./rendering-architecture.zh-CN.md)。
 
 #### `presentation` 说明
 
@@ -131,11 +140,20 @@
 interface ImageItem {
   id?: string; // 稳定主键（如路径）；身份请优先于 name
   src: string;
+  source?: MediaSource;
+  kind?: 'raster' | 'svg' | 'animated-image' | 'video' | 'unknown';
+  mimeType?: string;
   alt?: string;
   name?: string; // 工具栏信息栏显示的文件名
   minimapSrc?: string; // 导航小地图 URL；默认 src；若设 minimap 则忽略
+  minimapSource?: MediaSource;
   minimap?: React.ReactNode; // 自定义小地图；覆盖 minimapSrc
 }
+
+type MediaSource =
+  | { type: 'url'; href: string }
+  | { type: 'blob'; blob: Blob; mimeType?: string }
+  | { type: 'bytes'; data: ArrayBuffer; mimeType?: string };
 
 interface ImageGroup {
   id?: string; // 可选稳定主键（目录/相册）

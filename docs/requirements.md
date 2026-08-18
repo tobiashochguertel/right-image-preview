@@ -266,9 +266,28 @@
 - [x] 受控 `index` + `toolbarExtra` + ref `goTo`
 - [x] Demo 5：`showThumbnails` + `thumbnailsScope="flat"`
 
-## 阶段 16 — Display-ready 邻居预热
+## 阶段 16 — GPU-resident 邻居预热
 
-- [x] `preloadDisplaySlots` / `preloadMemoryBudgetBytes` / `estimateDecodedBytes` / `preloadDisplayMode`
-- [x] `display-ready` 确切判定（load + `decode`）；命中则快开（无 dwell/转圈；占位保留到视口可绘制）
-- [x] 默认 `'slot'`（离屏层）；`'decode'` 为 B 降级
-- [x] 文档：字节 `ready` ≠ 可秒切；槽位/内存由宿主决定
+- [x] `preloadRadius` / `preloadMemoryBudgetBytes` / 动态 Browse 与 Screen LOD
+- [x] Raster Screen LOD 邻图缓存 + 当前图延迟 Full LOD；长按期间可取消
+- [x] 浏览器预算回退 + Tauri 硬件预算 helper；按图片舞台 DIV × DPR 动态规划连续的 Browse/Screen 环，正常预算下 Screen 前 3 / 后 2 为底线
+- [x] `display-ready` 以 GPU fence 完成且 texture 驻留为准；命中则直接绘制
+- [x] 文档：字节 ready ≠ 可秒切；预算可由宿主硬件信息覆盖
+
+## 阶段 17 — v0.4 WebGL-first 多媒体渲染架构
+
+设计与执行基线见 [`v0.4-webgl-migration-plan.zh-CN.md`](./v0.4-webgl-migration-plan.zh-CN.md)。
+
+- [x] 固化 v0.3.12 tag 现状、建立改造前测试/构建/体积基线
+- [x] 确认静态位图 WebGL2-only，不保留完整 DOM Raster fallback
+- [x] 完成 Shell/Core、MediaSource、媒体 dispatcher、command ↔ viewState 的迁移设计
+- [x] `MediaSource`（URL / Blob / bytes）与 `MediaKind` header sniff
+- [x] Shell command slot 与媒体 capabilities 接线，导航/UI 只保留一份
+- [x] `renderers/raster-webgl/`：GPU fence、progressive texture、优先预取、LRU、context recovery
+- [x] `renderers/svg/`、`animated/`、`video/`、`unknown/` 独立实现与 capabilities
+- [x] 默认缩放低档改为 5 / 10 / 20 / 35 / 50 / 75%，高档沿用至 200%
+- [x] 缩略图状态：蓝 = GPU texture 当前驻留；绿 = 原图真实下载进度/曾完整下载；texture 淘汰后蓝降绿
+- [x] URL 原图按流式字节回报真实进度；无可见 Content-Length 时显示不确定进度，不伪造固定比例
+- [x] 删除 DOM Raster keep-alive/outgoing/slot/decode 图层机与相关 API
+- [x] 主图、切图、缩放/平移/旋转/翻转、双语架构/API 文档与 0.4 beta API 第一轮迁移
+- [ ] 完成与 v0.3.12、fast-images-viewer 的性能/内存对比

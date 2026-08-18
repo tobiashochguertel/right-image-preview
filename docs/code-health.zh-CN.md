@@ -15,7 +15,7 @@
 
 - **多处 `eslint-disable`**（hooks 依赖、ref 合并、effect 内 setState）：表示与默认规则有意的妥协，维护者需理解原因。
 - **`DelayedTooltip` 使用 `cloneElement` + ref 转发**：子节点类型或 ref 形态变化时较脆。
-- **渐进加载（`useProgressiveMainImage`）与主视图 opacity / spinner 分支**：组合状态多，需顺着多条分支阅读。
+- **Raster LOD 与 GPU cache**：重点检查 viewport generation、texture byte 预算、fence 完成与 context loss 恢复。
 
 ### 1.3 重复与 API 认知
 

@@ -8,7 +8,7 @@
 
 在浏览器中打开交互式演示（右上角可切换 **EN / 中文**），无需本地安装。
 
-> 无 UI 库依赖的 React 图片预览组件，原生支持固定档位缩放（Lightroom 式）、多图/多组导航、翻转旋转、键盘快捷键与自动渐隐控件。
+> 无 UI 库依赖的 React 媒体预览组件。v0.4 beta 的静态位图主舞台使用 WebGL2；SVG、动画图与 Video 使用各自的原生浏览器模块，并共享同一套 Viewer Shell。
 
 ---
 
@@ -16,8 +16,11 @@
 
 | 能力 | 说明 |
 |------|------|
+| **WebGL2 静态位图** | JPEG、静态 PNG/WebP、AVIF 等主图统一使用 canvas + GPU texture；不维护第二套完整 DOM Raster renderer |
+| **多媒体分发** | SVG、GIF/APNG/Animated WebP、Video、unknown 各自独立模块；工具栏按 capability 自动禁用不支持的操作 |
+| **多宿主图源** | 导出 `MediaSource`，支持 URL、Blob、ArrayBuffer bytes；可由浏览器、VS Code Webview、Tauri 宿主提供 |
 | **Fit / Native 双模式** | `fit` 以 contain 语义完整显示图片；`native` 以原始像素为 100% 基准 |
-| **固定档位缩放** | 放大/缩小只在离散档位间跳转（默认 10 %–200 %）；可用 **`stops`** 自定义 |
+| **固定档位缩放** | 放大/缩小只在离散档位间跳转（默认 5 %–200 %）；可用 **`stops`** 自定义 |
 | **缩放输入** | 可输入正整数 %；**工具栏提交值会限制在最大档位**（`ref` 调用不限制） |
 | **多图 / 多组导航** | 支持单组图片列表，也支持按文件夹/分组组织的多组图片 |
 | **翻转 & 旋转** | 水平/垂直翻转，90° 顺/逆时针旋转，带 CSS 动画 |
@@ -27,7 +30,8 @@
 | **导航小地图** | 主图溢出视口时右下角缩略图 + 可拖视口框；可通过 `showMinimap` 关闭 |
 | **缩略图条** | `showThumbnails` 开启底部横向缩略图（默认关）。`thumbnailsScope="group"`（默认）分组时仅当前组；`"flat"` 为整段扁平序列（过长时窗口虚拟化） |
 | **嵌入式模式** | `presentation="contained"` 填满宿主容器；仅聚焦时响应键盘 |
-| **相邻预加载** | `preloadRadius` 字节预热；`preloadDisplaySlots` 保持离屏 decode 就绪（槽位数由宿主按内存决定）。`display-ready` 切图快开（占位保留到视口可绘制）；仅字节就绪不会快开 |
+| **Browse/Screen/Full 分档** | 邻图数量按实时图片舞台 DIV × DPR 与真实纹理预算动态计算；预算允许时以导航方向前 3 / 后 2 个连续 Screen 形成固定核心，核心外从近到远连续铺固定 Browse 环。当前张停稳 300ms 后才升级 Full |
+| **无队列长按导航** | ←/→ 第一张立即切换；`holdRepeatDelayMs` 控制进入连续切换的门槛，`holdMinVisibleMs` 控制每张真正呈现后的最短展示时间；松开立即停止 |
 | **控件密度** | `chrome="minimal"` 空闲时控件完全隐藏 |
 | **浏览器全屏** | 工具栏切换 + ref `requestFullscreen` / `exitFullscreen`；Esc 先退出全屏 |
 | **受控下标** | `index` + `onIndexChange`；ref `goTo(index)` |
@@ -80,6 +84,14 @@ import { ImagePreview } from 'right-image-preview';
   onClose={() => setOpen(false)}
 />
 
+// Blob / bytes / Webview URI / Tauri asset URL
+<ImagePreview
+  src="stable-photo-id"
+  source={{ type: 'blob', blob: photoBlob }}
+  kind="raster"
+  visible={open}
+/>
+
 // 多图列表
 <ImagePreview
   images={[
@@ -120,6 +132,8 @@ import { ImagePreview } from 'right-image-preview';
 />
 ```
 
+渲染边界、context recovery、纹理缓存和宿主接入见[渲染架构](./docs/rendering-architecture.zh-CN.md)。
+
 ---
 
 ## API
@@ -131,6 +145,8 @@ import { ImagePreview } from 'right-image-preview';
 | Prop | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `src` | `string` | — | 单张图片 URL（提供 `images` 或非空 `groupedImages` 时忽略） |
+| `source` | `MediaSource` | — | URL / Blob / bytes 图源；实际加载时优先于 `src` |
+| `kind` | `MediaKind` | 自动识别 | 可明确指定 `raster` / `svg` / `animated-image` / `video` / `unknown` |
 | `minimapSrc` | `string` | — | 仅单图：小地图瓦片 URL（默认同主图 `src`）；设 `minimap` 时忽略 |
 | `minimap` | `React.ReactNode` | — | 仅单图：自定义小地图（覆盖 `minimapSrc`） |
 | `images` | `ImageItem[]` | — | 扁平多图列表（高于 `src`）；非空 `groupedImages` 时忽略（开发环境若同时传入可能 `console.warn`）；每项可带 `minimapSrc` / `minimap` |
@@ -138,7 +154,7 @@ import { ImagePreview } from 'right-image-preview';
 | `visible` | `boolean` | `true` | 控制预览显示/隐藏 |
 | `defaultGroupedSelection` | `{ defaultGroupIndex, defaultIndexInGroup }` | — | `groupedImages` 模式下的初始图（组下标只计非空组）；优先于 `defaultIndex` |
 | `defaultIndex` | `number` | `0` | 扁平列表中的初始下标；与分组同时传入 `defaultGroupedSelection` 时忽略 |
-| `stops` | `number[]` | `[10,25,50,75,100,125,150,175,200]` | Native zoom 档位（%，升序）；需要更高上限请传入更长列表 |
+| `stops` | `number[]` | `[5,10,20,35,50,75,100,125,150,175,200]` | Native zoom 档位（%，升序）；需要更高上限请传入更长列表 |
 | `initialMode` | `'fit' \| 'native'` | `'fit'` | 初始缩放模式 |
 | `initialNativePercent` | `number` | 第一档 | `initialMode='native'` 时的初始比例 |
 | `firstZoomInStrategy` | `'above-fit' \| 'first-stop' \| 'hundred'` | `'above-fit'` | 从 Fit 首次放大时的入档策略 |

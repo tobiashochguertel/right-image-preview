@@ -11,9 +11,39 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ### Added
 
+- **Copyable Demo 6 GPU diagnostics** — every image-index change emits one delayed JSON console entry containing requested/sampled index, memory totals, live viewport/DPR, planned Screen/Browse indexes, actually resident Screen/Browse indexes, and nearby phases.
+- **v0.4 WebGL-first beta foundation** — static Raster main content now renders through a WebGL2 canvas with upload fences, DPR resize, transform quads, progressive preview/full replacement, texture cache eviction, priority neighbor warm-up, `MAX_TEXTURE_SIZE` clamping, and context-loss recovery.
+- **Renderer-neutral media inputs** — exported `MediaSource` (`url` / `blob` / `bytes`), `MediaKind`, commands, capabilities, and view-state contracts; `ImageItem` and single-media props accept source/kind/MIME hints.
+- **Media dispatcher** — independent `raster-webgl/`, `svg/`, `animated/`, `video/`, and `unknown/` modules keep one Viewer Shell while declaring different capabilities.
 - **`npm run pack:local`** — builds into `.local-pack/right-image-preview/` for host `file:` installs (no npm publish needed for Media Lens iteration). Local packs show a top-center badge `local vX.Y.Z · YYYY-MM-DD HH:mm:ss`; npm publish builds have no badge.
+- **Adaptive Raster warm window** — `preloadRadius="auto"` walks across mixed media in navigation-priority order and admits GPU textures one at a time until actual uploaded bytes reach the cache budget. `preloadMaxCount` provides a safety ceiling.
+- **`holdRepeatDelayMs`** — the first ←/→ step remains immediate; automatic continuation begins only after the press stays held for the configured delay (default 300ms). It is independent from the per-image `holdMinVisibleMs` dwell (now default 200ms).
+- **Screen/Full Raster LODs** — neighbors decode to viewport×DPR Screen textures; only the current settled image promotes to Full after `fullResolutionSettleMs` (default 300ms). Hold navigation cancels intermediate Full work, and leaving releases the old Full while retaining its Screen texture.
+- **Display-tier GPU budgets** — automatic defaults are 192/256/384/512/768 MiB for HD/FHD/QHD/4K-class/roughly-6K+ physical pixels. Native 4K and the common macOS 5120×2880 high-DPI backing both use 512 MiB. Browsers cannot report free VRAM, so hosts may still override `preloadMemoryBudgetBytes`.
+
+### Changed
+
+- **Browse status uses calm violet** — the filmstrip and Demo 6 use `#c084fc` for immediately drawable medium-detail Browse textures, clearly separating it from blue Screen/Full and green transfer/cache status without the warning connotation of amber/orange.
+- Package version is `0.4.0-beta.1`. The existing local `v0.3.12` tag remains the DOM-generation archive; no tag or package was pushed/published.
+- **Bundle budget** — size-limit moves from 32 kB to 44 kB gzip; after removing the old DOM Raster engine, the current LOD build measures 39.81 kB versus the 31.93 kB v0.3.12 baseline. The increase is the persistent WebGL renderer/runtime, texture cache/adaptive queue, streamed progress tracking, header-only dimension parsing, Screen/Full scheduling, source sniffing, and dedicated media modules.
+- **Persistent Raster runtime** — the WebGL Canvas/context/cache stays mounted while SVG, animated images, or video is active. It becomes draw-dormant, pauses new preload uploads during animation/video playback, and redraws a retained texture when Raster becomes active again.
+- **Fixed continuous Browse/Screen bands** — auto preload reserves a three-ahead / two-behind contiguous Screen core when affordable, then expands a fixed contiguous Browse ring without ready-state holes. Counts follow the live image-stage DIV × DPR instead of fixed neighbor totals; Browse is not auto-upgraded to Screen.
+- **LOD-aware progress bars** — while a planned texture is transferring or decoding, its thumbnail bar is blue for Screen or violet for Browse and uses real available byte progress; the completed bar retains the same color.
+- **Thumbnail strip remains DOM-virtualized** — native thumbnail images preserve lazy decode, button/focus/accessibility semantics, and only visible cells plus overscan are mounted; the main-image WebGL context is not reused as a thumbnail atlas.
+- **Default zoom stops** — the low end is now `[5, 10, 20, 35, 50, 75]`, followed by the existing `100, 125, 150, 175, 200` stops.
+- **Truthful thumbnail transfer progress** — green now follows streamed original bytes when `Content-Length` is exposed (roughly 1% / 200 ms throttling). Unknown-length responses use an animated indeterminate segment instead of a fake one-third fill. Full green records a completed original request; blue is reserved for a texture that is still GPU-resident.
+- **Removed v0.3 DOM Raster compatibility surface** — `preloadDisplaySlots`, `preloadDisplaySettleMs`, `preloadDisplayMode`, `estimateDecodedBytes`, progressive DOM timing props, related helpers, retained `<img>` layers, and obsolete tests/docs are gone. `preloadRadius`, the live viewport, and the texture budget are the only neighbor-quality inputs.
 
 ### Fixed
+
+- **Immediate back-navigation keeps the prior Screen LOD** — Full never replaces/deletes its companion Screen texture. After navigating away, the just-left Screen remains in the protected cache set while its Full is released, so the former active thumbnail stays blue and a quick return does not restart from the green byte-cache state.
+- **Readable filmstrip and LOD diagnostics** — inactive thumbnails no longer dim their bitmap or preload bar; the active item uses a neutral-light border with a restrained blue halo. Demo 6 viewport/Screen/Browse diagnostics wrap complete index lists instead of truncating them with ellipses.
+- **Raster navigation keeps its GPU cache** — changing images no longer remounts the WebGL stage/context. Preloaded neighbor textures are reused, and budget eviction keeps higher-priority neighbors instead of letting farther work evict the next likely image.
+- **WebGL spinner lifecycle** — production loading is driven by media presentation phases rather than the legacy outgoing `<img>` hold; the spinner closes with the `display-ready` commit and cannot remain after the sharp texture appears.
+- **Truthful preload status under memory pressure** — an evicted texture is downgraded from blue `display-ready` to session `warm`, and the nearest image in the active navigation direction is favored when the budget cannot hold every requested neighbor.
+- **Renderer-neutral hold pacing** — production long-press navigation now waits on the active renderer's presented callback, including the WebGL Canvas path, instead of looking for a main-stage `<img>`. Release cancels the only pending timer, including the 0ms mode, so no repeat backlog can drain afterward.
+- **Resize-aware LOD reuse** — stage `ResizeObserver` changes re-plan neighbors from the actual image area. An undersized prior Screen texture is retained as Browse when useful; queued stale work is cancelled and stale in-flight completions cannot overwrite the new plan.
+- **Truthful Demo 6 memory** — diagnostics now sum actual resident WebGL texture bytes. The previous original-dimensions estimate incorrectly displayed 8+ GiB for dozens of small Screen textures.
 
 - **Navigate hold keeps zoom/pan** — snapshot the leaving frame in `goTo` *before* `resetPan`/`reset`, and only demote outgoing→1×1 after the incoming `<img>` is laid out at full size (`getBoundingClientRect` ≥ 8px), not merely when decode flags flip (avoids black + one-pixel flash).
 - **Cold gallery open tall thin strip** — current layer keeps full geometry once dims exist (do not 1×1 the current img under underlay); seed layout from `exif.width/height` on open; underlay uses `objectFit: contain`.

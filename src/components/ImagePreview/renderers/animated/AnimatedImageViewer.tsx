@@ -1,0 +1,35 @@
+import type { MediaSource } from '../../core/media-source';
+import { useMediaSourceUrl } from '../../core/use-media-source-url';
+import type { MediaStageTransformProps } from '../media-stage-types';
+import { animatedTransformStyle } from './zoomPan';
+
+export interface AnimatedImageViewerProps extends MediaStageTransformProps {
+  source: MediaSource;
+  alt: string;
+}
+
+export function AnimatedImageViewer(props: AnimatedImageViewerProps) {
+  const { source, alt, transform, onDimensions, onPhaseChange, onError, onPresented } = props;
+  const href = useMediaSourceUrl(source);
+  return (
+    <div data-rip-animated-viewer="" style={stageStyle}>
+      <img
+        src={href}
+        alt={alt}
+        draggable={false}
+        onLoad={(event) => {
+          onDimensions(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight);
+          onPhaseChange('display-ready');
+          onPresented();
+        }}
+        onError={() => onError(new Error('Unable to load animated image source'))}
+        style={{ display: 'block', maxWidth: 'none', maxHeight: 'none', ...animatedTransformStyle(transform) }}
+      />
+    </div>
+  );
+}
+
+const stageStyle = {
+  position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+  justifyContent: 'center', overflow: 'hidden', pointerEvents: 'none',
+} as const;

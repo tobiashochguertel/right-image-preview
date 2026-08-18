@@ -6,6 +6,7 @@ import {
   ZOOM_DROPDOWN_MAX_WIDTH_PX,
 } from './imagePreviewTuning';
 import type { NativePercent, ZoomMode } from './types';
+import type { MediaCapabilities } from './core/media-contract';
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 // Soft blue-grey palette — readable on dark bg without harsh white contrast.
@@ -21,6 +22,7 @@ const C = {
 } as const;
 
 interface ToolbarProps {
+  capabilities?: MediaCapabilities;
   mode: ZoomMode;
   nativePercent: NativePercent;
   fitEquivalentNativePercent?: number;
@@ -312,6 +314,7 @@ function MiddleEllipsisName({ name, style }: MiddleEllipsisNameProps) {
 // ── ZoomInput ──────────────────────────────────────────────────────────────
 
 interface ZoomInputProps {
+  disabled?: boolean;
   mode: ZoomMode;
   nativePercent: NativePercent;
   fitEquivalentNativePercent?: number;
@@ -324,6 +327,7 @@ interface ZoomInputProps {
 }
 
 function ZoomInput({
+  disabled = false,
   mode,
   nativePercent,
   fitEquivalentNativePercent,
@@ -347,6 +351,7 @@ function ZoomInput({
   const currentStopMatch = mode === 'native' ? Math.round(nativePercent) : null;
 
   const open = useCallback(() => {
+    if (disabled) return;
     setInputValue(
       mode === 'fit'
         ? (fitEquivalentNativePercent !== undefined
@@ -359,7 +364,7 @@ function ZoomInput({
       inputRef.current?.focus();
       inputRef.current?.select();
     });
-  }, [mode, nativePercent, fitEquivalentNativePercent]);
+  }, [disabled, mode, nativePercent, fitEquivalentNativePercent]);
 
   const maxStop = useMemo(() => Math.max(...stops), [stops]);
 
@@ -417,6 +422,7 @@ function ZoomInput({
           <span
             onClick={open}
             role="button"
+            aria-disabled={disabled}
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') open(); }}
             style={{
@@ -424,7 +430,8 @@ function ZoomInput({
               width: '100%',
               boxSizing: 'border-box',
               textAlign: 'center',
-              fontSize: 13, color: C.text, cursor: 'pointer',
+              fontSize: 13, color: disabled ? C.textDisabled : C.text,
+              cursor: disabled ? 'not-allowed' : 'pointer',
               padding: '3px 5px', borderRadius: 5,
               border: '1px solid transparent',
               fontVariantNumeric: 'tabular-nums',
@@ -561,6 +568,9 @@ function DropdownRow({ label, tip, active, onMouseDown }: DropdownRowProps) {
 // ── Toolbar ────────────────────────────────────────────────────────────────
 
 export function Toolbar({
+  capabilities = {
+    zoom: true, nativeZoom: true, pan: true, rotate: true, flip: true, minimap: true,
+  },
   mode, nativePercent, fitEquivalentNativePercent,
   atMinStop, atMaxStop,
   totalImages, currentIndex,
@@ -588,8 +598,8 @@ export function Toolbar({
   zoomLabelSlotPx,
   zoomDropdownWidthPx,
 }: ToolbarProps) {
-  const canZoomOut = mode === 'native' && !atMinStop;
-  const canZoomIn  = !(mode === 'native' && atMaxStop);
+  const canZoomOut = capabilities.zoom && mode === 'native' && !atMinStop;
+  const canZoomIn  = capabilities.zoom && !(mode === 'native' && atMaxStop);
   const isGroupMode = groupTotal !== undefined && groupCurrentIndex !== undefined;
   const showNav = isGroupMode || totalImages > 1;
 
@@ -791,21 +801,21 @@ export function Toolbar({
         {/* ── Flip (optional) ── */}
         {showFlip && (
           <>
-        <TBtn label={strings.flipH} tip={strings.tipFlipH} onClick={onFlipH}><IconFlipH /></TBtn>
-        <TBtn label={strings.flipV} tip={strings.tipFlipV} onClick={onFlipV}><IconFlipV /></TBtn>
+        <TBtn label={strings.flipH} tip={strings.tipFlipH} onClick={onFlipH} disabled={!capabilities.flip}><IconFlipH /></TBtn>
+        <TBtn label={strings.flipV} tip={strings.tipFlipV} onClick={onFlipV} disabled={!capabilities.flip}><IconFlipV /></TBtn>
             <Divider />
           </>
         )}
 
         {/* ── Rotate ── */}
-        <TBtn label={strings.rotateCCW} tip={strings.tipRotateCCW} onClick={onRotateCCW}><IconRotateCCW /></TBtn>
-        <TBtn label={strings.rotateCW} tip={strings.tipRotateCW} onClick={onRotateCW}><IconRotateCW /></TBtn>
+        <TBtn label={strings.rotateCCW} tip={strings.tipRotateCCW} onClick={onRotateCCW} disabled={!capabilities.rotate}><IconRotateCCW /></TBtn>
+        <TBtn label={strings.rotateCW} tip={strings.tipRotateCW} onClick={onRotateCW} disabled={!capabilities.rotate}><IconRotateCW /></TBtn>
 
         <Divider />
 
         {/* ── Jump-to-zoom presets ── */}
-        <TBtn label={strings.fitToViewport} tip={strings.tipFitToViewport} onClick={onFit}      active={mode === 'fit'}><IconFit /></TBtn>
-        <TBtn label={strings.actualSize} tip={strings.tipActualSize} onClick={onOneToOne} active={mode === 'native' && nativePercent === 100}><IconOneToOne /></TBtn>
+        <TBtn label={strings.fitToViewport} tip={strings.tipFitToViewport} onClick={onFit} disabled={!capabilities.zoom} active={mode === 'fit'}><IconFit /></TBtn>
+        <TBtn label={strings.actualSize} tip={strings.tipActualSize} onClick={onOneToOne} disabled={!capabilities.nativeZoom} active={mode === 'native' && nativePercent === 100}><IconOneToOne /></TBtn>
 
         <Divider />
 
@@ -813,6 +823,7 @@ export function Toolbar({
         <TBtn label={strings.zoomOut} tip={strings.tipZoomOut} onClick={onZoomOut} disabled={!canZoomOut}><IconZoomOut /></TBtn>
 
         <ZoomInput
+          disabled={!capabilities.zoom}
           mode={mode}
           nativePercent={nativePercent}
           fitEquivalentNativePercent={fitEquivalentNativePercent}
@@ -834,6 +845,7 @@ export function Toolbar({
           active={zoomLocked}
           accent={zoomLocked ? C.lockActive : undefined}
           onClick={onToggleLock}
+          disabled={!capabilities.zoom}
         >
           {zoomLocked ? <IconLockClosed /> : <IconLockOpen />}
         </TBtn>

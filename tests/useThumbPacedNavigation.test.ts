@@ -24,6 +24,62 @@ describe('useThumbPacedNavigation', () => {
 
     act(() => result.current.beginHold('next'));
     expect(next).toHaveBeenCalledTimes(1);
+    expect(result.current.holdingDirection).toBe('next');
+    act(() => result.current.endHold('next'));
+    expect(result.current.holdingDirection).toBeNull();
+  });
+
+  it('separates the first repeat delay from the per-image visible dwell', () => {
+    const next = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ currentIndex }) => useThumbPacedNavigation({
+        currentIndex,
+        thumbReady: true,
+        next,
+        prev: vi.fn(),
+        repeatDelayMs: 300,
+        minVisibleMs: 100,
+      }),
+      { initialProps: { currentIndex: 0 } },
+    );
+
+    act(() => result.current.beginHold('next'));
+    act(() => rerender({ currentIndex: 1 }));
+    act(() => vi.advanceTimersByTime(299));
+    expect(next).toHaveBeenCalledTimes(1);
+    act(() => vi.advanceTimersByTime(1));
+    expect(next).toHaveBeenCalledTimes(2);
+
+    act(() => rerender({ currentIndex: 2 }));
+    act(() => vi.advanceTimersByTime(99));
+    expect(next).toHaveBeenCalledTimes(2);
+    act(() => vi.advanceTimersByTime(1));
+    expect(next).toHaveBeenCalledTimes(3);
+  });
+
+  it('starts the visible dwell only after a slow image is presented', () => {
+    const next = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ currentIndex, thumbReady }) => useThumbPacedNavigation({
+        currentIndex,
+        thumbReady,
+        next,
+        prev: vi.fn(),
+        repeatDelayMs: 300,
+        minVisibleMs: 200,
+      }),
+      { initialProps: { currentIndex: 0, thumbReady: true } },
+    );
+
+    act(() => result.current.beginHold('next'));
+    act(() => rerender({ currentIndex: 1, thumbReady: false }));
+    act(() => vi.advanceTimersByTime(500));
+    expect(next).toHaveBeenCalledTimes(1);
+    act(() => rerender({ currentIndex: 1, thumbReady: true }));
+    act(() => vi.advanceTimersByTime(199));
+    expect(next).toHaveBeenCalledTimes(1);
+    act(() => vi.advanceTimersByTime(1));
+    expect(next).toHaveBeenCalledTimes(2);
   });
 
   it('short press: release before min-visible on the new image → no second step', () => {
@@ -125,6 +181,7 @@ describe('useThumbPacedNavigation', () => {
           thumbReady,
           next,
           prev: vi.fn(),
+          repeatDelayMs: 0,
           minVisibleMs: 0,
         }),
       { initialProps: { thumbReady: true, currentIndex: 0 } },
@@ -158,6 +215,7 @@ describe('useThumbPacedNavigation', () => {
           thumbReady,
           next,
           prev: vi.fn(),
+          repeatDelayMs: 0,
           minVisibleMs: 0,
         }),
       { initialProps: { thumbReady: true, currentIndex: 0 } },

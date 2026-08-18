@@ -3,38 +3,13 @@
  * Prefer editing this file over scattering magic numbers across components.
  */
 
-// ── Progressive main image (`minimapSrc` placeholder → full `src`) ───────────
-
-/** Default crossfade (ms) when revealing the full image; `0` = instant (no flash). */
-export const PROGRESSIVE_MAIN_DEFAULT_FADE_MS = 0;
-
-/**
- * `HTMLImageElement.decode()` can hang on very large bitmaps; after this timeout we still reveal
- * the main layer (image is already `complete` from `onLoad`).
- */
-export const IMAGE_DECODE_TIMEOUT_MS = 60_000;
-
-/**
- * `new Image()` preload for dimensions — if neither `load` nor `error` fires (e.g. extreme
- * payloads), fall back so the visible &lt;img&gt; can still drive layout.
- */
-export const PROGRESSIVE_PRELOAD_TIMEOUT_MS = 180_000;
-
-/**
- * Minimum time the minimap thumbnail stays visible before swapping to the full image (progressive
- * pipeline). Avoids skipping the thumbnail when the full image is served from cache and decodes in
- * the same frame as the first open.
- */
-export const MIN_PROGRESSIVE_THUMB_VISIBLE_MS = 160;
-
 // ── ←/→ hold navigation (`useThumbPacedNavigation`) ─────────────────────────
 
 /**
  * Time a key/pointer must stay down before continuous advance starts.
- * @deprecated Prefer {@link NAV_HOLD_MIN_VISIBLE_MS} — first step is immediate; further
- * steps wait until each image has been visible for min-visible, then re-check hold.
+ * The first step remains immediate; this only gates the first continuation.
  */
-export const NAV_HOLD_REPEAT_DELAY_MS = 450;
+export const NAV_HOLD_REPEAT_DELAY_MS = 300;
 
 /**
  * Minimum interval between auto-steps while holding (after {@link NAV_HOLD_REPEAT_DELAY_MS}).
@@ -48,34 +23,7 @@ export const NAV_HOLD_MIN_STEP_INTERVAL_MS = 220;
  * long before another step is allowed — and only if the key/pointer is still held.
  * Default for {@link ImagePreviewProps.holdMinVisibleMs}.
  */
-export const NAV_HOLD_MIN_VISIBLE_MS = 300;
-
-/**
- * @deprecated Prefer {@link DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_PREV} /
- * {@link DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_NEXT}. Kept for hosts that still
- * import this constant; stage layers no longer use translucent full frames.
- */
-export const DISPLAY_LAYER_KEEPALIVE_OPACITY = 0.02;
-
-/**
- * Keep-alive **crop window** for **previous** neighbors (`index < current`), as a fraction of
- * natural size. The `<img>` stays at full natural pixels; only the box is clipped
- * (`overflow: hidden`) — not CSS-scaled. Keep layers also **drop the fit transform**
- * (otherwise natural-resolution pixels get clipped by the viewport into a tall strip).
- * `0` → 1×1 CSS px window (recommended).
- */
-export const DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_PREV = 0;
-
-/**
- * Keep-alive **crop window** for **next** neighbors (`index > current`).
- * Same semantics as {@link DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_PREV}.
- */
-export const DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_NEXT = 0;
-
-/**
- * @deprecated Prefer {@link DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_NEXT}. Same value for older hosts.
- */
-export const DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO = DISPLAY_LAYER_KEEPALIVE_SIZE_RATIO_NEXT;
+export const NAV_HOLD_MIN_VISIBLE_MS = 200;
 
 // ── Viewport pan clamp (`useImageTransform`, axis-aligned overlap model) ─────
 
@@ -191,9 +139,6 @@ export const THUMBNAIL_STRIP_RADIUS_PX = 10;
 
 /** Active tile border width (px). */
 export const THUMBNAIL_STRIP_ACTIVE_BORDER_PX = 2;
-
-/** Opacity for non-active tiles in the strip. */
-export const THUMBNAIL_STRIP_INACTIVE_OPACITY = 0.55;
 
 /**
  * Windowed virtualization kicks in when `entryCount > visibleCapacity * multiplier`.

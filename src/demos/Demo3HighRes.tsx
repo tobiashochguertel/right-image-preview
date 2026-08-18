@@ -66,8 +66,6 @@ export function Demo3HighRes({ t, locale, previewLanguage }: { t: DemoStrings; l
         wheelEnabled
         doubleClickEnabled
         switchImageResetTransform
-        progressivePlaceholderMinMs={2800}
-        progressiveFadeMs={600}
         language={previewLanguage}
         onClose={() => setVisible(false)}
       />

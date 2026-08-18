@@ -76,13 +76,17 @@ export function resolvePreviewImages(props: ImagePreviewProps): {
   if (props.images && props.images.length > 0) {
     return { images: props.images, groupSlices: undefined };
   }
-  if (props.src) {
+  if (props.src || props.source) {
     return {
       images: [
         {
-          src: props.src,
+          src: props.src ?? 'media-source',
+          source: props.source,
+          kind: props.kind,
+          mimeType: props.mimeType,
           alt: props.alt,
           minimapSrc: props.minimapSrc,
+          minimapSource: props.minimapSource,
           minimap: props.minimap,
           exif: props.exif,
         },

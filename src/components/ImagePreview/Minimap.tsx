@@ -1,5 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { MediaSourceImage } from './core/MediaSourceImage';
+import type { MediaSource } from './core/media-source';
 import { DelayedTooltip } from './DelayedTooltip';
 import type { ZoomMode } from './types';
 import {
@@ -76,6 +78,8 @@ export interface MinimapProps {
    * Unused when {@link thumbnail} is set.
    */
   imageSrc: string;
+  /** Renderer-neutral source for the default minimap image. */
+  imageSource?: MediaSource;
   /** Custom minimap content; replaces the default `<img>`. */
   thumbnail?: ReactNode;
   imageAlt: string;
@@ -120,6 +124,7 @@ export interface MinimapProps {
  */
 export function Minimap({
   imageSrc,
+  imageSource,
   thumbnail,
   imageAlt,
   nw,
@@ -423,8 +428,8 @@ export function Minimap({
               {thumbnail}
             </div>
           ) : (
-            <img
-              src={imageSrc}
+            <MediaSourceImage
+              source={imageSource ?? { type: 'url', href: imageSrc }}
               alt={imageAlt}
               draggable={false}
               style={{
