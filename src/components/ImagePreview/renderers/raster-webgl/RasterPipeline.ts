@@ -44,8 +44,11 @@ export class RasterPipeline {
   private foregroundBlob: { resourceKey: string; source: MediaSource; blob: Blob } | null = null;
   private displayGeneration = 0;
   private displayBox: RasterSize | null = null;
-  // Keep one lane available to foreground preview/current work while neighbors warm.
-  private readonly decodeQueue = new PriorityTaskQueue(2, 50);
+  // Keep one lane available to the active image. Neighbor Screen work is still
+  // important, but must not consume both expensive decode/upload lanes before
+  // a newly selected image can start. Only the active Display request (100)
+  // qualifies as foreground; Full/neighbor work remains pre-emptible.
+  private readonly decodeQueue = new PriorityTaskQueue(2, 100);
 
   constructor(renderer: WebGLRasterRenderer, budgetBytes = DEFAULT_RASTER_TEXTURE_BUDGET_BYTES) {
     this.renderer = renderer;

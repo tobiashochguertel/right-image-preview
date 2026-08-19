@@ -41,6 +41,31 @@ describe('buildRasterPreloadPlan', () => {
     expect(plan.map((item) => item.resourceKey)).toEqual(['b', 'd']);
   });
 
+  it('does not scan an entire large raster folder once the auto candidate cap is met', () => {
+    const rows: ImageItem[] = Array.from({ length: 10_000 }, (_, index) => ({
+      id: String(index),
+      src: `/${index}.jpg`,
+    }));
+    let itemReads = 0;
+    const images = new Proxy(rows, {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && /^\d+$/.test(property)) itemReads += 1;
+        return Reflect.get(target, property, receiver);
+      },
+    });
+
+    const plan = buildRasterPreloadPlan({
+      images,
+      currentIndex: 5_000,
+      direction: 1,
+      range: 'auto',
+      maxCount: 16,
+    });
+
+    expect(plan).toHaveLength(16);
+    expect(itemReads).toBeLessThanOrEqual(32);
+  });
+
   it('orders a 3-forward / 2-backward baseline before expanding farther', () => {
     const rows: ImageItem[] = Array.from({ length: 15 }, (_, index) => ({
       id: String(index),

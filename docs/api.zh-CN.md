@@ -151,7 +151,7 @@ interface ImageItem {
 }
 
 type MediaSource =
-  | { type: 'url'; href: string }
+  | { type: 'url'; href: string; contentLength?: number }
   | { type: 'blob'; blob: Blob; mimeType?: string }
   | { type: 'bytes'; data: ArrayBuffer; mimeType?: string };
 

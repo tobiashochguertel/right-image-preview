@@ -135,6 +135,29 @@ describe('MediaSource', () => {
       complete: true,
     });
   });
+
+  it('uses trusted host size when a custom protocol omits Content-Length', async () => {
+    const progress = vi.fn();
+    const fetchImpl = vi.fn(async () => new Response(new Uint8Array([1, 2, 3, 4])));
+
+    await acquireMediaBlob(
+      { type: 'url', href: 'asset://localhost/photo.jpg', contentLength: 4 },
+      { fetchImpl: fetchImpl as typeof fetch, onProgress: progress },
+    );
+
+    expect(progress).toHaveBeenLastCalledWith({
+      loadedBytes: 4,
+      totalBytes: 4,
+      progress: 1,
+      complete: true,
+    });
+    expect(progress.mock.calls[0][0]).toEqual({
+      loadedBytes: 0,
+      totalBytes: 4,
+      progress: 0,
+      complete: false,
+    });
+  });
 });
 
 function objectUrlMock(): ObjectUrlApi {

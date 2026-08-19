@@ -100,21 +100,36 @@ function buildAutoPlan(
 ): RasterPreloadSource[] {
   const forward: RasterPreloadSource[] = [];
   const backward: RasterPreloadSource[] = [];
+  let forwardDone = false;
+  let backwardDone = false;
+  // Do not materialize the whole folder. In a large all-raster folder the old
+  // implementation walked every image on every navigation, even though the
+  // public safety cap meant only the first `maxCount` candidates could ever be
+  // scheduled. We only need up to that many candidates on either side; if a
+  // side runs out (or consists mostly of non-raster media), keep searching the
+  // other side until it too reaches the cap or its physical boundary.
   for (let distance = 1; distance < images.length; distance += 1) {
-    const ahead = toRasterPreloadSource(
-      images,
-      currentIndex + distance * direction,
-      'forward',
-      distance,
-    );
-    const behind = toRasterPreloadSource(
-      images,
-      currentIndex - distance * direction,
-      'backward',
-      distance,
-    );
-    if (ahead) forward.push(ahead);
-    if (behind) backward.push(behind);
+    if (!forwardDone) {
+      const index = currentIndex + distance * direction;
+      if (index < 0 || index >= images.length) {
+        forwardDone = true;
+      } else {
+        const ahead = toRasterPreloadSource(images, index, 'forward', distance);
+        if (ahead) forward.push(ahead);
+        if (forward.length >= maxCount) forwardDone = true;
+      }
+    }
+    if (!backwardDone) {
+      const index = currentIndex - distance * direction;
+      if (index < 0 || index >= images.length) {
+        backwardDone = true;
+      } else {
+        const behind = toRasterPreloadSource(images, index, 'backward', distance);
+        if (behind) backward.push(behind);
+        if (backward.length >= maxCount) backwardDone = true;
+      }
+    }
+    if (forwardDone && backwardDone) break;
   }
 
   const result: RasterPreloadSource[] = [];

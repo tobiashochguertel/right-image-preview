@@ -1,5 +1,13 @@
 export type MediaSource =
-  | { type: 'url'; href: string }
+  | {
+      type: 'url';
+      href: string;
+      /**
+       * Trusted source size supplied by the host when a custom protocol (for
+       * example Tauri `asset:`) cannot expose Content-Length to fetch.
+       */
+      contentLength?: number;
+    }
   | { type: 'blob'; blob: Blob; mimeType?: string }
   | { type: 'bytes'; data: ArrayBuffer; mimeType?: string };
 
@@ -102,7 +110,8 @@ export async function acquireMediaBlob(
   if (!response.ok) {
     throw new Error(`Failed to load media source: ${response.status} ${response.statusText}`);
   }
-  const contentLength = parseContentLength(response.headers.get('content-length'));
+  const contentLength = parseContentLength(response.headers.get('content-length')) ??
+    parseContentLength(source.contentLength);
   const contentType = response.headers.get('content-type') ?? '';
   if (!response.body) {
     const blob = await response.blob();
@@ -142,8 +151,8 @@ export async function acquireMediaBlob(
   return blob;
 }
 
-function parseContentLength(value: string | null): number | undefined {
-  if (!value) return undefined;
+function parseContentLength(value: string | number | null | undefined): number | undefined {
+  if (value == null || value === '') return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
