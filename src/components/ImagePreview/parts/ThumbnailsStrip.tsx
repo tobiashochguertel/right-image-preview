@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ImageItem } from '../types';
 import { MediaSourceImage } from '../core/MediaSourceImage';
 import type { MediaSource } from '../core/media-source';
@@ -40,6 +40,30 @@ export interface ThumbnailsStripProps {
   thumbAria: (index: number, total: number) => string;
   onSelect(flatIndex: number): void;
   onUserActivity?(): void;
+}
+
+/**
+ * The real scroller width is only available after the first commit.  Starting
+ * from zero would temporarily mount every tile, which is especially expensive
+ * for desktop folders containing hundreds or thousands of images.  A bounded
+ * bootstrap width lets large strips virtualize on their very first render;
+ * ResizeObserver replaces it with the exact contained viewport immediately.
+ */
+function bootstrapViewportWidth(): number {
+  if (typeof window === 'undefined') return 1024;
+  return Math.max(320, Math.min(window.innerWidth || 1024, 1024));
+}
+
+function activeScrollLeft(
+  entries: readonly ThumbnailStripEntry[],
+  activeFlatIndex: number,
+  stride: number,
+  tileOuter: number,
+  viewportWidth: number,
+): number {
+  const activePos = entries.findIndex((entry) => entry.flatIndex === activeFlatIndex);
+  if (activePos < 0) return 0;
+  return Math.max(0, activePos * stride - viewportWidth / 2 + tileOuter / 2);
 }
 
 function thumbSource(item: ImageItem): MediaSource {
@@ -100,13 +124,15 @@ export function ThumbnailsStrip({
   const glassRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLButtonElement>(null);
-  /** True when thumbs overflow the viewport — use a full-width bottom bar. */
-  const [expanded, setExpanded] = useState(false);
-  const [scrollLeft, setScrollLeft] = useState(0);
-  const [viewportW, setViewportW] = useState(0);
-
   const stride = thumbnailStripTileStridePx();
   const tileOuter = THUMBNAIL_STRIP_HEIGHT_PX + THUMBNAIL_STRIP_ACTIVE_BORDER_PX * 2;
+  const bootstrapWidth = bootstrapViewportWidth();
+  /** True when thumbs overflow the viewport — use a full-width bottom bar. */
+  const [expanded, setExpanded] = useState(false);
+  const [viewportW, setViewportW] = useState(bootstrapWidth);
+  const [scrollLeft, setScrollLeft] = useState(() =>
+    activeScrollLeft(entries, activeFlatIndex, stride, tileOuter, bootstrapWidth));
+
   const totalWidth = entries.length * stride - (entries.length > 0 ? THUMBNAIL_STRIP_GAP_PX : 0);
   const useVirtual = shouldVirtualizeThumbnailStrip(entries.length, viewportW);
 
@@ -122,36 +148,28 @@ export function ThumbnailsStrip({
   }, [useVirtual, scrollLeft, stride, viewportW, entries.length]);
 
   useLayoutEffect(() => {
-    const glass = glassRef.current;
-    const scroller = scrollerRef.current;
-    if (!glass || !scroller) return;
-
-    const update = () => {
-      const w = scroller.clientWidth;
-      setExpanded(scroller.scrollWidth > glass.clientWidth + 1 || useVirtual);
-      setViewportW(w);
-      setScrollLeft(scroller.scrollLeft);
-    };
-    update();
-
-    const ro = new ResizeObserver(update);
-    ro.observe(glass);
-    ro.observe(scroller);
-    return () => ro.disconnect();
-  }, [entries, useVirtual]);
-
-  useEffect(() => {
     const el = activeRef.current;
     const scroller = scrollerRef.current;
     if (!scroller || entries.length === 0) return;
 
     if (useVirtual) {
-      const activePos = entries.findIndex((e) => e.flatIndex === activeFlatIndex);
-      if (activePos < 0) return;
-      const target = activePos * stride - scroller.clientWidth / 2 + tileOuter / 2;
+      const target = activeScrollLeft(
+        entries,
+        activeFlatIndex,
+        stride,
+        tileOuter,
+        scroller.clientWidth || viewportW,
+      );
       // Instant scroll so the active border and strip position update with navigation
       // (same beat as currentIndex), not after a smooth pan that lags the main stage.
-      scroller.scrollTo({ left: Math.max(0, target), behavior: 'auto' });
+      // This is a layout effect so the first browser paint already contains the
+      // active virtual window instead of an empty strip.
+      if (typeof scroller.scrollTo === 'function') {
+        scroller.scrollTo({ left: target, behavior: 'auto' });
+      } else {
+        scroller.scrollLeft = target;
+      }
+      setScrollLeft((previous) => previous === target ? previous : target);
       return;
     }
 
@@ -161,7 +179,26 @@ export function ThumbnailsStrip({
       inline: 'center',
       behavior: 'auto',
     });
-  }, [activeFlatIndex, useVirtual, entries, stride, tileOuter]);
+  }, [activeFlatIndex, useVirtual, entries, stride, tileOuter, viewportW]);
+
+  useLayoutEffect(() => {
+    const glass = glassRef.current;
+    const scroller = scrollerRef.current;
+    if (!glass || !scroller) return;
+
+    const update = () => {
+      const w = scroller.clientWidth;
+      setExpanded(scroller.scrollWidth > glass.clientWidth + 1 || useVirtual);
+      if (w > 0) setViewportW((previous) => previous === w ? previous : w);
+      setScrollLeft((previous) => previous === scroller.scrollLeft ? previous : scroller.scrollLeft);
+    };
+    update();
+
+    const ro = new ResizeObserver(update);
+    ro.observe(glass);
+    ro.observe(scroller);
+    return () => ro.disconnect();
+  }, [entries, useVirtual]);
 
   if (entries.length <= 1) return null;
 

@@ -39,6 +39,7 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ### Fixed
 
+- **Large-folder preview startup no longer scales with the whole folder on every progress tick** — thumbnail-strip virtualization now starts from a bounded bootstrap viewport and centers the active virtual window in a layout effect. Raster runtime progress uses a one-time resource index and touches only active downloads/resident textures, so opening a preview neither creates every thumbnail DOM node before first paint nor repeatedly scans thousands of images while the current original transfers.
 - **No-op cache-retention render loop** — `retainOnly()` now publishes runtime state only when it actually removes a texture, and identical resident/cache snapshots preserve React state identity. This prevents the history-retention planner from feeding an unchanged cache snapshot back into itself at 100% CPU.
 - **Immediate back-navigation keeps the prior Screen LOD** — Full never replaces/deletes its companion Screen texture. After navigating away, the just-left Screen remains in the protected cache set while its Full is released, so the former active thumbnail stays blue and a quick return does not restart from the green byte-cache state.
 - **Readable filmstrip and LOD diagnostics** — inactive thumbnails no longer dim their bitmap or preload bar; the active item uses a neutral-light border with a restrained blue halo. Demo 6 viewport/Screen/Browse diagnostics wrap complete index lists instead of truncating them with ellipses.

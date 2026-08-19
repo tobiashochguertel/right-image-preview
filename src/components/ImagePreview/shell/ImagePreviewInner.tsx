@@ -62,6 +62,33 @@ import { usePinchZoom } from '../usePinchZoom';
 import { useWheelZoom } from '../useWheelZoom';
 import { useZoomState } from '../useZoomState';
 
+function sameNeighborPreloadEntry(
+  left: NeighborPreloadEntry | undefined,
+  right: NeighborPreloadEntry | undefined,
+): boolean {
+  return left === right || !!left && !!right &&
+    left.phase === right.phase &&
+    left.targetLod === right.targetLod &&
+    left.progress === right.progress &&
+    left.loadedBytes === right.loadedBytes &&
+    left.totalBytes === right.totalBytes &&
+    left.textureBytes === right.textureBytes &&
+    left.textureWidth === right.textureWidth &&
+    left.textureHeight === right.textureHeight;
+}
+
+function sameNeighborPreloadStatusMap(
+  left: NeighborPreloadStatusMap,
+  right: NeighborPreloadStatusMap,
+): boolean {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  return leftKeys.length === rightKeys.length && rightKeys.every((key) => {
+    const index = Number(key);
+    return sameNeighborPreloadEntry(left[index], right[index]);
+  });
+}
+
 const DEFAULT_STOPS: NativePercent[] = [5, 10, 20, 35, 50, 75, 100, 125, 150, 175, 200];
 
 injectGlobalStyle('rip-spin', '@keyframes _rip_spin{to{transform:rotate(360deg)}}');
@@ -418,6 +445,14 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       rasterPreloadDirection,
       rasterKnownSizes,
     ]);
+    const rasterIndexByResourceKey = useMemo(() => {
+      const index = new Map<string, number>();
+      images.forEach((item, flatIndex) => {
+        const resourceKey = item.id ?? item.src;
+        if (!index.has(resourceKey)) index.set(resourceKey, flatIndex);
+      });
+      return index;
+    }, [images]);
     const [gpuPreloadStatus, setGpuPreloadStatus] = useState<NeighborPreloadStatusMap>({});
     const onRasterPreloadStateChange = useCallback((
       item: RasterPreloadSource,
@@ -425,9 +460,8 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       targetLod?: 'browse' | 'screen',
     ) => {
       if (item.flatIndex == null) return;
-      setGpuPreloadStatus((previous) => ({
-        ...previous,
-        [item.flatIndex!]: phase === 'loading'
+      setGpuPreloadStatus((previous) => {
+        const nextEntry: NeighborPreloadEntry = phase === 'loading'
           ? { ...previous[item.flatIndex!], phase: 'loading', targetLod }
           : phase === 'display-ready'
             ? { ...previous[item.flatIndex!], phase: 'display-ready', progress: 1 }
@@ -435,8 +469,10 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
               ? { ...previous[item.flatIndex!], phase: 'browse-ready', progress: 1 }
             : phase === 'evicted'
               ? { phase: 'warm', progress: 1 }
-              : { phase: 'error', progress: 0 },
-      }));
+              : { phase: 'error', progress: 0 };
+        if (sameNeighborPreloadEntry(previous[item.flatIndex!], nextEntry)) return previous;
+        return { ...previous, [item.flatIndex!]: nextEntry };
+      });
     }, []);
     const onRasterRuntimeStateChange = useCallback((snapshot: RasterRuntimeSnapshot) => {
       setRasterKnownSizes((previous) => {
@@ -453,7 +489,6 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
         });
         return changed ? next : previous;
       });
-      const resident = new Set(snapshot.residentResourceKeys);
       const texturesByResource = new Map<string, typeof snapshot.residentTextures>();
       snapshot.residentTextures.forEach((texture) => {
         texturesByResource.set(texture.resourceKey, [
@@ -463,26 +498,28 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       });
       setGpuPreloadStatus((previous) => {
         const next: Record<number, NeighborPreloadEntry> = {};
-        images.forEach((item, index) => {
-          const resourceKey = item.id ?? item.src;
-          const download = snapshot.downloads[resourceKey];
-          if (resident.has(resourceKey)) {
-            const textures = texturesByResource.get(resourceKey) ?? [];
-            const largest = textures.reduce<(typeof textures)[number] | undefined>(
-              (best, texture) => !best || texture.bytes > best.bytes ? texture : best,
-              undefined,
-            );
-            next[index] = {
-              phase: textures.some((texture) =>
-                texture.quality === 'display' || texture.quality === 'full')
-                ? 'display-ready'
-                : 'browse-ready',
-              progress: 1,
-              textureBytes: textures.reduce((sum, texture) => sum + texture.bytes, 0),
-              textureWidth: largest?.width,
-              textureHeight: largest?.height,
-            };
-          } else if (download?.complete) {
+        texturesByResource.forEach((textures, resourceKey) => {
+          const index = rasterIndexByResourceKey.get(resourceKey);
+          if (index == null) return;
+          const largest = textures.reduce<(typeof textures)[number] | undefined>(
+            (best, texture) => !best || texture.bytes > best.bytes ? texture : best,
+            undefined,
+          );
+          next[index] = {
+            phase: textures.some((texture) =>
+              texture.quality === 'display' || texture.quality === 'full')
+              ? 'display-ready'
+              : 'browse-ready',
+            progress: 1,
+            textureBytes: textures.reduce((sum, texture) => sum + texture.bytes, 0),
+            textureWidth: largest?.width,
+            textureHeight: largest?.height,
+          };
+        });
+        Object.entries(snapshot.downloads).forEach(([resourceKey, download]) => {
+          const index = rasterIndexByResourceKey.get(resourceKey);
+          if (index == null || next[index]) return;
+          if (download.complete) {
             const loadingTarget = previous[index]?.phase === 'loading'
               ? previous[index]?.targetLod
               : undefined;
@@ -493,7 +530,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
               totalBytes: download.totalBytes,
               targetLod: loadingTarget,
             };
-          } else if (download) {
+          } else {
             next[index] = {
               phase: 'loading',
               progress: download.progress,
@@ -501,13 +538,15 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
               totalBytes: download.totalBytes,
               targetLod: previous[index]?.targetLod,
             };
-          } else if (previous[index]?.phase === 'error') {
-            next[index] = previous[index];
           }
         });
-        return next;
+        Object.entries(previous).forEach(([key, entry]) => {
+          const index = Number(key);
+          if (!next[index] && entry.phase === 'error') next[index] = entry;
+        });
+        return sameNeighborPreloadStatusMap(previous, next) ? previous : next;
       });
-    }, [images]);
+    }, [rasterIndexByResourceKey]);
     // Keep the current entry in the public/debug snapshot so hosts can sum true
     // cache bytes. ThumbnailsStrip independently suppresses the active tile bar.
     const rasterThumbnailStatus = gpuPreloadStatus;

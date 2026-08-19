@@ -9,6 +9,27 @@ const entries = [0, 1, 2].map((flatIndex) => ({
 }));
 
 describe('ThumbnailsStrip preload status', () => {
+  it('virtualizes a large strip on its first render around the active item', () => {
+    const manyEntries = Array.from({ length: 500 }, (_, flatIndex) => ({
+      flatIndex,
+      item: { id: `large-${flatIndex}`, src: `/large-${flatIndex}.jpg` },
+    }));
+    const { container } = render(
+      <ThumbnailsStrip
+        entries={manyEntries}
+        activeFlatIndex={250}
+        ariaLabel="thumbs"
+        thumbAria={(index) => `thumb-${index}`}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    const buttons = container.querySelectorAll('button');
+    expect(buttons.length).toBeGreaterThan(0);
+    expect(buttons.length).toBeLessThan(100);
+    expect(container.querySelector('[aria-current="true"]')).not.toBeNull();
+  });
+
   it('uses the measured download ratio for the green bar', () => {
     const { container } = render(
       <ThumbnailsStrip
