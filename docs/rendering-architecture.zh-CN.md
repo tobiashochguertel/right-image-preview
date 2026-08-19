@@ -66,7 +66,7 @@ WebGL context loss 时阻止浏览器默认放弃恢复，清空失效句柄并�
 
 Raster WebGL 在 incoming texture draw 后的 rAF 回报 presented；SVG、动画图和 Video 由各自 renderer 回报。生产路径不再查找 `<img>`，所以 Canvas 常驻和混合媒体切换不会让长按续播卡死。
 
-LOD 已采用独立的 trailing settle 策略：远邻先按当前 stage box 的 60% 线性尺寸准备 Browse，近邻准备完整 Screen；Full 只针对当前图片，并在 `fullResolutionSettleMs`（默认 300ms）内没有继续导航后启动。hold 期间暂停 Full，松开后只调度最终停留项。Full 就绪后原子替换并保留当前 Screen；离开释放旧 Full。超过 `MAX_TEXTURE_SIZE` 的 Full 仍会等比限制，真正的超大图 tile renderer 留给后续 0.4.x。
+LOD 已采用独立的 trailing settle 策略：远邻先按当前 stage box 的 60% 线性尺寸准备 Browse，近邻准备完整 Screen，但都要等当前 Screen texture 已提交。Full 只针对当前图片，并改为按需升级：Fit 状态的 Screen 已覆盖物理视口，只有缩放超过该 Screen 纹理且 `fullResolutionSettleMs`（默认 300ms）内没有继续导航时才启动 Full。hold 期间暂停 Full，松开后只调度最终停留项。Full 就绪后原子替换并保留当前 Screen；离开释放旧 Full。超过 `MAX_TEXTURE_SIZE` 的 Full 仍会等比限制，真正的超大图 tile renderer 留给后续 0.4.x。
 
 ## 缩略图条
 

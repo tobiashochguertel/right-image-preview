@@ -11,6 +11,7 @@ import type { RasterTextureEntry } from './types';
 import { WebGLRasterRenderer } from './WebGLRasterRenderer';
 import {
   RASTER_FULL_RESOLUTION_SETTLE_MS,
+  needsRasterFullResolution,
   scaleRasterLodBox,
 } from './rasterLod';
 import { detectRasterTextureBudgetBytes } from './rasterMemoryBudget';
@@ -400,6 +401,12 @@ export function WebGLRasterStage({
     const pipeline = pipelineRef.current;
     if (!active || !pipeline || !resourceKey || !source || fullResolutionPaused) return;
     if (!entry || entry.resourceKey !== resourceKey || entry.quality !== 'display') return;
+    if (!needsRasterFullResolution(
+      { width: entry.naturalWidth, height: entry.naturalHeight },
+      { width: entry.textureWidth, height: entry.textureHeight },
+      transform.scale,
+      viewport.dpr,
+    )) return;
     const generation = generationRef.current;
     const key = resourceKey + '|full';
     const naturalSize = knownWidth && knownHeight
@@ -437,14 +444,27 @@ export function WebGLRasterStage({
     fullResolutionSettleMs,
     knownWidth,
     knownHeight,
+    transform.scale,
+    viewport.dpr,
     contextGeneration,
     retentionKeys,
   ]);
 
   useEffect(() => {
     const pipeline = pipelineRef.current;
-    if (!pipeline) return;
+    if (!active || !pipeline) return;
     let cancelled = false;
+    const activeScreenReady = !!(
+      resourceKey &&
+      entry &&
+      entry.resourceKey === resourceKey &&
+      (entry.quality === 'display' || entry.quality === 'full')
+    );
+    pipeline.cache.protect(retentionKeys);
+    if (!preloadEnabled || !activeScreenReady) {
+      pipeline.retainOnly(preloadEnabled ? retentionKeys : protectedKeys);
+      return;
+    }
     const priorities = new Map<string, number>();
     retentionKeys.forEach((key) => priorities.set(key, 100));
     lodPlan.entries.forEach((item) => {
@@ -458,11 +478,6 @@ export function WebGLRasterStage({
         priorities.set(itemDisplayKey, item.priority);
       }
     });
-    pipeline.cache.protect(retentionKeys);
-    if (!preloadEnabled) {
-      pipeline.retainOnly(protectedKeys);
-      return;
-    }
     // A plan change (especially a viewport resize) must discard old distant
     // textures. Otherwise the cache remains under budget and stale blue items
     // survive between the new continuous bands.
@@ -539,6 +554,9 @@ export function WebGLRasterStage({
       cancelled = true;
     };
   }, [
+    active,
+    resourceKey,
+    entry,
     lodPlan.entries,
     preloadEnabled,
     preloadPaused,

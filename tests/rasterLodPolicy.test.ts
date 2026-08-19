@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { fitRasterToScreenLod } from '../src/components/ImagePreview/renderers/raster-webgl/rasterLod';
+import {
+  fitRasterToScreenLod,
+  needsRasterFullResolution,
+} from '../src/components/ImagePreview/renderers/raster-webgl/rasterLod';
 import { readRasterNaturalSize } from '../src/components/ImagePreview/renderers/raster-webgl/rasterDimensions';
 import {
   RASTER_TEXTURE_BUDGET_4K_BYTES,
@@ -22,6 +25,27 @@ describe('Raster LOD policy', () => {
       width: 1200,
       height: 800,
     });
+  });
+
+  it('promotes to Full only after zoom outgrows the Screen texture', () => {
+    expect(needsRasterFullResolution(
+      { width: 7000, height: 4000 },
+      { width: 5120, height: 2880 },
+      0.36,
+      2,
+    )).toBe(false);
+    expect(needsRasterFullResolution(
+      { width: 7000, height: 4000 },
+      { width: 5120, height: 2880 },
+      1,
+      2,
+    )).toBe(true);
+    expect(needsRasterFullResolution(
+      { width: 1200, height: 800 },
+      { width: 1200, height: 800 },
+      1,
+      2,
+    )).toBe(false);
   });
 
   it('derives a conservative Tauri hardware budget and backs off under RAM pressure', () => {

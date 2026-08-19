@@ -66,7 +66,7 @@
 | `preloadMaxCount` | `number` | `128` | auto 候选安全上限；实际驻留数量由上传后的 texture 字节数与预算决定 |
 | `holdRepeatDelayMs` | `number` | `NAV_HOLD_REPEAT_DELAY_MS`（300） | ←/→ 按下时第一张仍立即切换；只有持续按住达到此时长后，才允许第一次自动续播。它与每张图片的最短展示时长互相独立。 |
 | `holdMinVisibleMs` | `number` | `NAV_HOLD_MIN_VISIBLE_MS`（200） | 自动续播时，每张需由当前 renderer 回报主区域**已呈现**，再实际展示满此时长，且仍按住才切下一张。仅有布局尺寸、下载完成或 decode 完成都不计时。松开取消唯一的定时器，**不堆积**步进；`0` 表示呈现后下一事件循环即可继续。 |
-| `fullResolutionSettleMs` | `number` | `300` | 当前 Raster 的 Screen LOD 呈现后，停稳多久才开始 Full LOD。继续导航或仍在长按会取消；`0` 表示 Screen 就绪后立即后台升级。只升级当前张。 |
+| `fullResolutionSettleMs` | `number` | `300` | 当前 Raster 的缩放需求超过 Screen LOD 后，停稳多久才开始 Full LOD。继续导航或仍在长按会取消；`0` 表示需求出现后立即后台升级。只升级当前张；Fit 状态不会仅因后台停留而完整解码。 |
 | `preloadMemoryBudgetBytes` | `number` | 浏览器按显示器分档 | Raster GPU texture cache 预算；显式值始终优先。Tauri 宿主应以 `sysinfo`/平台 GPU budget 调用 `suggestRasterHardwareTextureBudgetBytes` 后传入。Screen/Browse 数量另按实时图片舞台 DIV × DPR 和单图尺寸动态计算。 |
 | `onPreloadIndexesChange` | `(indexes: number[]) => void` | — | 可选：当前计划预加载的扁平下标 |
 | `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | 回报可获得的原图真实下载进度与 GPU 驻留状态；texture 被回收后由 `display-ready` 降为 `warm` |

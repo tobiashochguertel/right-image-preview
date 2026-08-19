@@ -66,7 +66,7 @@ Keyboard and side arrows share one queue-free hold state machine. Pressing steps
 
 Raster WebGL reports presentation on the rAF following its incoming texture draw; SVG, animated-image, and Video renderers report from their own commit paths. Production pacing never queries an `<img>`, so persistent Canvas and mixed-media switches do not stall continuation.
 
-LOD uses a separate trailing-settle policy: far neighbors prepare Browse at 60% of the current stage box's linear dimensions and near neighbors use full Screen. Full is current-only and starts after `fullResolutionSettleMs` (300ms by default) without further navigation. Full promotion is suspended during hold and only the final landed item is scheduled after release. Full atomically replaces Screen while retaining the current Screen texture; leaving releases old Full. Full still respects `MAX_TEXTURE_SIZE`; truly tiled rendering remains future 0.4.x work.
+LOD uses a separate trailing-settle policy: far neighbors prepare Browse at 60% of the current stage box's linear dimensions and near neighbors use full Screen, but only after the active Screen texture is committed. Full is current-only and demand-driven: fit-mode Screen already covers the physical viewport, so a Full decode starts only after zoom exceeds that Screen texture and `fullResolutionSettleMs` (300ms by default) elapses without further navigation. Full promotion is suspended during hold and only the final landed item is scheduled after release. Full atomically replaces Screen while retaining the current Screen texture; leaving releases old Full. Full still respects `MAX_TEXTURE_SIZE`; truly tiled rendering remains future 0.4.x work.
 
 ## Thumbnail strip
 

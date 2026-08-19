@@ -20,6 +20,7 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 - **`holdRepeatDelayMs`** — the first ←/→ step remains immediate; automatic continuation begins only after the press stays held for the configured delay (default 300ms). It is independent from the per-image `holdMinVisibleMs` dwell (now default 200ms).
 - **Screen/Full Raster LODs** — neighbors decode to viewport×DPR Screen textures; only the current settled image promotes to Full after `fullResolutionSettleMs` (default 300ms). Hold navigation cancels intermediate Full work, and leaving releases the old Full while retaining its Screen texture.
 - **Screen history pins** — recent non-contiguous visits retain their already-resident Screen textures after current plus immediate next/previous capacity is reserved. These pins never schedule a retry after eviction, keeping 4 ↔ 11-style thumbnail toggles fast without adding hidden decode work.
+- **Demand-driven Full LOD** — Fit mode remains on its already viewport-sharp Screen texture. Full decode is deferred until user zoom demand actually exceeds Screen, preventing an idle large-local-image decode from blocking interaction.
 - **Display-tier GPU budgets** — automatic defaults are 192/256/384/512/768 MiB for HD/FHD/QHD/4K-class/roughly-6K+ physical pixels. Native 4K and the common macOS 5120×2880 high-DPI backing both use 512 MiB. Browsers cannot report free VRAM, so hosts may still override `preloadMemoryBudgetBytes`.
 
 ### Changed

@@ -41,3 +41,26 @@ export function scaleRasterLodBox(box: RasterSize, scale = RASTER_BROWSE_LOD_SCA
     height: Math.max(1, Math.round(box.height * safeScale)),
   };
 }
+
+/**
+ * Fit-mode Screen already covers its physical viewport. Full decode is only
+ * useful once zoom demand outgrows that resident texture; starting it earlier
+ * can stall some WebViews on very large local JPEGs without improving pixels.
+ */
+export function needsRasterFullResolution(
+  naturalSize: RasterSize,
+  textureSize: RasterSize,
+  transformScale: number,
+  dpr: number,
+): boolean {
+  if (textureSize.width >= naturalSize.width && textureSize.height >= naturalSize.height) {
+    return false;
+  }
+  const physicalScale = Math.max(0, transformScale) * Math.max(1, dpr);
+  return (
+    (textureSize.width < naturalSize.width &&
+      naturalSize.width * physicalScale > textureSize.width * 1.01) ||
+    (textureSize.height < naturalSize.height &&
+      naturalSize.height * physicalScale > textureSize.height * 1.01)
+  );
+}
