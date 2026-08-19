@@ -944,6 +944,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
           >
             <MediaStage
               resourceKey={currentImage.id ?? currentImage.src}
+              currentFlatIndex={currentIndex}
               kind={currentMediaKind}
               source={rasterSource}
               previewSource={rasterPreviewSource}

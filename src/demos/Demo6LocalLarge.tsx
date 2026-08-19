@@ -227,6 +227,10 @@ export function Demo6LocalLarge({
     ...(lodPlan?.browseForwardIndexes ?? []),
     ...(lodPlan?.browseBackwardIndexes ?? []),
   ], index), [lodPlan, index]);
+  const historyScreenPlan = useMemo(
+    () => lodPlan?.historyScreenIndexes ?? [],
+    [lodPlan],
+  );
   const residentLods = useMemo(() => {
     const screen: number[] = [];
     const browse: number[] = [];
@@ -264,6 +268,7 @@ export function Demo6LocalLarge({
     planned: {
       screen: screenPlan,
       browse: browsePlan,
+      historyScreen: historyScreenPlan,
     },
     resident: residentLods,
     nearbyPhases: {
@@ -280,6 +285,7 @@ export function Demo6LocalLarge({
     lodPlan?.viewport,
     screenPlan,
     browsePlan,
+    historyScreenPlan,
     residentLods,
     preloadStatus,
   ]);
@@ -578,6 +584,9 @@ export function Demo6LocalLarge({
                 <div style={{ ...diagnosticLine, color: '#c084fc', fontSize: 10 }}>
                   Browse LOD · next {browsePlan.next.length} [{browsePlan.next.join(', ')}]
                   {' · '}prev {browsePlan.prev.length} [{browsePlan.prev.join(', ')}]
+                </div>
+                <div style={{ ...diagnosticLine, color: '#93c5fd', fontSize: 10 }}>
+                  History Screen · {historyScreenPlan.length} [{historyScreenPlan.join(', ')}]
                 </div>
               </div>
 

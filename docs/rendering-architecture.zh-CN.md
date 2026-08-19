@@ -50,6 +50,8 @@ WebGL Raster stage 在整个 Viewer Shell 生命周期内常驻，包括当前�
 
 Raster 图片之间导航时复用同一个 context 与 cache；资源键变化只触发纹理选择/加载，不能通过 React `key` 卸载 stage。这里的 viewport 严格指承载图片的 stage DIV，而不是屏幕或应用窗口；`ResizeObserver` 读取其 CSS box，再乘 WebView 实际 DPR 得到 Screen backing box。窗口拖动、侧栏伸缩、contained/fullscreen 变化都会重新规划。`preloadRadius="auto"` 按该 backing box 估算每张 Screen bytes：若全部候选都能放下则全部为 Screen；否则使用 P75 Screen 成本确定连续核心，压力高时前后各 1 张，常规条件可达导航方向 3 张、反方向 2 张，核心外才按距离连续准入固定 Browse，形成无空洞的紫罗兰环。两侧数量在相等时优先导航方向，但整体始终近似均衡；不会跳过中间图片，也不会把 Browse 自动升级为 Screen；没有固定总数量。
 
+cache 还维护一组独立的、按最近访问排序的 Screen 历史钉住项，用于非连续的缩略图跳转。当前图的 Screen 会与 Full 共存；导航离开时，该 Screen 成为历史候选。选择历史项之前，先为当前纹理集合和前、后方向各最近一张 Screen 预留空间；然后才根据真实剩余 texture bytes 尽可能保留**已经驻留**的历史 Screen。历史钉住项严格只是保留策略，不会进入预加载任务表；因此即使历史纹理被回收，也不会由历史记录触发重新下载、解码或上传。诊断中这些钉住项会与连续 Screen/Browse 走廊分开报告。
+
 Browse/Screen 请求带 viewport generation。尺寸级别改变时，旧 Screen 若仍达到新 Browse 目标则改为柔和紫罗兰色 Browse 继续复用，否则回收；尚未运行的旧尺寸队列会取消，已经进入 `createImageBitmap`、浏览器无法中断的任务在完成后删除 texture，不允许重新写回 cache。蓝色因此表示“驻留且足以覆盖当前图片 stage DIV × DPR”，紫罗兰表示“驻留且可立即显示的中等细节”。
 
 浏览器不公开可用显存，因此网页环境仍用显示器分档作为回退，这不是硬件探测。Tauri 宿主应以 `sysinfo` 提供总/可用内存，并在可行时补充 Metal `recommendedMaxWorkingSetSize`、DXGI video-memory budget 或 Vulkan memory budget，再通过 `suggestRasterHardwareTextureBudgetBytes` 生成预算。组件内部始终以真实已上传 texture bytes 记账；宿主传入 `preloadMemoryBudgetBytes` 时完全覆盖浏览器回退。

@@ -14,6 +14,7 @@ import { VideoViewer } from './video/VideoViewer';
 
 export interface MediaStageProps {
   resourceKey: string;
+  currentFlatIndex?: number;
   kind: MediaKind;
   source: MediaSource;
   previewSource?: MediaSource;
@@ -120,6 +121,7 @@ export function MediaStage(props: MediaStageProps) {
       <WebGLRasterStage
         active={rasterActive}
         resourceKey={rasterActive ? props.resourceKey : undefined}
+        currentFlatIndex={rasterActive ? props.currentFlatIndex : undefined}
         source={rasterActive ? props.source : undefined}
         previewSource={rasterActive ? props.previewSource : undefined}
         preloadSources={props.preloadSources}

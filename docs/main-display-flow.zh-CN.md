@@ -26,7 +26,9 @@ MediaSource → fetch/Blob → createImageBitmap → WebGL2 texture → GPU fenc
 - Screen：覆盖图片舞台 DIV × DPR；正常预算下至少保障前进方向 3 张、后退方向 2 张。
 - Full：当前张停稳 `fullResolutionSettleMs` 后才开始，可取消；不为每个经过项完整解码。
 
-前后数量不写死。规划器逐张估算真实 RGBA8 texture bytes：若所有候选 Screen 都能放入预算，则全部直接使用 Screen；否则先建立随压力动态缩放的连续 Screen 核心（压力极高时前后各 1 张，常规条件可达前 3 / 后 2），再由内向外连续扩展固定 Browse 环；Browse 不会被自动升级成 Screen。因此就绪区不会出现绿色空洞夹在蓝/紫条之间。Demo 6 实时显示当前 DIV、DPR、backing pixels 与各方向索引。
+前后数量不写死。规划器逐张估算真实 RGBA8 texture bytes：若所有候选 Screen 都能放入预算，则全部直接使用 Screen；否则先建立随压力动态缩放的连续 Screen 核心（压力极高时前后各 1 张，常规条件可达前 3 / 后 2），再由内向外连续扩展固定 Browse 环；Browse 不会被自动升级成 Screen。因此就绪区不会出现绿色空洞夹在蓝/紫条之间。
+
+连续导航走廊外还会维护一组受预算约束的历史 Screen 钉住项：离开某张图时，只要它的 Screen texture 仍驻留，就成为最新历史候选；当前图升级为 Full 后，其 Screen 伴随 texture 也继续保留。cache 会先为当前图以及最近的前/后一张 Screen 预留空间，再按最近访问顺序保留剩余预算能容纳的既有 Screen。历史项**只保留、不补建**：被回收或原本不存在的项绝不会因为历史记录而重新下载、解码或上传。因此缩略图 4 ↔ 11 这类非连续往返可以瞬时显示，同时方向性的连续走廊不会变成有跳洞的计划。Demo 6 会分开显示走廊与历史索引。
 
 ## 状态条
 

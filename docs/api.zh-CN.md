@@ -70,7 +70,7 @@
 | `preloadMemoryBudgetBytes` | `number` | 浏览器按显示器分档 | Raster GPU texture cache 预算；显式值始终优先。Tauri 宿主应以 `sysinfo`/平台 GPU budget 调用 `suggestRasterHardwareTextureBudgetBytes` 后传入。Screen/Browse 数量另按实时图片舞台 DIV × DPR 和单图尺寸动态计算。 |
 | `onPreloadIndexesChange` | `(indexes: number[]) => void` | — | 可选：当前计划预加载的扁平下标 |
 | `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | 回报可获得的原图真实下载进度与 GPU 驻留状态；texture 被回收后由 `display-ready` 降为 `warm` |
-| `onRasterPreloadPlanChange` | `(snapshot: RasterPreloadPlanSnapshot) => void` | — | 开发诊断：实时回报图片舞台 DIV、DPR、backing pixels、预算与 Screen/Browse 各方向索引 |
+| `onRasterPreloadPlanChange` | `(snapshot: RasterPreloadPlanSnapshot) => void` | — | 开发诊断：实时回报图片舞台 DIV、DPR、backing pixels、预算、连续 Screen/Browse 各方向索引，以及仅保留既有纹理的历史 Screen 索引/字节数 |
 | `showThumbnailPreloadStatus` | `boolean` | `false` | 缩略图条：**蓝** = Screen 计划/驻留；**柔和紫罗兰** = Browse 计划/驻留；计划中的条按真实下载百分比填充；**绿** = 仅原图下载历史或 texture 已回收；**当前张无底条** |
 | `showSwitchLoader` | `boolean` | `true` | 当前媒体等待 `display-ready` 时显示中央圆环，并在完整纹理提交时关闭；`false` 只隐藏转圈 |
 | `chrome` | `'default' \| 'minimal'` | `'default'` | `minimal` 空闲时控件完全隐藏 |

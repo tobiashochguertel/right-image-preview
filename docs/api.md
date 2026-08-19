@@ -70,7 +70,7 @@
 | `preloadMemoryBudgetBytes` | `number` | browser display tier | Raster GPU texture-cache budget; an explicit value always wins. Tauri hosts should collect RAM/platform GPU guidance, call `suggestRasterHardwareTextureBudgetBytes`, and pass the result. Browse/Screen counts are independently planned from the live image-stage DIV × DPR and item dimensions. |
 | `onPreloadIndexesChange` | `(indexes: number[]) => void` | — | Optional debug hook for planned preload indexes |
 | `onPreloadStatusChange` | `(status: NeighborPreloadStatusMap) => void` | — | Reports true original-transfer progress when available and GPU residency; evicted `display-ready` entries downgrade to `warm` |
-| `onRasterPreloadPlanChange` | `(snapshot: RasterPreloadPlanSnapshot) => void` | — | Development diagnostics: live image-stage DIV, DPR, backing pixels, budget, and directional Screen/Browse indexes |
+| `onRasterPreloadPlanChange` | `(snapshot: RasterPreloadPlanSnapshot) => void` | — | Development diagnostics: live image-stage DIV, DPR, backing pixels, budget, directional continuous Screen/Browse indexes, and retained-history Screen indexes/bytes |
 | `showThumbnailPreloadStatus` | `boolean` | `false` | Strip edges: **blue** = planned/resident Screen texture; **violet** = planned/resident Browse texture; planned transfers use their true available percentage; **green** = original-only transfer/completion or an evicted texture; **current tile has no bar** |
 | `showSwitchLoader` | `boolean` | `true` | Center spinner while the active media awaits `display-ready`; it closes in the display commit. `false` hides it only |
 | `chrome` | `'default' \| 'minimal'` | `'default'` | `minimal` fades idle chrome to 0% |

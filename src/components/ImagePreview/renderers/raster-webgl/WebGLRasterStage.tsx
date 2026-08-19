@@ -15,6 +15,11 @@ import {
 } from './rasterLod';
 import { detectRasterTextureBudgetBytes } from './rasterMemoryBudget';
 import {
+  rememberRasterScreenHistory,
+  selectRasterScreenHistoryPins,
+  type RasterScreenHistoryEntry,
+} from './rasterScreenHistory';
+import {
   estimateRasterTextureBytes,
   planRasterNeighborLods,
   type RasterPlannedPreload,
@@ -25,6 +30,7 @@ import {
 export interface WebGLRasterStageProps {
   active: boolean;
   resourceKey?: string;
+  currentFlatIndex?: number;
   source?: MediaSource;
   previewSource?: MediaSource;
   preloadSources?: readonly RasterPreloadSource[];
@@ -51,6 +57,7 @@ export interface WebGLRasterStageProps {
 export function WebGLRasterStage({
   active,
   resourceKey,
+  currentFlatIndex,
   source,
   previewSource,
   preloadSources = [],
@@ -82,9 +89,11 @@ export function WebGLRasterStage({
   const planCallbackRef = useRef(onPreloadPlanChange);
   const suppressCanvasUntilActiveEntryRef = useRef(true);
   const activeFullResourceRef = useRef<string | null>(null);
-  const lastActiveRasterResourceRef = useRef<string | undefined>(resourceKey);
+  const lastActiveRasterRef = useRef<RasterScreenHistoryEntry | null>(
+    resourceKey ? { resourceKey, flatIndex: currentFlatIndex } : null,
+  );
   const [entry, setEntry] = useState<RasterTextureEntry | null>(null);
-  const [previousScreenResourceKey, setPreviousScreenResourceKey] = useState<string | null>(null);
+  const [screenHistory, setScreenHistory] = useState<readonly RasterScreenHistoryEntry[]>([]);
   const [viewport, setViewport] = useState<RasterViewport>({ width: 1, height: 1, dpr: 1 });
   const [autoBudgetBytes] = useState(detectRasterTextureBudgetBytes);
   const [contextGeneration, setContextGeneration] = useState(0);
@@ -105,17 +114,8 @@ export function WebGLRasterStage({
       // neighbor pruning effect can delete it between setEntry() and paint.
       resourceKey + '|browse',
     ];
-    if (
-      preloadEnabled &&
-      previousScreenResourceKey &&
-      previousScreenResourceKey !== resourceKey
-    ) {
-      // Full replaces Screen only for drawing. Keep the immediately previous
-      // Screen protected so a quick Back action never starts from green/cold.
-      keys.push(previousScreenResourceKey + '|display');
-    }
     return keys;
-  }, [resourceKey, preloadEnabled, previousScreenResourceKey]);
+  }, [resourceKey]);
   const screenBox = useMemo(() => ({
     width: Math.max(1, Math.round(viewport.width * viewport.dpr)),
     height: Math.max(1, Math.round(viewport.height * viewport.dpr)),
@@ -138,21 +138,71 @@ export function WebGLRasterStage({
         maxTextureSize,
       )
     : actualCurrentBytes;
-  const reservedBytes = Math.max(actualCurrentBytes, estimatedCurrentBytes);
+  const currentReservedBytes = Math.max(actualCurrentBytes, estimatedCurrentBytes);
+  const immediateNeighborScreenBytes = useMemo(() => {
+    const nearest = (side: RasterPreloadSource['side']) => preloadSources
+      .filter((candidate) => candidate.side === side)
+      .sort((a, b) => a.distance - b.distance)[0];
+    return (['forward', 'backward'] as const).reduce((sum, side) => {
+      const candidate = nearest(side);
+      return sum + (candidate
+        ? estimateRasterTextureBytes(candidate.knownSize, screenBox, maxTextureSize)
+        : 0);
+    }, 0);
+  }, [preloadSources, screenBox, maxTextureSize]);
+  const historyPins = useMemo(() => selectRasterScreenHistoryPins({
+    enabled: preloadEnabled,
+    resourceKey,
+    history: screenHistory,
+    residentTextures,
+    budgetBytes: effectiveBudgetBytes,
+    currentReservedBytes,
+    immediateNeighborScreenBytes,
+  }), [
+    preloadEnabled,
+    resourceKey,
+    residentTextures,
+    effectiveBudgetBytes,
+    currentReservedBytes,
+    immediateNeighborScreenBytes,
+    screenHistory,
+  ]);
+  const historyPinKeys = useMemo(
+    () => historyPins.map((pin) => pin.resourceKey + '|display'),
+    [historyPins],
+  );
+  const retentionKeys = useMemo(
+    () => [...protectedKeys, ...historyPinKeys],
+    [protectedKeys, historyPinKeys],
+  );
+  const planningSources = useMemo(
+    () => preloadSources.filter((candidate) =>
+      !historyPins.some((pin) => pin.resourceKey === candidate.resourceKey)),
+    [preloadSources, historyPins],
+  );
+  const historyReservedBytes = historyPins.reduce((sum, pin) => sum + pin.bytes, 0);
   const lodPlan = useMemo(() => planRasterNeighborLods({
-    candidates: preloadEnabled ? preloadSources : [],
+    candidates: preloadEnabled ? planningSources : [],
     viewport,
     budgetBytes: effectiveBudgetBytes,
-    reservedBytes,
+    reservedBytes: currentReservedBytes + historyReservedBytes,
     maxTextureSize,
   }), [
     preloadEnabled,
-    preloadSources,
+    planningSources,
     viewport,
     effectiveBudgetBytes,
-    reservedBytes,
+    currentReservedBytes,
+    historyReservedBytes,
     maxTextureSize,
   ]);
+  const planSnapshot = useMemo<RasterPreloadPlanSnapshot>(() => ({
+    ...lodPlan.snapshot,
+    historyScreenIndexes: historyPins
+      .map((pin) => pin.flatIndex)
+      .filter((flatIndex): flatIndex is number => flatIndex != null),
+    historyScreenBytes: historyReservedBytes,
+  }), [lodPlan.snapshot, historyPins, historyReservedBytes]);
 
   useLayoutEffect(() => {
     activeRef.current = active;
@@ -173,16 +223,17 @@ export function WebGLRasterStage({
 
   useLayoutEffect(() => {
     if (!active || !resourceKey) return;
-    const leavingResource = lastActiveRasterResourceRef.current;
-    if (leavingResource && leavingResource !== resourceKey) {
-      setPreviousScreenResourceKey(leavingResource);
+    const leaving = lastActiveRasterRef.current;
+    if (leaving && leaving.resourceKey !== resourceKey) {
+      setScreenHistory((previous) =>
+        rememberRasterScreenHistory(previous, leaving, resourceKey));
     }
-    lastActiveRasterResourceRef.current = resourceKey;
-  }, [active, resourceKey]);
+    lastActiveRasterRef.current = { resourceKey, flatIndex: currentFlatIndex };
+  }, [active, resourceKey, currentFlatIndex]);
 
   useLayoutEffect(() => {
-    planCallbackRef.current?.(lodPlan.snapshot);
-  }, [lodPlan.snapshot]);
+    planCallbackRef.current?.(planSnapshot);
+  }, [planSnapshot]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -308,7 +359,7 @@ export function WebGLRasterStage({
     const residentFull = pipeline.cache.get(activeFullKey);
     if (residentFull) {
       displayReadyGenerationRef.current = generation;
-      pipeline.cache.protect(protectedKeys);
+      pipeline.cache.protect(retentionKeys);
       setEntry(residentFull);
       callbacksRef.current.onDimensions(residentFull.naturalWidth, residentFull.naturalHeight);
       callbacksRef.current.onPhaseChange('display-ready');
@@ -318,7 +369,7 @@ export function WebGLRasterStage({
       .then((display) => {
         if (generationRef.current !== generation) return;
         displayReadyGenerationRef.current = generation;
-        pipeline.cache.protect(protectedKeys);
+        pipeline.cache.protect(retentionKeys);
         pipeline.release(resourceKey + '|preview');
         pipeline.release(resourceKey + '|browse');
         setEntry(display);
@@ -342,7 +393,7 @@ export function WebGLRasterStage({
     contextGeneration,
     displayKey,
     fullKey,
-    protectedKeys,
+    retentionKeys,
   ]);
 
   useEffect(() => {
@@ -364,7 +415,7 @@ export function WebGLRasterStage({
             pipeline.release(key);
             return;
           }
-          pipeline.cache.protect(protectedKeys);
+          pipeline.cache.protect(retentionKeys);
           setEntry(full);
           callbacksRef.current.onDimensions(full.naturalWidth, full.naturalHeight);
         })
@@ -387,7 +438,7 @@ export function WebGLRasterStage({
     knownWidth,
     knownHeight,
     contextGeneration,
-    protectedKeys,
+    retentionKeys,
   ]);
 
   useEffect(() => {
@@ -395,7 +446,7 @@ export function WebGLRasterStage({
     if (!pipeline) return;
     let cancelled = false;
     const priorities = new Map<string, number>();
-    protectedKeys.forEach((key) => priorities.set(key, 100));
+    retentionKeys.forEach((key) => priorities.set(key, 100));
     lodPlan.entries.forEach((item) => {
       const itemDisplayKey = item.resourceKey + '|display';
       if (item.lod === 'screen') {
@@ -407,7 +458,7 @@ export function WebGLRasterStage({
         priorities.set(itemDisplayKey, item.priority);
       }
     });
-    pipeline.cache.protect(protectedKeys);
+    pipeline.cache.protect(retentionKeys);
     if (!preloadEnabled) {
       pipeline.retainOnly(protectedKeys);
       return;
@@ -494,6 +545,7 @@ export function WebGLRasterStage({
     displayKey,
     fullKey,
     protectedKeys,
+    retentionKeys,
     contextGeneration,
   ]);
 

@@ -42,6 +42,9 @@ export interface RasterPreloadPlanSnapshot {
   screenBackwardIndexes: readonly number[];
   browseForwardIndexes: readonly number[];
   browseBackwardIndexes: readonly number[];
+  /** Existing, non-contiguous Screen textures retained from recently viewed images. */
+  historyScreenIndexes: readonly number[];
+  historyScreenBytes: number;
 }
 
 export interface RasterDynamicLodPlanOptions {
@@ -346,6 +349,8 @@ export function planRasterNeighborLods({
       screenBackwardIndexes: indexes('screen', 'backward'),
       browseForwardIndexes: indexes('browse', 'forward'),
       browseBackwardIndexes: indexes('browse', 'backward'),
+      historyScreenIndexes: [],
+      historyScreenBytes: 0,
     },
   };
 }
