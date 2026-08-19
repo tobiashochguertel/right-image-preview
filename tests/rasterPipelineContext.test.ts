@@ -5,6 +5,25 @@ import type { WebGLContextEvent, WebGLRasterRenderer } from '../src/components/I
 import type { RasterTextureEntry } from '../src/components/ImagePreview/renderers/raster-webgl/types';
 
 describe('RasterPipeline WebGL context lifecycle', () => {
+  it('does not publish a runtime update for an idempotent retain pass', () => {
+    const renderer = {
+      gl: { deleteTexture: vi.fn() } as unknown as WebGL2RenderingContext,
+      subscribeContext() {
+        return () => undefined;
+      },
+    } as unknown as WebGLRasterRenderer;
+    const pipeline = new RasterPipeline(renderer, 100);
+    pipeline.cache.put(entry());
+    const listener = vi.fn();
+    pipeline.subscribe(listener);
+
+    pipeline.retainOnly(['current|display']);
+    expect(listener).not.toHaveBeenCalled();
+    pipeline.retainOnly([]);
+    expect(listener).toHaveBeenCalledTimes(1);
+    pipeline.dispose();
+  });
+
   it('drops invalid cache handles on loss and advances generation after restore', () => {
     const deleteTexture = vi.fn();
     let contextListener: ((event: WebGLContextEvent) => void) | undefined;

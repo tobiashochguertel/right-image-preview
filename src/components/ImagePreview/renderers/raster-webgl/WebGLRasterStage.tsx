@@ -55,6 +55,23 @@ export interface WebGLRasterStageProps {
   onPresented(): void;
 }
 
+function sameResidentTextures(
+  previous: readonly RasterRuntimeSnapshot['residentTextures'][number][],
+  next: readonly RasterRuntimeSnapshot['residentTextures'][number][],
+): boolean {
+  return previous.length === next.length && previous.every((item, index) => {
+    const candidate = next[index];
+    return candidate != null &&
+      item.resourceKey === candidate.resourceKey &&
+      item.quality === candidate.quality &&
+      item.width === candidate.width &&
+      item.height === candidate.height &&
+      item.naturalWidth === candidate.naturalWidth &&
+      item.naturalHeight === candidate.naturalHeight &&
+      item.bytes === candidate.bytes;
+  });
+}
+
 export function WebGLRasterStage({
   active,
   resourceKey,
@@ -246,13 +263,21 @@ export function WebGLRasterStage({
       pipelineRef.current = pipeline;
       const unsubscribe = pipeline.subscribe(() => {
         const snapshot = pipeline.cache.snapshot();
-        setCacheSnapshot({
-          count: snapshot.count,
-          usedBytes: snapshot.usedBytes,
-          maxBytes: snapshot.maxBytes,
-        });
+        setCacheSnapshot((previous) =>
+          previous.count === snapshot.count &&
+          previous.usedBytes === snapshot.usedBytes &&
+          previous.maxBytes === snapshot.maxBytes
+            ? previous
+            : {
+                count: snapshot.count,
+                usedBytes: snapshot.usedBytes,
+                maxBytes: snapshot.maxBytes,
+              });
         const runtime = pipeline.runtimeSnapshot();
-        setResidentTextures(runtime.residentTextures);
+        setResidentTextures((previous) =>
+          sameResidentTextures(previous, runtime.residentTextures)
+            ? previous
+            : runtime.residentTextures);
         runtimeCallbackRef.current?.(runtime);
         if (pipeline.isContextLost) {
           if (activeRef.current) callbacksRef.current.onPhaseChange('restoring');

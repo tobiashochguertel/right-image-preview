@@ -135,8 +135,7 @@ export class RasterPipeline {
   }
 
   retainOnly(keys: readonly string[]): void {
-    this.cache.retainOnly(keys);
-    this.emit();
+    if (this.cache.retainOnly(keys)) this.emit();
   }
 
   release(key: string): void {

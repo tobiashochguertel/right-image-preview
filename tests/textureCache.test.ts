@@ -94,7 +94,8 @@ describe('TextureCache', () => {
     cache.put(entry('neighbor-a', 10, 2), 20);
     cache.put(entry('neighbor-b', 10, 3), 19);
 
-    cache.retainOnly(['current']);
+    expect(cache.retainOnly(['current'])).toBe(true);
+    expect(cache.retainOnly(['current'])).toBe(false);
 
     expect(cache.has('current')).toBe(true);
     expect(cache.has('neighbor-a')).toBe(false);

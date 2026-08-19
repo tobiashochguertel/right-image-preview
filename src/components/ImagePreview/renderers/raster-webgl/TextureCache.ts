@@ -54,11 +54,13 @@ export class TextureCache {
     this.enforceBudget();
   }
 
-  retainOnly(keys: readonly string[]): void {
+  retainOnly(keys: readonly string[]): boolean {
     const retained = new Set(keys);
+    let changed = false;
     for (const key of [...this.entries.keys()]) {
-      if (!retained.has(key)) this.delete(key);
+      if (!retained.has(key)) changed = this.delete(key) || changed;
     }
+    return changed;
   }
 
   delete(key: string, deleteTexture = true): boolean {
