@@ -24,7 +24,7 @@ MediaSource → fetch/Blob → createImageBitmap → WebGL2 texture → GPU fenc
 - Preview：可选低清首帧。
 - Browse：Screen 线性尺寸的 60%，用于更远邻图的低成本瞬时呈现。
 - Screen：覆盖图片舞台 DIV × DPR；正常预算下至少保障前进方向 3 张、后退方向 2 张。
-- Full：只针对当前张；仅当缩放需求超过 Screen 后，停稳 `fullResolutionSettleMs` 才开始，可取消；Fit 状态不为每张图完整解码。
+- Full：只针对当前张；仅当缩放需求超过 Screen 后，停稳 `fullResolutionSettleMs` 才开始，可取消；Fit 状态不为每张图完整解码。邻居 cache/LOD 状态变化不得重置这段停稳计时；一旦当前图产生 Full 需求，新的邻居解码/上传立即让路，直至 Full 就绪。主图和 minimap 的连续拖动同样暂停新邻居任务，并把高频 pointer move 合并成每个动画帧一次前台 transform 提交。
 
 前后数量不写死。规划器逐张估算真实 RGBA8 texture bytes：若所有候选 Screen 都能放入预算，则全部直接使用 Screen；否则先建立随压力动态缩放的连续 Screen 核心（压力极高时前后各 1 张，常规条件可达前 3 / 后 2），再由内向外连续扩展固定 Browse 环；Browse 不会被自动升级成 Screen。因此就绪区不会出现绿色空洞夹在蓝/紫条之间。
 

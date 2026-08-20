@@ -204,7 +204,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
 
     const [zoomLocked, setZoomLocked] = useState(initialZoomLocked);
     const [exifOpen, setExifOpen] = useState(initialExifOpen && showExif);
-    const [, setMinimapDragging] = useState(false);
+    const [minimapDragging, setMinimapDragging] = useState(false);
     const [imageLoadError, setImageLoadError] = useState(false);
     const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -224,6 +224,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     // ── Image transform ─────────────────────────────────────────────────────
     const {
       transform,
+      isPanning,
       fitEquivalentNativePercent,
       setContainerEl,
       onImageLoad,
@@ -990,6 +991,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
               previewSource={rasterPreviewSource}
               preloadSources={rasterNeighborSources}
               rasterPreloadEnabled={preloadRadius !== 0 && preloadMaxCount > 0}
+              rasterPreloadPaused={isPanning || minimapDragging}
               rasterFullResolutionPaused={holdingDirection != null}
               rasterFullResolutionSettleMs={fullResolutionSettleMs}
               textureBudgetBytes={preloadMemoryBudgetBytes}

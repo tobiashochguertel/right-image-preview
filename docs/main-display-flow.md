@@ -24,7 +24,7 @@ For a 100 CSS-pixel-wide stage at DPR 1.5, Screen needs about 150 source pixels 
 - Preview: optional low-resolution first frame.
 - Browse: 60% of Screen linear dimensions for lower-cost distant instant navigation.
 - Screen: covers image-stage DIV × DPR; under a normal budget the floor is three forward and two backward.
-- Full: current-only, starts only when zoom demand outgrows Screen, then is delayed by `fullResolutionSettleMs` and cancellable while navigating.
+- Full: current-only, starts only when zoom demand outgrows Screen, then is delayed by `fullResolutionSettleMs` and cancellable while navigating. Neighbor cache/LOD churn must not restart that settle timer. Once Full is demanded, new neighbor decode/upload work yields until Full is ready. Live main/minimap dragging likewise pauses new neighbor work and coalesces high-frequency pointer moves into one foreground transform commit per animation frame.
 
 Counts are not fixed. The planner estimates each RGBA8 texture. If every candidate Screen texture fits, every candidate is Screen; otherwise its contiguous Screen core scales from one item on each side under pressure through the normal three-ahead/two-behind case, then a fixed contiguous Browse ring expands from that core. A green hole therefore cannot appear between ready blue/violet items, and Browse is never automatically promoted to Screen.
 

@@ -20,6 +20,8 @@ export interface MediaStageProps {
   previewSource?: MediaSource;
   preloadSources?: readonly RasterPreloadSource[];
   rasterPreloadEnabled?: boolean;
+  /** Foreground interaction owns the frame budget; do not start more neighbor work. */
+  rasterPreloadPaused?: boolean;
   rasterFullResolutionPaused?: boolean;
   rasterFullResolutionSettleMs?: number;
   textureBudgetBytes?: number;
@@ -126,7 +128,11 @@ export function MediaStage(props: MediaStageProps) {
         previewSource={rasterActive ? props.previewSource : undefined}
         preloadSources={props.preloadSources}
         preloadEnabled={props.rasterPreloadEnabled}
-        preloadPaused={props.kind === 'animated-image' || (props.kind === 'video' && videoPlaying)}
+        preloadPaused={
+          props.rasterPreloadPaused ||
+          props.kind === 'animated-image' ||
+          (props.kind === 'video' && videoPlaying)
+        }
         fullResolutionPaused={props.rasterFullResolutionPaused}
         fullResolutionSettleMs={props.rasterFullResolutionSettleMs}
         textureBudgetBytes={props.textureBudgetBytes}

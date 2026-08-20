@@ -107,6 +107,7 @@ export function WebGLRasterStage({
   const planCallbackRef = useRef(onPreloadPlanChange);
   const suppressCanvasUntilActiveEntryRef = useRef(true);
   const activeFullResourceRef = useRef<string | null>(null);
+  const retentionKeysRef = useRef<readonly string[]>([]);
   const lastActiveRasterRef = useRef<RasterScreenHistoryEntry | null>(
     resourceKey ? { resourceKey, flatIndex: currentFlatIndex } : null,
   );
@@ -120,8 +121,6 @@ export function WebGLRasterStage({
   const [residentTextures, setResidentTextures] = useState<RasterRuntimeSnapshot['residentTextures']>([]);
   const knownWidth = knownSize?.width;
   const knownHeight = knownSize?.height;
-  const displayKey = resourceKey ? resourceKey + '|display' : null;
-  const fullKey = resourceKey ? resourceKey + '|full' : null;
   const protectedKeys = useMemo(() => {
     if (!resourceKey) return [];
     const keys = [
@@ -221,6 +220,18 @@ export function WebGLRasterStage({
       .filter((flatIndex): flatIndex is number => flatIndex != null),
     historyScreenBytes: historyReservedBytes,
   }), [lodPlan.snapshot, historyPins, historyReservedBytes]);
+  const foregroundNeedsFull = !!(
+    active &&
+    resourceKey &&
+    entry?.resourceKey === resourceKey &&
+    entry.quality === 'display' &&
+    needsRasterFullResolution(
+      { width: entry.naturalWidth, height: entry.naturalHeight },
+      { width: entry.textureWidth, height: entry.textureHeight },
+      transform.scale,
+      viewport.dpr,
+    )
+  );
 
   useLayoutEffect(() => {
     activeRef.current = active;
@@ -238,6 +249,10 @@ export function WebGLRasterStage({
     onRuntimeStateChange,
     onPreloadPlanChange,
   ]);
+
+  useLayoutEffect(() => {
+    retentionKeysRef.current = retentionKeys;
+  }, [retentionKeys]);
 
   useLayoutEffect(() => {
     if (!active || !resourceKey) return;
@@ -385,7 +400,7 @@ export function WebGLRasterStage({
     const residentFull = pipeline.cache.get(activeFullKey);
     if (residentFull) {
       displayReadyGenerationRef.current = generation;
-      pipeline.cache.protect(retentionKeys);
+      pipeline.cache.protect(retentionKeysRef.current);
       setEntry(residentFull);
       callbacksRef.current.onDimensions(residentFull.naturalWidth, residentFull.naturalHeight);
       callbacksRef.current.onPhaseChange('display-ready');
@@ -395,7 +410,7 @@ export function WebGLRasterStage({
       .then((display) => {
         if (generationRef.current !== generation) return;
         displayReadyGenerationRef.current = generation;
-        pipeline.cache.protect(retentionKeys);
+        pipeline.cache.protect(retentionKeysRef.current);
         pipeline.release(resourceKey + '|preview');
         pipeline.release(resourceKey + '|browse');
         setEntry(display);
@@ -417,21 +432,13 @@ export function WebGLRasterStage({
     knownHeight,
     screenBox,
     contextGeneration,
-    displayKey,
-    fullKey,
-    retentionKeys,
   ]);
 
   useEffect(() => {
     const pipeline = pipelineRef.current;
     if (!active || !pipeline || !resourceKey || !source || fullResolutionPaused) return;
     if (!entry || entry.resourceKey !== resourceKey || entry.quality !== 'display') return;
-    if (!needsRasterFullResolution(
-      { width: entry.naturalWidth, height: entry.naturalHeight },
-      { width: entry.textureWidth, height: entry.textureHeight },
-      transform.scale,
-      viewport.dpr,
-    )) return;
+    if (!foregroundNeedsFull) return;
     const generation = generationRef.current;
     const key = resourceKey + '|full';
     const naturalSize = knownWidth && knownHeight
@@ -447,7 +454,7 @@ export function WebGLRasterStage({
             pipeline.release(key);
             return;
           }
-          pipeline.cache.protect(retentionKeys);
+          pipeline.cache.protect(retentionKeysRef.current);
           setEntry(full);
           callbacksRef.current.onDimensions(full.naturalWidth, full.naturalHeight);
         })
@@ -472,7 +479,7 @@ export function WebGLRasterStage({
     transform.scale,
     viewport.dpr,
     contextGeneration,
-    retentionKeys,
+    foregroundNeedsFull,
   ]);
 
   useEffect(() => {
@@ -486,6 +493,11 @@ export function WebGLRasterStage({
       (entry.quality === 'display' || entry.quality === 'full')
     );
     pipeline.cache.protect(retentionKeys);
+    // Full for the active zoom always wins.  Likewise, a live main/minimap drag
+    // must not start another expensive decode/upload between pointer frames.
+    // The currently running background task may finish, but the sequential
+    // preload loop is cancelled before it can start the next neighbor.
+    if (preloadPaused || foregroundNeedsFull) return;
     if (!preloadEnabled || !activeScreenReady) {
       pipeline.retainOnly(preloadEnabled ? retentionKeys : protectedKeys);
       return;
@@ -585,8 +597,7 @@ export function WebGLRasterStage({
     lodPlan.entries,
     preloadEnabled,
     preloadPaused,
-    displayKey,
-    fullKey,
+    foregroundNeedsFull,
     protectedKeys,
     retentionKeys,
     contextGeneration,

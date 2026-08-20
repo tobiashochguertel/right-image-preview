@@ -138,6 +138,8 @@ export function useImageTransform(options: UseImageTransformOptions): UseImageTr
   const [translateX, setTranslateX] = useState(0);
   const [translateY, setTranslateY] = useState(0);
   const translateRef = useRef({ x: 0, y: 0 });
+  const pendingTranslateRef = useRef<{ x: number; y: number } | null>(null);
+  const translateFrameRef = useRef<number | null>(null);
 
   const [rotation, setRotation] = useState<Rotation>(0);
   const [flipH, setFlipH] = useState(false);
@@ -149,11 +151,50 @@ export function useImageTransform(options: UseImageTransformOptions): UseImageTr
   const panStartRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
   const pointersRef = useRef<Map<number, PointerEvent>>(new Map());
 
-  const applyTranslate = useCallback((x: number, y: number) => {
-    translateRef.current = { x, y };
-    setTranslateX(x);
-    setTranslateY(y);
+  const commitTranslateState = useCallback((x: number, y: number) => {
+    setTranslateX((previous) => previous === x ? previous : x);
+    setTranslateY((previous) => previous === y ? previous : y);
   }, []);
+
+  const cancelScheduledTranslate = useCallback(() => {
+    if (translateFrameRef.current !== null) {
+      cancelAnimationFrame(translateFrameRef.current);
+      translateFrameRef.current = null;
+    }
+    pendingTranslateRef.current = null;
+  }, []);
+
+  const applyTranslate = useCallback((x: number, y: number) => {
+    cancelScheduledTranslate();
+    translateRef.current = { x, y };
+    commitTranslateState(x, y);
+  }, [cancelScheduledTranslate, commitTranslateState]);
+
+  /** Coalesce high-frequency main/minimap pointer moves to one React commit per frame. */
+  const scheduleTranslate = useCallback((x: number, y: number) => {
+    translateRef.current = { x, y };
+    pendingTranslateRef.current = { x, y };
+    if (translateFrameRef.current !== null) return;
+    translateFrameRef.current = requestAnimationFrame(() => {
+      translateFrameRef.current = null;
+      const pending = pendingTranslateRef.current;
+      pendingTranslateRef.current = null;
+      if (pending) commitTranslateState(pending.x, pending.y);
+    });
+  }, [commitTranslateState]);
+
+  const flushScheduledTranslate = useCallback(() => {
+    const pending = pendingTranslateRef.current;
+    if (!pending) return;
+    if (translateFrameRef.current !== null) {
+      cancelAnimationFrame(translateFrameRef.current);
+      translateFrameRef.current = null;
+    }
+    pendingTranslateRef.current = null;
+    commitTranslateState(pending.x, pending.y);
+  }, [commitTranslateState]);
+
+  useEffect(() => cancelScheduledTranslate, [cancelScheduledTranslate]);
 
   // ── Container measurement ─────────────────────────────────────────────────
 
@@ -190,7 +231,6 @@ export function useImageTransform(options: UseImageTransformOptions): UseImageTr
   useEffect(() => {
     if (prevModeRef.current !== 'fit' && mode === 'fit' && fitResetPan) {
       // Pan state is translate state; resetting when entering Fit must follow mode transition.
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync translate with zoom mode
       applyTranslate(0, 0);
     }
     prevModeRef.current = mode;
@@ -213,9 +253,9 @@ export function useImageTransform(options: UseImageTransformOptions): UseImageTr
         rotation,
         MINIMAP_PAN_MIN_VIEWPORT_COVERAGE,
       );
-      applyTranslate(c.x, c.y);
+      scheduleTranslate(c.x, c.y);
     },
-    [mode, imageDims, containerSize, rotation, nativePercent, applyTranslate],
+    [mode, imageDims, containerSize, rotation, nativePercent, scheduleTranslate],
   );
 
   const panJumpToNatural = useCallback(
@@ -309,17 +349,18 @@ export function useImageTransform(options: UseImageTransformOptions): UseImageTr
         nx = c.x;
         ny = c.y;
       }
-      applyTranslate(nx, ny);
+      scheduleTranslate(nx, ny);
     }
-  }, [applyTranslate, mode, imageDims, containerSize, rotation, nativePercent]);
+  }, [scheduleTranslate, mode, imageDims, containerSize, rotation, nativePercent]);
 
   const onPanEnd = useCallback((e?: React.PointerEvent) => {
     if (e) pointersRef.current.delete(e.pointerId);
     if (pointersRef.current.size === 0) {
       panStartRef.current = null;
       setIsPanning(false);
+      flushScheduledTranslate();
     }
-  }, []);
+  }, [flushScheduledTranslate]);
 
   // ── Proportional translate adjustment on zoom ─────────────────────────────
   // When zoom level changes via toolbar / keyboard (not via cursor-anchor),
@@ -366,7 +407,6 @@ export function useImageTransform(options: UseImageTransformOptions): UseImageTr
       newTy = c.y;
     }
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- clamp pan after zoom stop / container change
     applyTranslate(newTx, newTy);
   }, [nativePercent, mode, imageDims, containerSize, rotation, applyTranslate]);
 
