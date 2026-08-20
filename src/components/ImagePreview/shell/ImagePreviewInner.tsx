@@ -38,6 +38,7 @@ import {
 } from '../imagePreviewTuning';
 import { injectGlobalStyle } from '../injectGlobalStyle';
 import { findGroup } from '../lib/imagePreviewFindGroup';
+import { resolveMinimapMediaSource } from '../lib/imagePreviewData';
 import {
   isLocalPackBuild,
   LOCAL_PACK_BUILD_AT,
@@ -1067,7 +1068,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
             {showMinimap && currentMediaCapabilities.minimap && imageDims && containerSize && (
               <Minimap
                 imageSrc={currentImage.minimapSrc ?? currentImage.src}
-                imageSource={currentImage.minimapSource ?? currentImage.source}
+                imageSource={resolveMinimapMediaSource(currentImage)}
                 thumbnail={currentImage.minimap}
                 imageAlt={currentImage.alt ?? ''}
                 nw={imageDims.naturalWidth}

@@ -9,6 +9,34 @@ const entries = [0, 1, 2].map((flatIndex) => ({
 }));
 
 describe('ThumbnailsStrip preload status', () => {
+  it('prefers minimapSrc over the main renderer source', () => {
+    const { container } = render(
+      <ThumbnailsStrip
+        entries={[
+          {
+            flatIndex: 0,
+            item: {
+              id: 'desktop-photo',
+              src: '/original.jpg',
+              source: { type: 'url', href: 'asset://localhost/original.jpg' },
+              minimapSrc: 'asset://localhost/thumb.webp',
+            },
+          },
+          entries[1]!,
+        ]}
+        activeFlatIndex={0}
+        ariaLabel="thumbs"
+        thumbAria={(index) => `thumb-${index}`}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('img')).toHaveAttribute(
+      'src',
+      'asset://localhost/thumb.webp',
+    );
+  });
+
   it('virtualizes a large strip on its first render around the active item', () => {
     const manyEntries = Array.from({ length: 500 }, (_, flatIndex) => ({
       flatIndex,

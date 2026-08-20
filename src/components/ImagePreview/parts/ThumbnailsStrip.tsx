@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ImageItem } from '../types';
 import { MediaSourceImage } from '../core/MediaSourceImage';
-import type { MediaSource } from '../core/media-source';
+import { resolveMinimapMediaSource } from '../lib/imagePreviewData';
 import {
   THUMBNAIL_STRIP_ACTIVE_BORDER_PX,
   THUMBNAIL_STRIP_BOTTOM_INSET_PX,
@@ -64,13 +64,6 @@ function activeScrollLeft(
   const activePos = entries.findIndex((entry) => entry.flatIndex === activeFlatIndex);
   if (activePos < 0) return 0;
   return Math.max(0, activePos * stride - viewportWidth / 2 + tileOuter / 2);
-}
-
-function thumbSource(item: ImageItem): MediaSource {
-  return item.minimapSource ?? item.source ?? {
-    type: 'url',
-    href: item.minimapSrc ?? item.src,
-  };
 }
 
 function itemKey(item: ImageItem, flatIndex: number): string {
@@ -256,7 +249,7 @@ export function ThumbnailsStrip({
         }}
       >
         <MediaSourceImage
-          source={thumbSource(item)}
+          source={resolveMinimapMediaSource(item)}
           alt=""
           draggable={false}
           loading="lazy"
