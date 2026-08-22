@@ -35,6 +35,11 @@ export interface UseImageTransformOptions {
   mode: ZoomMode;
   nativePercent: number;
   fitResetPan: boolean;
+  /**
+   * Upper bound for Fit scale (1 = 100% native). `Infinity` keeps classic CSS-contain
+   * upscaling of small images.
+   */
+  fitMaxScale?: number;
 }
 
 export interface UseImageTransformResult {
@@ -80,9 +85,35 @@ export interface UseImageTransformResult {
   panJumpToNatural(nx: number, ny: number): { tx: number; ty: number } | undefined;
 }
 
-function computeFitScale(dims: ImageDimensions, container: ContainerSize): number {
+/**
+ * Contain scale, optionally capped so Fit never upscales past `fitMaxScale`.
+ * `fitMaxScale = 1` means Fit ≤ 100% native (small images stay actual size).
+ */
+export function computeFitScale(
+  dims: ImageDimensions,
+  container: ContainerSize,
+  fitMaxScale: number = Number.POSITIVE_INFINITY,
+): number {
   if (container.width === 0 || container.height === 0) return 1;
-  return Math.min(container.width / dims.naturalWidth, container.height / dims.naturalHeight);
+  const contain = Math.min(
+    container.width / dims.naturalWidth,
+    container.height / dims.naturalHeight,
+  );
+  if (!Number.isFinite(contain) || contain <= 0) return 1;
+  const cap = Number.isFinite(fitMaxScale) && fitMaxScale > 0 ? fitMaxScale : Number.POSITIVE_INFINITY;
+  return Math.min(contain, cap);
+}
+
+/** Convert `fitMaxNativePercent` to a Fit scale cap; invalid / omitted → no cap. */
+export function resolveFitMaxScale(fitMaxNativePercent: number | undefined): number {
+  if (
+    fitMaxNativePercent == null ||
+    !Number.isFinite(fitMaxNativePercent) ||
+    fitMaxNativePercent <= 0
+  ) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return fitMaxNativePercent / 100;
 }
 
 /**
@@ -129,7 +160,7 @@ function buildCssTransform(
 }
 
 export function useImageTransform(options: UseImageTransformOptions): UseImageTransformResult {
-  const { mode, nativePercent, fitResetPan } = options;
+  const { mode, nativePercent, fitResetPan, fitMaxScale = Number.POSITIVE_INFINITY } = options;
 
   const [imageDims, setImageDims] = useState<ImageDimensions | null>(null);
   const [containerSize, setContainerSize] = useState<ContainerSize | null>(null);
@@ -464,7 +495,7 @@ export function useImageTransform(options: UseImageTransformOptions): UseImageTr
     const fitDims = isSwapped
       ? { naturalWidth: imageDims.naturalHeight, naturalHeight: imageDims.naturalWidth }
       : imageDims;
-    const fitScale = computeFitScale(fitDims, containerSize);
+    const fitScale = computeFitScale(fitDims, containerSize, fitMaxScale);
     fitEquivalentNativePercent = fitScale * 100;
     scale = mode === 'fit' ? fitScale : nativePercent / 100;
   } else if (mode === 'fit' && imageDims && !containerReady) {

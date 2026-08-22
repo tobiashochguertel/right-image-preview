@@ -334,6 +334,12 @@ export interface ImagePreviewProps {
   initialMode?: ZoomMode;
   /** Initial native% when initialMode === 'native'. Default: first stop. */
   initialNativePercent?: NativePercent;
+  /**
+   * Cap for Fit / contain scale, expressed as native percent.
+   * `100` means Fit never upscales past 1:1 (small images stay actual size, centred).
+   * Omit or pass a non-positive / non-finite value to keep classic CSS-contain upscaling.
+   */
+  fitMaxNativePercent?: NativePercent;
 
   // ── Behaviour options ──────────────────────────────────────────────────────
   firstZoomInStrategy?: FirstZoomInStrategy;

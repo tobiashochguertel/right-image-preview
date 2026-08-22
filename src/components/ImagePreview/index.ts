@@ -38,6 +38,7 @@ export {
   NAV_HOLD_REPEAT_DELAY_MS,
 } from './imagePreviewTuning';
 export type { Rotation } from './useImageTransform';
+export { computeFitScale, resolveFitMaxScale } from './useImageTransform';
 export {
   RASTER_FULL_RESOLUTION_SETTLE_MS,
   RASTER_BROWSE_LOD_SCALE,

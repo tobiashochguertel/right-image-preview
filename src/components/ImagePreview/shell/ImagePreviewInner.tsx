@@ -58,7 +58,7 @@ import type {
 } from '../types';
 import { useImagePreviewKeyboard } from '../useImagePreviewKeyboard';
 import { useThumbPacedNavigation } from '../useThumbPacedNavigation';
-import { useImageTransform } from '../useImageTransform';
+import { resolveFitMaxScale, useImageTransform } from '../useImageTransform';
 import { usePinchZoom } from '../usePinchZoom';
 import { useWheelZoom } from '../useWheelZoom';
 import { useZoomState } from '../useZoomState';
@@ -101,6 +101,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       stops = DEFAULT_STOPS,
       initialMode = 'fit',
       initialNativePercent,
+      fitMaxNativePercent,
       firstZoomInStrategy = 'above-fit',
       zoomOutBelowMinBehaviour = 'noop',
       zoomInAtMaxBehaviour = 'noop',
@@ -242,7 +243,12 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       zoomAnchorTranslate,
       panByDelta,
       panJumpToNatural,
-    } = useImageTransform({ mode, nativePercent, fitResetPan });
+    } = useImageTransform({
+      mode,
+      nativePercent,
+      fitResetPan,
+      fitMaxScale: resolveFitMaxScale(fitMaxNativePercent),
+    });
 
     // Stable Shell → active-media command boundary. During Phase 2 the existing DOM
     // implementation is attached through this narrow controller; the WebGL/media
