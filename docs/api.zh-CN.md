@@ -31,6 +31,7 @@
 | `stops` | `NativePercent[]` | `[5,10,20,35,50,75,100,125,150,175,200]` | 离散档位列表（升序，至少 1 项）；需要更高上限请传入自定义列表 |
 | `initialMode` | `'fit' \| 'native'` | `'fit'` | 初始缩放模式 |
 | `initialNativePercent` | `number` | 第一档 | `initialMode='native'` 时的初始百分比 |
+| `fitMaxNativePercent` | `NativePercent` | 无上限 | Fit / contain 上限（native %）。`100` 表示不超过 1:1；省略则允许 CSS contain 把小图放大铺满 |
 | `firstZoomInStrategy` | `'above-fit' \| 'first-stop' \| 'hundred'` | `'above-fit'` | 从 Fit 首次放大时的落档策略 |
 | `zoomOutBelowMinBehaviour` | `'fit' \| 'noop'` | `'noop'` | 缩小到最小档以下的行为 |
 | `zoomInAtMaxBehaviour` | `'noop' \| 'notify'` | `'noop'` | 放大到最大档以上的行为 |

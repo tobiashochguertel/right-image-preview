@@ -157,6 +157,7 @@ See [rendering architecture](./docs/rendering-architecture.md) for host integrat
 | `stops` | `number[]` | `[5,10,20,35,50,75,100,125,150,175,200]` | Discrete zoom stops in % (ascending); raise the cap by passing a longer list |
 | `initialMode` | `'fit' \| 'native'` | `'fit'` | Initial zoom mode |
 | `initialNativePercent` | `number` | first stop | Initial native percent when `initialMode='native'` |
+| `fitMaxNativePercent` | `number` | none (uncapped) | Cap for Fit / contain, as native %. `100` keeps small images at actual size; omit to allow CSS-contain upscaling |
 | `firstZoomInStrategy` | `'above-fit' \| 'first-stop' \| 'hundred'` | `'above-fit'` | Which stop to land on when zooming in from Fit for the first time |
 | `zoomOutBelowMinBehaviour` | `'fit' \| 'noop'` | `'noop'` | Behaviour when zooming out below the minimum stop |
 | `zoomInAtMaxBehaviour` | `'noop' \| 'notify'` | `'noop'` | Behaviour when zooming in at the maximum stop |
@@ -321,7 +322,8 @@ tests/
 ## Zoom Algorithm
 
 ```
-fitScale    = min(containerW / naturalW, containerH / naturalH)
+fitScale    = min(containerW / naturalW, containerH / naturalH, fitMaxScale)
+              fitMaxScale = fitMaxNativePercent / 100  (omitted → ∞, classic contain upscale)
 nativeScale = nativePercent / 100
 
 CSS transform scale (fit)    = fitScale

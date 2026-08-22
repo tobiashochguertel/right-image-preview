@@ -31,6 +31,7 @@
 | `stops` | `NativePercent[]` | `[5,10,20,35,50,75,100,125,150,175,200]` | Discrete zoom stop list (ascending, at least 1 item); pass a custom list for a higher max |
 | `initialMode` | `'fit' \| 'native'` | `'fit'` | Initial zoom mode |
 | `initialNativePercent` | `number` | first stop | Initial percentage when `initialMode='native'` |
+| `fitMaxNativePercent` | `NativePercent` | none (uncapped) | Cap for Fit / contain as native %. `100` = never upscale past 1:1; omit to keep CSS-contain upscaling of small images |
 | `firstZoomInStrategy` | `'above-fit' \| 'first-stop' \| 'hundred'` | `'above-fit'` | Which stop to land on when zooming in from Fit for the first time |
 | `zoomOutBelowMinBehaviour` | `'fit' \| 'noop'` | `'noop'` | What happens when zooming out below the minimum stop |
 | `zoomInAtMaxBehaviour` | `'noop' \| 'notify'` | `'noop'` | What happens when zooming in at the maximum stop |

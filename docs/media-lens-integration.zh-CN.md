@@ -21,11 +21,12 @@ const textureBudget = suggestRasterHardwareTextureBudgetBytes({
   fullResolutionSettleMs={300}
   showThumbnails
   showThumbnailPreloadStatus
+  fitMaxNativePercent={100}
 />
 ```
 
 Tauri 可用 `sysinfo` 获取总/可用 RAM；macOS Metal 使用 `recommendedMaxWorkingSetSize`，Windows DXGI 使用 `QueryVideoMemoryInfo`，Vulkan 使用 `VK_EXT_memory_budget`。这些值是规划上限提示，WebGL cache 仍按实际 texture bytes 执行回收。浏览器拿不到剩余显存时，组件使用保守显示器档位。
 
-为提高首次规划准确度，请在 `ImageItem.exif.width/height` 中提供原图像素尺寸。视口由组件内部图片舞台 DIV 的 `ResizeObserver` 自动测量，宿主不应传屏幕尺寸。
+为提高首次规划准确度，请在 `ImageItem.exif.width/height` 中提供原图像素尺寸。视口由组件内部图片舞台 DIV 的 `ResizeObserver` 自动测量，宿主不应传屏幕尺寸。看图默认请传 `fitMaxNativePercent={100}`：大图仍然 contain 缩小，小图保持 1:1，不把 320×180 一类素材自适应放大到 300%+。超过 100% 只应来自滚轮/键盘/输入比例或缩放锁。
 
 旧的 `preloadDisplaySlots`、`preloadDisplayMode`、`preloadDisplaySettleMs`、`estimateDecodedBytes`、`suggestPreloadMemoryBudgetBytes` 已删除。

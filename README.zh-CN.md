@@ -157,6 +157,7 @@ import { ImagePreview } from 'right-image-preview';
 | `stops` | `number[]` | `[5,10,20,35,50,75,100,125,150,175,200]` | Native zoom 档位（%，升序）；需要更高上限请传入更长列表 |
 | `initialMode` | `'fit' \| 'native'` | `'fit'` | 初始缩放模式 |
 | `initialNativePercent` | `number` | 第一档 | `initialMode='native'` 时的初始比例 |
+| `fitMaxNativePercent` | `number` | 无上限 | Fit / contain 的上限（按 native %）。`100` 表示小图保持 1:1，不铺满窗口；省略则允许 CSS contain 放大 |
 | `firstZoomInStrategy` | `'above-fit' \| 'first-stop' \| 'hundred'` | `'above-fit'` | 从 Fit 首次放大时的入档策略 |
 | `zoomOutBelowMinBehaviour` | `'fit' \| 'noop'` | `'noop'` | 缩小到最小档以下的行为 |
 | `zoomInAtMaxBehaviour` | `'noop' \| 'notify'` | `'noop'` | 放大到最大档时的行为 |
@@ -321,7 +322,8 @@ tests/
 ## 缩放算法
 
 ```
-fitScale   = min(containerW / naturalW, containerH / naturalH)
+fitScale   = min(containerW / naturalW, containerH / naturalH, fitMaxScale)
+             fitMaxScale = fitMaxNativePercent / 100（省略则为 ∞，即 CSS contain 可放大）
 nativeScale = nativePercent / 100
 
 CSS transform scale（fit）    = fitScale

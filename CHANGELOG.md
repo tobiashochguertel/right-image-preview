@@ -11,6 +11,7 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ### Added
 
+- **`fitMaxNativePercent`** — optional cap for Fit / contain, as native percent. `100` keeps small images at actual size (centred) instead of upscaling them to fill the viewport. Wheel / keyboard / typed percent / zoom-lock can still go above 100%. Also exports `computeFitScale` and `resolveFitMaxScale`.
 - **Copyable Demo 6 GPU diagnostics** — every image-index change emits one delayed JSON console entry containing requested/sampled index, memory totals, live viewport/DPR, planned Screen/Browse indexes, actually resident Screen/Browse indexes, and nearby phases.
 - **v0.4 WebGL-first beta foundation** — static Raster main content now renders through a WebGL2 canvas with upload fences, DPR resize, transform quads, progressive preview/full replacement, texture cache eviction, priority neighbor warm-up, `MAX_TEXTURE_SIZE` clamping, and context-loss recovery.
 - **Renderer-neutral media inputs** — exported `MediaSource` (`url` / `blob` / `bytes`), `MediaKind`, commands, capabilities, and view-state contracts; `ImageItem` and single-media props accept source/kind/MIME hints.
