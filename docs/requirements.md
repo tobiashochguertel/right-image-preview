@@ -222,6 +222,7 @@
 ### closeOnMaskClick 修复
 - [x] **根本原因**：viewport div（`width/height: 100%`）完整覆盖 overlay，点击黑色区域时 `e.target` 是 viewport div 而非 overlay，原检测永远失败
 - [x] **修复**：在 viewport div 上也加 `onClick` + `e.target === e.currentTarget` 检测
+- [x] **WebGL 回归修复**：全视口 L2 pan/zoom 命中层会截获所有点击，且 canvas DOM 边界不等于图片边界；命中层现在对当前缩放、平移和旋转做逆变换，点真实图片矩形外的黑边才关闭
 - [x] `closeOnMaskClick` 默认值改为 `false`（opt-in 更安全）
 
 ---

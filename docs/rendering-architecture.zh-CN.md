@@ -33,9 +33,12 @@ type MediaSource =
 
 ```text
 MediaSource
-  → Blob（Blob 输入不复制）
-  → createImageBitmap
-  → MAX_TEXTURE_SIZE 约束下等比缩放
+  → 中心优先队列
+  → Dedicated Worker fetch / 分块收集 / Blob（URL 输入）
+  → Dedicated Worker createImageBitmap（Blob 输入不复制）
+  → transferable ImageBitmap
+  → MAX_TEXTURE_SIZE 与单纹理预算约束下等比缩放
+  → 上传前纹理字节预留 / 淘汰
   → texImage2D
   → GPU fence signaled
   → TextureCache
@@ -44,7 +47,17 @@ MediaSource
 
 canvas backing store 使用 CSS viewport × DPR。缩放、平移、旋转、翻转由 quad 顶点统一计算；空闲时没有 continuous render loop，仅在纹理、变换、viewport 或 context 状态变化时绘制。
 
-当前 texture 未准备好时不清空 canvas，上一帧保持可见；新 texture 的上传 fence 完成后一次性替换。渐进图、Screen LOD 和 Full LOD 使用 generation 防止乱序覆盖。邻图通过有界优先队列进入同一 texture cache；队列为当前图保留前台通道。`preloadMemoryBudgetBytes` 同时作为 GPU cache 预算，当前 texture 受保护，其他 texture 按优先级和 LRU 近似策略回收并显式 `deleteTexture`。
+当前 texture 未准备好时不清空 canvas，上一帧保持可见；新 texture 的上传 fence 完成后一次性替换。渐进图、Screen LOD 和 Full LOD 使用 generation 防止乱序覆盖。邻图通过有界优先队列进入同一 texture cache；队列为当前图保留前台通道。`preloadMemoryBudgetBytes` 同时作为逻辑 RGBA8 texture 预算。每次 `texImage2D` 前按 `width × height × 4` 预留字节：后台任务无法腾出未保护空间时直接放弃，前台 Full 可先淘汰受保护的旧 LOD；单张 Full 超过预算时在 Worker decode 阶段等比降采样。驻留加预留字节因此不会先上传再超额，回收会显式调用 `deleteTexture`。
+
+这个硬上限只覆盖组件创建并记账的 RGBA8 texture payload，不等于操作系统可观测的物理显存上限。WebGL 不公开驱动对齐、内部副本、交换链/帧缓冲、解码器工作集或统一内存占用，宿主提供的 GPU/RAM budget 也只能作为规划输入，不能据此承诺整个进程的物理显存绝不越线。
+
+主舞台 entry 只是 cache 纹理的借用引用，绘制前必须同时满足资源身份一致且 cache 仍持有同一句柄。预算淘汰后，stage 只会回退到**同一资源**仍驻留的最清晰 LOD；没有可用 LOD 时保持 Canvas 上一帧，不绑定已删除句柄。邻图上传在 `finally` 中恢复之前的 `TEXTURE_BINDING_2D`，不能把自己的 sampler 状态泄漏给主舞台。这个双重约束防止已淘汰主图在交互重绘时误采样最近上传的邻图。
+
+Raster decode 使用主线程统一调度的 Dedicated Worker pool。URL 输入从 `fetch`、ReadableStream 分块收集、`new Blob(chunks)` 到 `createImageBitmap` 全部留在 Worker；主线程只接收节流进度和 transferable `ImageBitmap`。Worker 不保存自己的长任务队列，每个 Worker 同时只接收一个 URL/Blob → ImageBitmap 任务。主线程另以单并发队列执行 `texImage2D` 与 GPU fence，避免多个 Worker 同时完成后形成上传尖峰。默认按 `navigator.hardwareConcurrency` 自动选择 1–3 个 Worker，显式 `rasterDecodeWorkers` 可覆盖，`rasterDecodeWorkerMax` 限制自动/显式上限。超过 8000 万自然像素的任务视为重任务，独占 decode pool，避免多张超大图同时制造完整像素工作集。
+
+发布包以内联 Worker 构造器生成 Blob URL，避免 ESM/CJS 和不同宿主 public base 解析外部 Worker 资源的差异。宿主 CSP 必须允许 `worker-src blob:`（旧策略可由 `child-src blob:` 回退）；若 Worker 创建失败，组件保留主线程 `createImageBitmap` 兼容路径，但该回退不提供超大图无卡顿保证。
+
+取消按阶段处理：未派发任务直接从中心队列删除；已在 Worker 内 fetch/组装/decode 的旧当前任务通过 terminate 所在 Worker 并立即重建实现硬抢占，因此网络读取和不可取消的 `createImageBitmap` 会一起停止。普通低优先级运行任务可软取消并在返回时 `close()`；等待上传的 bitmap 在取消时关闭。已经进入 `texImage2D` 的上传无法中途停止，完成后仍通过 context/viewport/navigation generation 检查，过期 texture 立即删除。新当前图若已有同目标 Screen 在途则提升并复用，不重复解码。
 
 WebGL Raster stage 在整个 Viewer Shell 生命周期内常驻，包括当前资源切到 SVG、GIF 或 Video 时。非 Raster 激活时 Canvas 使用 `visibility: hidden` 进入休眠，不绘制、不参与交互，但保留 context、pipeline 和 texture cache；切回 Raster 后显式重绘缓存 texture，不依赖 `preserveDrawingBuffer` 的旧帧。Video 播放和动画图片展示期间不启动新的 Raster 解码/上传，已经驻留的 texture 不会因此清空。context loss 仍是唯一需要整体重建 GPU 资源的路径。
 
@@ -52,11 +65,13 @@ Raster 图片之间导航时复用同一个 context 与 cache；资源键变化�
 
 cache 还维护一组独立的、按最近访问排序的 Screen 历史钉住项，用于非连续的缩略图跳转。当前图的 Screen 会与 Full 共存；导航离开时，该 Screen 成为历史候选。选择历史项之前，先为当前纹理集合和前、后方向各最近一张 Screen 预留空间；然后才根据真实剩余 texture bytes 尽可能保留**已经驻留**的历史 Screen。历史钉住项严格只是保留策略，不会进入预加载任务表；因此即使历史纹理被回收，也不会由历史记录触发重新下载、解码或上传。诊断中这些钉住项会与连续 Screen/Browse 走廊分开报告。
 
-Browse/Screen 请求带 viewport generation。尺寸级别改变时，旧 Screen 若仍达到新 Browse 目标则改为柔和紫罗兰色 Browse 继续复用，否则回收；尚未运行的旧尺寸队列会取消，已经进入 `createImageBitmap`、浏览器无法中断的任务在完成后删除 texture，不允许重新写回 cache。蓝色因此表示“驻留且足以覆盖当前图片 stage DIV × DPR”，紫罗兰表示“驻留且可立即显示的中等细节”。
+Browse/Screen 请求带 viewport generation。尺寸级别改变时，旧 Screen 若仍达到新 Browse 目标则改为柔和紫罗兰色 Browse 继续复用，否则回收；旧尺寸的排队/fetch/decode 任务会取消，必要时硬抢占对应 Worker，不允许过期结果重新写回 cache。蓝色因此表示“驻留且足以覆盖当前图片 stage DIV × DPR”，紫罗兰表示“驻留且可立即显示的中等细节”。
 
-浏览器不公开可用显存，因此网页环境仍用显示器分档作为回退，这不是硬件探测。Tauri 宿主应以 `sysinfo` 提供总/可用内存，并在可行时补充 Metal `recommendedMaxWorkingSetSize`、DXGI video-memory budget 或 Vulkan memory budget，再通过 `suggestRasterHardwareTextureBudgetBytes` 生成预算。组件内部始终以真实已上传 texture bytes 记账；宿主传入 `preloadMemoryBudgetBytes` 时完全覆盖浏览器回退。
+浏览器不公开可用显存，因此网页环境仍用显示器分档作为回退，这不是硬件探测。Tauri 宿主应以 `sysinfo` 提供总/可用内存，并在可行时补充 Metal `recommendedMaxWorkingSetSize`、DXGI video-memory budget 或 Vulkan memory budget，再通过 `suggestRasterHardwareTextureBudgetBytes` 生成预算。组件内部以纹理尺寸计算逻辑 RGBA8 payload；宿主传入 `preloadMemoryBudgetBytes` 时完全覆盖浏览器回退。
 
-URL 原图的 Blob 获取使用流式 `fetch`：能读取 `Content-Length` 时按真实接收字节发布进度（约 1% 或 200ms 节流），不能读取总长时发布不确定进度。完整响应记录与 GPU residency 分离保存：下载完成为绿色缓存提示，texture fence 完成且仍驻留才是蓝色；texture 回收或 context loss 会把蓝色降为绿色，但不会抹掉“本 Viewer 生命周期内曾完整下载”的事实。跨域服务若希望显示真实百分比，必须允许 CORS，并通过 `Access-Control-Expose-Headers: Content-Length` 暴露总长。
+底片条与 Raster 原图管线彼此独立。长列表只挂载可见窗口和 overscan，并通过 `onThumbnailVisibleIndexesChange` 回报这些扁平下标。桌面宿主可对每项传底片专用 `thumbnailSource/thumbnailSrc`；显式 `null` 表示生成中，瓦片保持空白且不会兼容回退到原图，从而允许宿主逐张发布原生后台线程生成的结果。
+
+URL 原图在 Worker 内使用流式 `fetch` 获取：分块数组和最终 `new Blob(chunks)` 都不经过主线程。能读取 `Content-Length` 时按真实接收字节发布进度（约 1% 或 200ms 节流），不能读取总长时发布不确定进度。完整响应记录与 GPU residency 分离保存：下载完成为绿色缓存提示，texture fence 完成且仍驻留才是蓝色；texture 回收或 context loss 会把蓝色降为绿色，但不会抹掉“本 Viewer 生命周期内曾完整下载”的事实。跨域服务若希望显示真实百分比，必须允许 CORS，并通过 `Access-Control-Expose-Headers: Content-Length` 暴露总长。
 
 WebGL context loss 时阻止浏览器默认放弃恢复，清空失效句柄并进入 `restoring`；恢复后重建 shader/buffer、增加 generation 并重新解码上传。超过 `MAX_TEXTURE_SIZE` 的单图在 beta 中等比降采样；完整 tile/LOD 留给后续 0.4.x。
 

@@ -28,12 +28,12 @@
 | **智能侧边箭头** | 不可导航时箭头完全隐藏；组边界自动变为跳组按钮（双箭头） |
 | **控件自动渐隐** | 3 秒无操作后控件渐隐至约 10% 透明度，任意活动立即恢复 |
 | **导航小地图** | 主图溢出视口时右下角缩略图 + 可拖视口框；可通过 `showMinimap` 关闭 |
-| **缩略图条** | `showThumbnails` 开启底部横向缩略图（默认关）。`thumbnailsScope="group"`（默认）分组时仅当前组；`"flat"` 为整段扁平序列（过长时窗口虚拟化） |
+| **缩略图条** | `showThumbnails` 开启底部横向缩略图（默认关）。`thumbnailsScope="group"`（默认）分组时仅当前组；`"flat"` 为整段扁平序列（过长时窗口虚拟化）；桌面宿主可用 `onThumbnailVisibleIndexesChange` 只生成可见窗口 |
 | **嵌入式模式** | `presentation="contained"` 填满宿主容器；仅聚焦时响应键盘 |
 | **Browse/Screen/Full 分档** | 邻图数量按实时图片舞台 DIV × DPR 与真实纹理预算动态计算；若全部候选的 Screen 都能放下则全部使用 Screen，否则连续核心会随压力在前后各 1 张至前 3 / 后 2 张之间动态变化，核心外从近到远连续铺固定 Browse 环。当前张停稳 300ms 后才升级 Full |
 | **无队列长按导航** | ←/→ 第一张立即切换；`holdRepeatDelayMs` 控制进入连续切换的门槛，`holdMinVisibleMs` 控制每张真正呈现后的最短展示时间；松开立即停止 |
 | **控件密度** | `chrome="minimal"` 空闲时控件完全隐藏 |
-| **浏览器全屏** | 工具栏切换 + ref `requestFullscreen` / `exitFullscreen`；Esc 先退出全屏 |
+| **宿主优先全屏** | 可选 `fullscreen` 适配器接管状态和进出；未提供时回退标准浏览器 Fullscreen API。Esc 优先退出全屏 |
 | **受控下标** | `index` + `onIndexChange`；ref `goTo(index)` |
 | **小地图独立图源** | 每条 **`ImageItem`**（及单图 **`src`** 模式）可设 **`minimapSrc`** / **`minimap`**，用小缩略图或自定义节点；默认仍用主图 **`src`** |
 | **触控双指捏合缩放** | 双指捏合/展开实现连续缩放；缩放锚点跟随双指中点；可用 **`pinchEnabled`** 关闭 |
@@ -158,6 +158,11 @@ import { ImagePreview } from 'right-image-preview';
 | `initialMode` | `'fit' \| 'native'` | `'fit'` | 初始缩放模式 |
 | `initialNativePercent` | `number` | 第一档 | `initialMode='native'` 时的初始比例 |
 | `fitMaxNativePercent` | `number` | 无上限 | Fit / contain 的上限（按 native %）。`100` 表示小图保持 1:1，不铺满窗口；省略则允许 CSS contain 放大 |
+| `fullscreen` | `FullscreenAdapter` | — | 宿主拥有的全屏状态与进出动作；优先于浏览器 Fullscreen API |
+| `onFullscreenError` | `(error: unknown) => void` | — | 浏览器 API 缺失/拒绝/状态未确认及宿主适配器失败的错误回调 |
+| `rasterDecodeWorkers` | `number \| 'auto'` | `'auto'` | Raster 专用解码 Worker 数；auto 按逻辑 CPU 并发保守选择 1–3 |
+| `rasterDecodeWorkerMax` | `number` | `3` | 解码并发安全上限；超过 8000 万像素的来源仍独占解码 |
+| `onThumbnailVisibleIndexesChange` | `(indexes: number[]) => void` | — | 底片虚拟列表实际挂载下标；宿主可只生成这批缩略图 |
 | `firstZoomInStrategy` | `'above-fit' \| 'first-stop' \| 'hundred'` | `'above-fit'` | 从 Fit 首次放大时的入档策略 |
 | `zoomOutBelowMinBehaviour` | `'fit' \| 'noop'` | `'noop'` | 缩小到最小档以下的行为 |
 | `zoomInAtMaxBehaviour` | `'noop' \| 'notify'` | `'noop'` | 放大到最大档时的行为 |
@@ -202,6 +207,7 @@ interface ImageItem {
   alt?: string;
   name?: string; // 工具栏信息栏显示的文件名
   minimapSrc?: string;
+  thumbnailSrc?: string | null; // 仅底片；null 时不回退原图
   minimap?: React.ReactNode;
 }
 
@@ -221,7 +227,15 @@ interface ZoomState {
   nativePercent: number;
   fitEquivalentNativePercent?: number; // 供 UI 显示"适应 ≈ xx%"
 }
+
+interface FullscreenAdapter {
+  isFullscreen: boolean;
+  enter(): void | Promise<void>;
+  exit(): void | Promise<void>;
+}
 ```
+
+传入 `fullscreen` 后，它是全屏状态的唯一来源：工具栏、Esc 与 ref 方法都只委托给适配器，不读取或调用 DOM Fullscreen API。未传时组件按能力检测使用标准浏览器 API，只有 `fullscreenchange` 确认目标状态后才更新工具栏。
 
 包内还导出 **`resolvePreviewImages`**、**`flattenGroupedImages`**、**`resolveDefaultGroupedFlatIndex`**、**`FlattenedGroupSlice`** 与 **`DefaultGroupedSelection`**，便于在组件外复用相同的扁平列表与组内下标范围。**`resolveStrings`** 与 **`mergeStrings`** 也一并导出，可用于在组件外以编程方式构建自定义 locale 对象。
 
@@ -248,6 +262,11 @@ interface ImagePreviewRef {
   prev(): void;
   nextGroup(): void;
   prevGroup(): void;
+
+  // 全屏（传入宿主适配器时委托适配器，否则走浏览器兜底）
+  requestFullscreen(): Promise<boolean>;
+  exitFullscreen(): Promise<void>;
+  isFullscreen(): boolean;
 
   // 状态读取
   getState(): ZoomState;

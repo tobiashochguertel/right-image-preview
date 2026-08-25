@@ -5,7 +5,7 @@ This document describes only the current implementation. The static-raster main 
 ## Raster presentation
 
 ```text
-MediaSource → fetch/Blob → createImageBitmap → WebGL2 texture → GPU fence → atomic presentation
+MediaSource → Worker-pool fetch/Blob/createImageBitmap → serial WebGL2 upload → GPU fence → atomic presentation
 ```
 
 - The Canvas persists for the Viewer lifetime. SVG, animated-image, and video temporarily hide it and pause new prefetch while resident textures remain cached.
@@ -25,6 +25,8 @@ For a 100 CSS-pixel-wide stage at DPR 1.5, Screen needs about 150 source pixels 
 - Browse: 60% of Screen linear dimensions for lower-cost distant instant navigation.
 - Screen: covers image-stage DIV × DPR; under a normal budget the floor is three forward and two backward.
 - Full: current-only, starts only when zoom demand outgrows Screen, then is delayed by `fullResolutionSettleMs` and cancellable while navigating. Neighbor cache/LOD churn must not restart that settle timer. Once Full is demanded, new neighbor decode/upload work yields until Full is ready. Live main/minimap dragging likewise pauses new neighbor work and coalesces high-frequency pointer moves into one foreground transform commit per animation frame.
+
+Preview/Browse/Screen/Full decode jobs share one central priority scheduler. URL fetch, Blob chunk assembly, and `createImageBitmap` all run inside a Worker; each Worker executes one job and owns no private queue. Navigation removes queued work and hard-preempts an obsolete current read/decode by terminating/replacing that Worker so the new current Screen can start immediately. Historical Screen entries retain already-resident textures only and never create decode jobs.
 
 Counts are not fixed. The planner estimates each RGBA8 texture. If every candidate Screen texture fits, every candidate is Screen; otherwise its contiguous Screen core scales from one item on each side under pressure through the normal three-ahead/two-behind case, then a fixed contiguous Browse ring expands from that core. A green hole therefore cannot appear between ready blue/violet items, and Browse is never automatically promoted to Screen.
 

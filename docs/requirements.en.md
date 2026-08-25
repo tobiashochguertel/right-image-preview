@@ -222,6 +222,7 @@
 ### closeOnMaskClick Fix
 - [x] **Root cause**: the viewport div (`width/height: 100%`) covers the entire overlay, so clicks on the dark mask land on the viewport div — `e.target !== e.currentTarget` on the overlay, so the handler never fired
 - [x] **Fix**: added the same `onClick` + `e.target === e.currentTarget` check on the viewport div
+- [x] **WebGL regression fix**: the viewport-sized L2 pan/zoom hit floor intercepts every click, while the canvas DOM bounds are not the image bounds; the hit floor now inverse-transforms the current scale, translation, and rotation so only black space outside the real image rectangle closes
 - [x] `closeOnMaskClick` default changed from `true` to `false` (opt-in is safer)
 
 ---

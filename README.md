@@ -28,12 +28,12 @@ Open the interactive demo in your browser (toggle **EN / 中文** in the top-rig
 | **Smart side arrows** | Hidden when no navigation is possible; replaced by a group-jump button (double chevron) at group boundaries |
 | **Auto-fade controls** | All controls fade to ~10 % opacity after 3 s of inactivity; any activity instantly restores them |
 | **Navigation minimap** | Corner thumbnail + draggable viewport frame when the image overflows; optional via `showMinimap` |
-| **Thumbnail strip** | `showThumbnails` shows a bottom horizontal thumb nav (off by default). `thumbnailsScope="group"` (default) lists the current group when grouped; `"flat"` lists the full flat sequence (window-virtualized when long) |
+| **Thumbnail strip** | `showThumbnails` shows a bottom horizontal thumb nav (off by default). `thumbnailsScope="group"` (default) lists the current group when grouped; `"flat"` lists the full flat sequence (window-virtualized when long); desktop hosts can generate only `onThumbnailVisibleIndexesChange` |
 | **Contained / embedded mode** | `presentation="contained"` fills a host pane; keyboard only while focused |
 | **Browse/Screen/Full LODs** | Neighbor counts follow the live image-stage DIV × DPR and the real texture budget. If every candidate Screen fits, all are Screen; otherwise a contiguous core dynamically ranges from one each side under pressure to three ahead / two behind, with a fixed Browse ring outside it. Full is current-only and begins after 300ms only when zoom outgrows Screen; Fit mode stays at Screen |
 | **Queue-free hold navigation** | ←/→ steps once immediately; `holdRepeatDelayMs` gates automatic continuation and `holdMinVisibleMs` controls each actually-presented frame's dwell; release stops immediately |
 | **Chrome density** | `chrome="minimal"` fades idle controls to fully hidden |
-| **Browser fullscreen** | Toolbar toggle + ref `requestFullscreen` / `exitFullscreen`; Esc exits FS first |
+| **Host-first fullscreen** | An optional `fullscreen` adapter owns state and enter/exit; otherwise the standard browser Fullscreen API is used. Esc exits fullscreen first |
 | **Controlled index** | `index` + `onIndexChange`; ref `goTo(index)` |
 | **Minimap source per item** | Each **`ImageItem`** (and single-**`src`** mode) can set **`minimapSrc`** / **`minimap`** so the map uses a lighter tile or custom node; defaults to the main **`src`** |
 | **Touch pinch-to-zoom** | Two-finger pinch/spread for continuous zoom; anchor follows the midpoint between fingers; disable with **`pinchEnabled`** |
@@ -158,6 +158,11 @@ See [rendering architecture](./docs/rendering-architecture.md) for host integrat
 | `initialMode` | `'fit' \| 'native'` | `'fit'` | Initial zoom mode |
 | `initialNativePercent` | `number` | first stop | Initial native percent when `initialMode='native'` |
 | `fitMaxNativePercent` | `number` | none (uncapped) | Cap for Fit / contain, as native %. `100` keeps small images at actual size; omit to allow CSS-contain upscaling |
+| `fullscreen` | `FullscreenAdapter` | — | Host-owned fullscreen state and enter/exit actions; takes priority over browser Fullscreen API |
+| `onFullscreenError` | `(error: unknown) => void` | — | Receives unavailable/rejected/unconfirmed browser fullscreen and host-adapter failures |
+| `rasterDecodeWorkers` | `number \| 'auto'` | `'auto'` | Dedicated Raster decode Workers; auto selects a conservative 1–3 from logical CPU concurrency |
+| `rasterDecodeWorkerMax` | `number` | `3` | Safety cap for decode concurrency; >80MP sources still decode exclusively |
+| `onThumbnailVisibleIndexesChange` | `(indexes: number[]) => void` | — | Flat indexes actually mounted by the virtual strip; hosts can generate only this window |
 | `firstZoomInStrategy` | `'above-fit' \| 'first-stop' \| 'hundred'` | `'above-fit'` | Which stop to land on when zooming in from Fit for the first time |
 | `zoomOutBelowMinBehaviour` | `'fit' \| 'noop'` | `'noop'` | Behaviour when zooming out below the minimum stop |
 | `zoomInAtMaxBehaviour` | `'noop' \| 'notify'` | `'noop'` | Behaviour when zooming in at the maximum stop |
@@ -202,6 +207,7 @@ interface ImageItem {
   alt?: string;
   name?: string; // filename shown in the info badge
   minimapSrc?: string;
+  thumbnailSrc?: string | null; // strip only; null prevents original fallback
   minimap?: React.ReactNode;
 }
 
@@ -221,7 +227,15 @@ interface ZoomState {
   nativePercent: number;
   fitEquivalentNativePercent?: number; // for displaying "Fit ≈ xx%"
 }
+
+interface FullscreenAdapter {
+  isFullscreen: boolean;
+  enter(): void | Promise<void>;
+  exit(): void | Promise<void>;
+}
 ```
+
+When `fullscreen` is supplied, it is the only fullscreen state source: the toolbar, Esc, and ref methods delegate to it without reading or calling DOM Fullscreen APIs. Without it, the component uses feature detection for the standard browser API and updates the toolbar only after `fullscreenchange` confirms the requested state.
 
 The package also exports **`resolvePreviewImages`**, **`flattenGroupedImages`**, **`resolveDefaultGroupedFlatIndex`**, **`FlattenedGroupSlice`**, and **`DefaultGroupedSelection`** if you need the same flattened list and per-group index ranges outside the component. **`resolveStrings`** and **`mergeStrings`** are also exported for building custom locale objects programmatically.
 
@@ -248,6 +262,11 @@ interface ImagePreviewRef {
   prev(): void;
   nextGroup(): void;
   prevGroup(): void;
+
+  // fullscreen (host adapter when supplied; browser fallback otherwise)
+  requestFullscreen(): Promise<boolean>;
+  exitFullscreen(): Promise<void>;
+  isFullscreen(): boolean;
 
   // state
   getState(): ZoomState;
