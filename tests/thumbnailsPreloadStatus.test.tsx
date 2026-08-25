@@ -37,18 +37,41 @@ describe('ThumbnailsStrip preload status', () => {
     );
   });
 
+  it('keeps a tile empty when the host explicitly waits for a generated thumbnail', () => {
+    const { container } = render(
+      <ThumbnailsStrip
+        entries={[{
+          flatIndex: 0,
+          item: {
+            id: 'pending-thumbnail',
+            src: '/large-original.jpg',
+            thumbnailSrc: null,
+          },
+        }, entries[1]!]}
+        activeFlatIndex={0}
+        ariaLabel="thumbs"
+        thumbAria={(index) => `thumb-${index}`}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('img[src="/large-original.jpg"]')).toBeNull();
+  });
+
   it('virtualizes a large strip on its first render around the active item', () => {
-    const manyEntries = Array.from({ length: 500 }, (_, flatIndex) => ({
+    const onVisibleIndexesChange = vi.fn();
+    const manyEntries = Array.from({ length: 5_000 }, (_, flatIndex) => ({
       flatIndex,
       item: { id: `large-${flatIndex}`, src: `/large-${flatIndex}.jpg` },
     }));
     const { container } = render(
       <ThumbnailsStrip
         entries={manyEntries}
-        activeFlatIndex={250}
+        activeFlatIndex={2_500}
         ariaLabel="thumbs"
         thumbAria={(index) => `thumb-${index}`}
         onSelect={vi.fn()}
+        onVisibleIndexesChange={onVisibleIndexesChange}
       />,
     );
 
@@ -56,6 +79,10 @@ describe('ThumbnailsStrip preload status', () => {
     expect(buttons.length).toBeGreaterThan(0);
     expect(buttons.length).toBeLessThan(100);
     expect(container.querySelector('[aria-current="true"]')).not.toBeNull();
+    expect(onVisibleIndexesChange).toHaveBeenCalled();
+    const visibleIndexes = onVisibleIndexesChange.mock.calls.at(-1)?.[0] as number[];
+    expect(visibleIndexes).toContain(2_500);
+    expect(visibleIndexes.length).toBeLessThan(100);
   });
 
   it('uses the measured download ratio for the green bar', () => {

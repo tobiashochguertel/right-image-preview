@@ -4,12 +4,18 @@ import {
   type MediaSource,
 } from '../../core/media-source';
 import { TextureCache } from './TextureCache';
+import type { TextureCacheReservation } from './TextureCache';
 import { WebGLRasterRenderer } from './WebGLRasterRenderer';
 import type { RasterTextureEntry, RasterTextureQuality } from './types';
 import { PriorityTaskQueue } from './PriorityTaskQueue';
 import { readRasterNaturalSize } from './rasterDimensions';
 import { fitRasterToScreenLod, type RasterSize } from './rasterLod';
 import { RASTER_TEXTURE_BUDGET_4K_BYTES } from './rasterMemoryBudget';
+import {
+  RasterDecodeWorkerPool,
+  type RasterDecodeWorkerPoolOptions,
+} from './RasterDecodeWorkerPool';
+import type { RasterDecodeWorkerSetting } from './rasterDecodePolicy';
 
 export const DEFAULT_RASTER_TEXTURE_BUDGET_BYTES = RASTER_TEXTURE_BUDGET_4K_BYTES;
 
@@ -17,7 +23,13 @@ export interface RasterRuntimeSnapshot {
   downloads: Readonly<Record<string, MediaDownloadProgress>>;
   residentResourceKeys: readonly string[];
   residentTextures: readonly RasterResidentTextureSnapshot[];
-  cache: { count: number; usedBytes: number; maxBytes: number; oversubscribed: boolean };
+  cache: {
+    count: number;
+    usedBytes: number;
+    reservedBytes: number;
+    maxBytes: number;
+    oversubscribed: boolean;
+  };
 }
 
 export interface RasterResidentTextureSnapshot {
@@ -30,10 +42,40 @@ export interface RasterResidentTextureSnapshot {
   bytes: number;
 }
 
+export interface RasterPipelineOptions {
+  decodeWorkers?: RasterDecodeWorkerSetting;
+  decodeWorkerMax?: number;
+  /** Test/host injection point; normal consumers use the Worker settings above. */
+  decodePool?: RasterDecodeWorkerPool;
+}
+
+interface RasterSchedulingState {
+  priority: number;
+  foreground: boolean;
+}
+
+interface RasterInFlightRecord {
+  resourceKey: string;
+  quality: RasterTextureQuality;
+  viewportLod: boolean;
+  activeSpecific: boolean;
+  decodeKey: string;
+  abortController: AbortController;
+  scheduling: RasterSchedulingState;
+  promise: Promise<RasterTextureEntry>;
+}
+
+interface PreparedRasterTexture {
+  entry: RasterTextureEntry;
+  reservation: TextureCacheReservation;
+}
+
 export class RasterPipeline {
   readonly renderer: WebGLRasterRenderer;
   readonly cache: TextureCache;
-  private readonly inFlight = new Map<string, Promise<RasterTextureEntry>>();
+  private readonly inFlight = new Map<string, RasterInFlightRecord>();
+  private readonly decodePool: RasterDecodeWorkerPool;
+  private readonly uploadQueue = new PriorityTaskQueue(1);
   private disposed = false;
   private readonly unsubscribeContext: () => void;
   private contextGeneration = 0;
@@ -44,23 +86,28 @@ export class RasterPipeline {
   private foregroundBlob: { resourceKey: string; source: MediaSource; blob: Blob } | null = null;
   private displayGeneration = 0;
   private displayBox: RasterSize | null = null;
-  // Keep one lane available to the active image. Neighbor Screen work is still
-  // important, but must not consume both expensive decode/upload lanes before
-  // a newly selected image can start. Only the active Display request (100)
-  // qualifies as foreground; Full/neighbor work remains pre-emptible.
-  private readonly decodeQueue = new PriorityTaskQueue(2, 100);
+  private activeResourceKey: string | undefined;
+  private requestSequence = 0;
 
-  constructor(renderer: WebGLRasterRenderer, budgetBytes = DEFAULT_RASTER_TEXTURE_BUDGET_BYTES) {
+  constructor(
+    renderer: WebGLRasterRenderer,
+    budgetBytes = DEFAULT_RASTER_TEXTURE_BUDGET_BYTES,
+    options: RasterPipelineOptions = {},
+  ) {
     this.renderer = renderer;
     this.cache = new TextureCache(renderer.gl, budgetBytes);
+    this.decodePool = options.decodePool ?? new RasterDecodeWorkerPool({
+      workers: options.decodeWorkers,
+      maxWorkers: options.decodeWorkerMax,
+    } satisfies RasterDecodeWorkerPoolOptions);
     this.unsubscribeContext = renderer.subscribeContext((event) => {
       if (event === 'lost') {
         this.contextLost = true;
+        this.cancelAllInFlight(true, 'WebGL context lost');
         this.cache.clear(false);
       } else {
         this.contextLost = false;
         this.contextGeneration += 1;
-        this.inFlight.clear();
       }
       this.emit();
     });
@@ -112,7 +159,11 @@ export class RasterPipeline {
     if (sizeClassChanged) {
       this.displayBox = screenBox;
       this.displayGeneration += 1;
-      this.decodeQueue.cancelPending('lod');
+      this.cancelInFlight(
+        (record) => record.viewportLod,
+        true,
+        'Raster viewport LOD became stale after stage resize',
+      );
     }
     let changed = false;
     for (const entry of this.cache.residentEntries()) {
@@ -147,6 +198,17 @@ export class RasterPipeline {
     this.emit();
   }
 
+  /** Cancels background work removed by the latest Screen/Browse corridor plan. */
+  reconcileDecodePlan(desiredTextureKeys: readonly string[]): void {
+    const desired = new Set(desiredTextureKeys);
+    this.cancelInFlight(
+      (record) => !record.activeSpecific &&
+        !desired.has(`${record.resourceKey}|${record.quality}`),
+      false,
+      'Raster decode removed from the current preload plan',
+    );
+  }
+
   prepare(
     resourceKey: string,
     source: MediaSource,
@@ -157,6 +219,8 @@ export class RasterPipeline {
   ): Promise<RasterTextureEntry> {
     const key = resourceKey + '|' + quality;
     const viewportLod = quality === 'display' || quality === 'browse';
+    const activeDisplay = quality === 'display' && priority >= 100;
+    if (activeDisplay) this.activateResource(resourceKey);
     const requestDisplayGeneration = this.displayGeneration;
     const inFlightKey = viewportLod
       ? `${key}@${requestDisplayGeneration}`
@@ -166,41 +230,88 @@ export class RasterPipeline {
       return Promise.resolve(cached);
     }
     const running = this.inFlight.get(inFlightKey);
-    if (running) return running;
+    if (running) {
+      if (activeDisplay) {
+        running.activeSpecific = true;
+        running.scheduling.priority = Math.max(running.scheduling.priority, priority);
+        running.scheduling.foreground = true;
+        this.decodePool.promote(running.decodeKey, running.scheduling.priority, true);
+      }
+      return running.promise;
+    }
     const generation = this.contextGeneration;
-    const promise = this.decodeQueue.schedule(
+    const abortController = new AbortController();
+    const decodeKey = `${inFlightKey}#${++this.requestSequence}`;
+    const scheduling: RasterSchedulingState = {
       priority,
-      () => this.createEntry(key, resourceKey, source, quality, naturalSize, priority, screenBox),
-      viewportLod ? 'lod' : undefined,
+      foreground: activeDisplay || quality === 'full',
+    };
+    const record = {} as RasterInFlightRecord;
+    const promise = this.createEntry(
+      key,
+      resourceKey,
+      source,
+      quality,
+      naturalSize,
+      screenBox,
+      scheduling,
+      decodeKey,
+      abortController.signal,
     )
-      .then((entry) => {
+      .then(({ entry, reservation }) => {
         if (this.disposed) {
           this.renderer.gl.deleteTexture(entry.texture);
-          throw new Error('Raster pipeline has been disposed');
+          reservation.release();
+          throw new DOMException('Raster pipeline has been disposed', 'AbortError');
         }
         if (generation !== this.contextGeneration || this.contextLost) {
           this.renderer.gl.deleteTexture(entry.texture);
-          throw new Error('Raster upload became stale after WebGL context loss');
+          reservation.release();
+          throw new DOMException(
+            'Raster upload became stale after WebGL context loss',
+            'AbortError',
+          );
         }
         if (viewportLod && requestDisplayGeneration !== this.displayGeneration) {
           this.renderer.gl.deleteTexture(entry.texture);
-          throw new Error('Raster viewport LOD became stale after stage resize');
+          reservation.release();
+          throw new DOMException(
+            'Raster viewport LOD became stale after stage resize',
+            'AbortError',
+          );
         }
-        this.cache.put(entry, priority);
+        if (!reservation.commit(entry, scheduling.priority)) {
+          throw new DOMException(
+            'Raster texture budget changed before upload admission completed',
+            'AbortError',
+          );
+        }
         this.emit();
         return entry;
       })
       .finally(() => {
-        if (this.inFlight.get(inFlightKey) === promise) this.inFlight.delete(inFlightKey);
+        if (this.inFlight.get(inFlightKey) === record) this.inFlight.delete(inFlightKey);
       });
-    this.inFlight.set(inFlightKey, promise);
+    Object.assign(record, {
+      resourceKey,
+      quality,
+      viewportLod,
+      activeSpecific: activeDisplay || quality === 'preview' || quality === 'full',
+      decodeKey,
+      abortController,
+      scheduling,
+      promise,
+    });
+    this.inFlight.set(inFlightKey, record);
     return promise;
   }
 
   dispose(): void {
     this.disposed = true;
     this.unsubscribeContext();
-    this.decodeQueue.dispose();
+    this.cancelAllInFlight(true, 'Raster pipeline has been disposed');
+    this.decodePool.dispose();
+    this.uploadQueue.dispose();
     this.cache.clear();
     this.foregroundBlob = null;
     this.listeners.clear();
@@ -212,92 +323,176 @@ export class RasterPipeline {
     source: MediaSource,
     quality: RasterTextureQuality,
     naturalSize?: { width: number; height: number },
-    priority = 0,
     screenBox?: RasterSize,
-  ): Promise<RasterTextureEntry> {
+    scheduling: RasterSchedulingState = { priority: 0, foreground: false },
+    decodeKey = `${resourceKey}|${quality}`,
+    signal?: AbortSignal,
+  ): Promise<PreparedRasterTexture> {
     const reportProgress = quality === 'preview'
       ? undefined
       : (progress: MediaDownloadProgress) => {
           this.downloads.set(resourceKey, progress);
           this.emit();
         };
-    const foreground = quality !== 'preview' && priority >= 80;
-    const retained = foreground && this.foregroundBlob?.resourceKey === resourceKey &&
+    const currentOriginal = quality !== 'preview' && this.activeResourceKey === resourceKey;
+    const retained = currentOriginal && this.foregroundBlob?.resourceKey === resourceKey &&
       sameMediaSource(this.foregroundBlob.source, source)
       ? this.foregroundBlob.blob
       : undefined;
-    const blob = retained ?? await acquireMediaBlob(source, { onProgress: reportProgress });
-    if (foreground && !retained) this.foregroundBlob = { resourceKey, source, blob };
+    // URL 获取和 Blob 分块组装也必须在 Worker；只把 Blob/bytes 输入留在主线程包装。
+    const blob = retained ?? (source.type === 'url'
+      ? undefined
+      : await acquireMediaBlob(source, { onProgress: reportProgress, signal }));
+    signal?.throwIfAborted();
+    if (currentOriginal && !retained && blob) {
+      this.foregroundBlob = { resourceKey, source, blob };
+    }
 
-    const headerSize = quality === 'preview'
+    const headerSize = quality === 'preview' || naturalSize || !blob
       ? undefined
       : await readRasterNaturalSize(blob).catch(() => undefined);
     let resolvedNaturalSize = naturalSize ?? headerSize;
-    let textureSize = resolvedNaturalSize
-      ? resolveTextureSize(quality, resolvedNaturalSize, screenBox, this.renderer.maxTextureSize)
+    const textureSize = resolvedNaturalSize
+      ? resolveTextureSize(
+          quality,
+          resolvedNaturalSize,
+          screenBox,
+          this.renderer.maxTextureSize,
+          this.cache.maxBytes,
+        )
       : undefined;
-    let bitmap = textureSize && (
-      textureSize.width < resolvedNaturalSize!.width ||
-      textureSize.height < resolvedNaturalSize!.height
-    )
-      ? await createImageBitmap(blob, {
-          imageOrientation: 'from-image',
-          resizeWidth: textureSize.width,
-          resizeHeight: textureSize.height,
-          resizeQuality: 'high',
-        })
-      : await createImageBitmap(blob, { imageOrientation: 'from-image' });
+    const directTarget = textureSize && resolvedNaturalSize && (
+      textureSize.width < resolvedNaturalSize.width ||
+      textureSize.height < resolvedNaturalSize.height
+    ) ? textureSize : undefined;
+    const decoded = await this.decodePool.decode({
+      key: decodeKey,
+      blob,
+      url: source.type === 'url'
+        ? { href: source.href, contentLength: source.contentLength }
+        : undefined,
+      onProgress: reportProgress,
+      targetSize: directTarget,
+      fitBox: !resolvedNaturalSize && (quality === 'display' || quality === 'browse')
+        ? screenBox
+        : undefined,
+      maxTextureSize: this.renderer.maxTextureSize,
+      naturalPixels: quality !== 'preview' && resolvedNaturalSize
+        ? resolvedNaturalSize.width * resolvedNaturalSize.height
+        : undefined,
+      priority: scheduling.priority,
+      foreground: scheduling.foreground,
+    });
+    const bitmap = decoded.bitmap;
+    if (
+      blob &&
+      quality !== 'preview' &&
+      this.activeResourceKey === resourceKey &&
+      (
+        this.foregroundBlob?.resourceKey !== resourceKey ||
+        !sameMediaSource(this.foregroundBlob.source, source)
+      )
+    ) {
+      this.foregroundBlob = { resourceKey, source, blob };
+    }
+    if (signal?.aborted) {
+      bitmap.close();
+      signal.throwIfAborted();
+    }
 
     if (!resolvedNaturalSize) {
-      resolvedNaturalSize = { width: bitmap.width, height: bitmap.height };
-      textureSize = resolveTextureSize(
-        quality,
-        resolvedNaturalSize,
-        screenBox,
-        this.renderer.maxTextureSize,
-      );
-      if (textureSize.width !== bitmap.width || textureSize.height !== bitmap.height) {
-        const resized = await createImageBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, {
-          resizeWidth: textureSize.width,
-          resizeHeight: textureSize.height,
-          resizeQuality: 'high',
-        });
-        bitmap.close();
-        bitmap = resized;
-      }
+      resolvedNaturalSize = decoded.naturalSize ?? { width: bitmap.width, height: bitmap.height };
     }
     const naturalWidth = resolvedNaturalSize.width;
     const naturalHeight = resolvedNaturalSize.height;
-    const fullLimit = fitRasterToTextureLimit(
-      naturalWidth,
-      naturalHeight,
-      this.renderer.maxTextureSize,
-    );
     const textureLimited = quality === 'full' && (
-      fullLimit.width !== naturalWidth || fullLimit.height !== naturalHeight
+      bitmap.width !== naturalWidth || bitmap.height !== naturalHeight
     );
     try {
-      const texture = await this.renderer.upload(bitmap);
-      const now = performance.now();
-      return {
-        key,
-        resourceKey,
-        quality,
-        texture,
-        textureWidth: bitmap.width,
-        textureHeight: bitmap.height,
-        naturalWidth,
-        naturalHeight,
-        estimatedBytes: bitmap.width * bitmap.height * 4,
-        lastUsedAt: now,
-        readyAt: now,
-        textureLimited,
-      };
+      const prepared = await this.uploadQueue.schedule(
+        scheduling.priority,
+        async () => {
+          signal?.throwIfAborted();
+          const estimatedBytes = bitmap.width * bitmap.height * 4;
+          const reservation = this.cache.reserve(
+            key,
+            estimatedBytes,
+            scheduling.foreground,
+            scheduling.priority,
+          );
+          if (!reservation) {
+            throw new DOMException(
+              'Raster texture rejected by the configured texture budget',
+              'QuotaExceededError',
+            );
+          }
+          try {
+            const texture = await this.renderer.upload(bitmap);
+            if (signal?.aborted) {
+              this.renderer.gl.deleteTexture(texture);
+              signal.throwIfAborted();
+            }
+            const now = performance.now();
+            return {
+              entry: {
+                key,
+                resourceKey,
+                quality,
+                texture,
+                textureWidth: bitmap.width,
+                textureHeight: bitmap.height,
+                naturalWidth,
+                naturalHeight,
+                estimatedBytes,
+                lastUsedAt: now,
+                readyAt: now,
+                textureLimited,
+              },
+              reservation,
+            } satisfies PreparedRasterTexture;
+          } catch (error) {
+            reservation.release();
+            throw error;
+          }
+        },
+        decodeKey,
+      );
+      return prepared;
     } finally {
       bitmap.close();
       if (quality === 'full' && this.foregroundBlob?.resourceKey === resourceKey) {
         this.foregroundBlob = null;
       }
+    }
+  }
+
+  private activateResource(resourceKey: string): void {
+    if (this.activeResourceKey === resourceKey) return;
+    this.activeResourceKey = resourceKey;
+    if (this.foregroundBlob?.resourceKey !== resourceKey) this.foregroundBlob = null;
+    this.cancelInFlight(
+      (record) => record.activeSpecific && record.resourceKey !== resourceKey,
+      true,
+      `Raster decode superseded by current resource: ${resourceKey}`,
+    );
+  }
+
+  private cancelAllInFlight(hard: boolean, reason: string): void {
+    this.cancelInFlight(() => true, hard, reason);
+  }
+
+  private cancelInFlight(
+    predicate: (record: RasterInFlightRecord) => boolean,
+    hard: boolean,
+    reason: string,
+  ): void {
+    for (const [key, record] of this.inFlight) {
+      if (!predicate(record)) continue;
+      this.inFlight.delete(key);
+      const cancellation = new DOMException(reason, 'AbortError');
+      record.abortController.abort(cancellation);
+      this.decodePool.cancel(record.decodeKey, hard);
+      this.uploadQueue.cancelPending(record.decodeKey, cancellation);
     }
   }
 
@@ -312,6 +507,7 @@ export class RasterPipeline {
       { width: entry.naturalWidth, height: entry.naturalHeight },
       screenBox,
       this.renderer.maxTextureSize,
+      this.cache.maxBytes,
     );
     // Ignore tiny viewport jitter (scrollbars, fractional DPR); a real size-class
     // transition such as contained → 4K fullscreen still invalidates immediately.
@@ -329,6 +525,7 @@ export class RasterPipeline {
       { width: entry.naturalWidth, height: entry.naturalHeight },
       screenBox,
       this.renderer.maxTextureSize,
+      this.cache.maxBytes,
     );
     return entry.textureWidth <= target.width * 1.35 && entry.textureHeight <= target.height * 1.35;
   }
@@ -343,6 +540,7 @@ function resolveTextureSize(
   naturalSize: RasterSize,
   screenBox: RasterSize | undefined,
   maxTextureSize: number,
+  maxTextureBytes: number,
 ): RasterSize {
   const requested = (quality === 'display' || quality === 'browse') && screenBox
     ? fitRasterToScreenLod(
@@ -352,7 +550,16 @@ function resolveTextureSize(
         screenBox.height,
       )
     : naturalSize;
-  return fitRasterToTextureLimit(requested.width, requested.height, maxTextureSize);
+  const dimensionLimited = fitRasterToTextureLimit(
+    requested.width,
+    requested.height,
+    maxTextureSize,
+  );
+  return fitRasterToByteLimit(
+    dimensionLimited.width,
+    dimensionLimited.height,
+    maxTextureBytes,
+  );
 }
 
 function sameMediaSource(a: MediaSource, b: MediaSource): boolean {
@@ -378,4 +585,30 @@ export function fitRasterToTextureLimit(
     width: Math.max(1, Math.round(safeWidth * ratio)),
     height: Math.max(1, Math.round(safeHeight * ratio)),
   };
+}
+
+export function fitRasterToByteLimit(
+  width: number,
+  height: number,
+  maxBytes: number,
+): { width: number; height: number } {
+  const safeWidth = Math.max(1, Math.floor(width));
+  const safeHeight = Math.max(1, Math.floor(height));
+  const safeBytes = Math.max(0, Math.floor(maxBytes));
+  const estimatedBytes = safeWidth * safeHeight * 4;
+  if (estimatedBytes <= safeBytes) return { width: safeWidth, height: safeHeight };
+  if (safeBytes < 4) return { width: 1, height: 1 };
+  const maxPixels = Math.floor(safeBytes / 4);
+  const ratio = Math.sqrt(safeBytes / estimatedBytes);
+  let targetWidth = Math.max(1, Math.floor(safeWidth * ratio));
+  let targetHeight = Math.max(1, Math.floor(safeHeight * ratio));
+  // 极端细长图会把较短边钳到 1；再次约束长边，仍保证最终像素数不越界。
+  if (targetWidth * targetHeight > maxPixels) {
+    if (targetWidth >= targetHeight) {
+      targetWidth = Math.max(1, Math.floor(maxPixels / targetHeight));
+    } else {
+      targetHeight = Math.max(1, Math.floor(maxPixels / targetWidth));
+    }
+  }
+  return { width: targetWidth, height: targetHeight };
 }

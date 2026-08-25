@@ -38,12 +38,14 @@ export class PriorityTaskQueue {
     });
   }
 
-  cancelPending(tag: string): void {
-    const error = new Error(`Task queue group was cancelled: ${tag}`);
+  cancelPending(
+    tag: string,
+    reason: unknown = new Error(`Task queue group was cancelled: ${tag}`),
+  ): void {
     for (let index = this.pending.length - 1; index >= 0; index -= 1) {
       if (this.pending[index].tag !== tag) continue;
       const [task] = this.pending.splice(index, 1);
-      task.reject(error);
+      task.reject(reason);
     }
   }
 

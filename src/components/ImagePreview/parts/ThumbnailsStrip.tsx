@@ -1,7 +1,7 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ImageItem } from '../types';
 import { MediaSourceImage } from '../core/MediaSourceImage';
-import { resolveMinimapMediaSource } from '../lib/imagePreviewData';
+import { resolveThumbnailMediaSource } from '../lib/imagePreviewData';
 import {
   THUMBNAIL_STRIP_ACTIVE_BORDER_PX,
   THUMBNAIL_STRIP_BOTTOM_INSET_PX,
@@ -40,6 +40,7 @@ export interface ThumbnailsStripProps {
   thumbAria: (index: number, total: number) => string;
   onSelect(flatIndex: number): void;
   onUserActivity?(): void;
+  onVisibleIndexesChange?(indexes: number[]): void;
 }
 
 /**
@@ -113,6 +114,7 @@ export function ThumbnailsStrip({
   thumbAria,
   onSelect,
   onUserActivity,
+  onVisibleIndexesChange,
 }: ThumbnailsStripProps) {
   const glassRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -139,6 +141,22 @@ export function ThumbnailsStrip({
     );
     return { start, end };
   }, [useVirtual, scrollLeft, stride, viewportW, entries.length]);
+  const lastVisibleReportRef = useRef<{
+    callback: ThumbnailsStripProps['onVisibleIndexesChange'];
+    signature: string;
+  } | undefined>(undefined);
+
+  useEffect(() => {
+    if (!onVisibleIndexesChange) return;
+    const indexes = entries
+      .slice(virtualRange.start, virtualRange.end)
+      .map((entry) => entry.flatIndex);
+    const signature = indexes.join(',');
+    const previous = lastVisibleReportRef.current;
+    if (previous?.callback === onVisibleIndexesChange && previous.signature === signature) return;
+    lastVisibleReportRef.current = { callback: onVisibleIndexesChange, signature };
+    onVisibleIndexesChange(indexes);
+  }, [entries, onVisibleIndexesChange, virtualRange.end, virtualRange.start]);
 
   useLayoutEffect(() => {
     const el = activeRef.current;
@@ -207,6 +225,7 @@ export function ThumbnailsStrip({
     const isBrowseLoading = phase === 'loading' && preloadStatus?.[flatIndex]?.targetLod === 'browse';
     const isScreenLoading = phase === 'loading' && preloadStatus?.[flatIndex]?.targetLod === 'screen';
     const isIndeterminate = fill === 'indeterminate';
+    const thumbnailSource = resolveThumbnailMediaSource(item);
     const barFillColor = isDisplayReady
       ? PRELOAD_BAR_DISPLAY_READY
       : isBrowseReady
@@ -248,20 +267,22 @@ export function ThumbnailsStrip({
           overflow: 'hidden',
         }}
       >
-        <MediaSourceImage
-          source={resolveMinimapMediaSource(item)}
-          alt=""
-          draggable={false}
-          loading="lazy"
-          decoding="async"
-          style={{
-            display: 'block',
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            pointerEvents: 'none',
-          }}
-        />
+        {thumbnailSource ? (
+          <MediaSourceImage
+            source={thumbnailSource}
+            alt=""
+            draggable={false}
+            loading="lazy"
+            decoding="async"
+            style={{
+              display: 'block',
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              pointerEvents: 'none',
+            }}
+          />
+        ) : null}
         {fill != null && (
           <span
             aria-hidden

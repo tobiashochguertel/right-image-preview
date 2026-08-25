@@ -8,6 +8,7 @@ import {
   type RasterRuntimeSnapshot,
 } from './RasterPipeline';
 import type { RasterTextureEntry } from './types';
+import type { RasterDecodeWorkerSetting } from './rasterDecodePolicy';
 import { WebGLRasterRenderer } from './WebGLRasterRenderer';
 import {
   RASTER_FULL_RESOLUTION_SETTLE_MS,
@@ -40,6 +41,8 @@ export interface WebGLRasterStageProps {
   fullResolutionPaused?: boolean;
   fullResolutionSettleMs?: number;
   textureBudgetBytes?: number;
+  decodeWorkers?: RasterDecodeWorkerSetting;
+  decodeWorkerMax?: number;
   onPreloadStateChange?(
     item: RasterPreloadSource,
     phase: 'loading' | 'browse-ready' | 'display-ready' | 'evicted' | 'error',
@@ -53,6 +56,10 @@ export interface WebGLRasterStageProps {
   onPhaseChange(phase: MediaPresentationPhase): void;
   onError(error: Error): void;
   onPresented(): void;
+}
+
+function isAbortError(cause: unknown): boolean {
+  return cause instanceof Error && cause.name === 'AbortError';
 }
 
 function sameResidentTextures(
@@ -84,6 +91,8 @@ export function WebGLRasterStage({
   fullResolutionPaused = false,
   fullResolutionSettleMs = RASTER_FULL_RESOLUTION_SETTLE_MS,
   textureBudgetBytes,
+  decodeWorkers,
+  decodeWorkerMax,
   onPreloadStateChange,
   onRuntimeStateChange,
   onPreloadPlanChange,
@@ -97,6 +106,7 @@ export function WebGLRasterStage({
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pipelineRef = useRef<RasterPipeline | null>(null);
+  const resourceKeyRef = useRef(resourceKey);
   const pipelineErrorRef = useRef<Error | null>(null);
   const activeRef = useRef(active);
   const generationRef = useRef(0);
@@ -235,12 +245,14 @@ export function WebGLRasterStage({
 
   useLayoutEffect(() => {
     activeRef.current = active;
+    resourceKeyRef.current = resourceKey;
     callbacksRef.current = { onDimensions, onPhaseChange, onError, onPresented };
     preloadCallbackRef.current = onPreloadStateChange;
     runtimeCallbackRef.current = onRuntimeStateChange;
     planCallbackRef.current = onPreloadPlanChange;
   }, [
     active,
+    resourceKey,
     onDimensions,
     onPhaseChange,
     onError,
@@ -272,10 +284,19 @@ export function WebGLRasterStage({
     const canvas = canvasRef.current;
     if (!canvas) return;
     try {
-      const pipeline = new RasterPipeline(new WebGLRasterRenderer(canvas));
+      const pipeline = new RasterPipeline(
+        new WebGLRasterRenderer(canvas),
+        DEFAULT_RASTER_TEXTURE_BUDGET_BYTES,
+        { decodeWorkers, decodeWorkerMax },
+      );
       setRendererMaxTextureSize(pipeline.renderer.maxTextureSize);
       pipelineErrorRef.current = null;
       pipelineRef.current = pipeline;
+      // Worker settings are runtime props. A recreated pipeline owns a new GL
+      // cache, so never keep rendering an entry whose texture belonged to the
+      // disposed instance.
+      setEntry(null);
+      setResidentTextures([]);
       const unsubscribe = pipeline.subscribe(() => {
         const snapshot = pipeline.cache.snapshot();
         setCacheSnapshot((previous) =>
@@ -293,6 +314,13 @@ export function WebGLRasterStage({
           sameResidentTextures(previous, runtime.residentTextures)
             ? previous
             : runtime.residentTextures);
+        setEntry((previous) => {
+          if (!previous || pipeline.cache.isResident(previous)) return previous;
+          const currentResourceKey = resourceKeyRef.current;
+          return currentResourceKey
+            ? pipeline.cache.bestResident(currentResourceKey) ?? previous
+            : previous;
+        });
         runtimeCallbackRef.current?.(runtime);
         if (pipeline.isContextLost) {
           if (activeRef.current) callbacksRef.current.onPhaseChange('restoring');
@@ -315,7 +343,7 @@ export function WebGLRasterStage({
       }
       return;
     }
-  }, []);
+  }, [decodeWorkers, decodeWorkerMax]);
 
   useLayoutEffect(() => {
     pipelineRef.current?.reconcileViewportLods(screenBox, browseBox, resourceKey);
@@ -325,7 +353,7 @@ export function WebGLRasterStage({
     pipelineRef.current?.setBudgetBytes(
       effectiveBudgetBytes,
     );
-  }, [effectiveBudgetBytes]);
+  }, [effectiveBudgetBytes, decodeWorkers, decodeWorkerMax]);
 
   useLayoutEffect(() => {
     const host = hostRef.current;
@@ -419,6 +447,7 @@ export function WebGLRasterStage({
       })
       .catch((cause) => {
         if (generationRef.current !== generation) return;
+        if (isAbortError(cause)) return;
         const error = cause instanceof Error ? cause : new Error(String(cause));
         callbacksRef.current.onPhaseChange('error');
         callbacksRef.current.onError(error);
@@ -432,6 +461,8 @@ export function WebGLRasterStage({
     knownHeight,
     screenBox,
     contextGeneration,
+    decodeWorkers,
+    decodeWorkerMax,
   ]);
 
   useEffect(() => {
@@ -493,6 +524,12 @@ export function WebGLRasterStage({
       (entry.quality === 'display' || entry.quality === 'full')
     );
     pipeline.cache.protect(retentionKeys);
+    pipeline.reconcileDecodePlan([
+      ...retentionKeys,
+      ...lodPlan.entries.flatMap((item) => item.lod === 'screen'
+        ? [item.resourceKey + '|display']
+        : [item.resourceKey + '|browse', item.resourceKey + '|display']),
+    ]);
     // Full for the active zoom always wins.  Likewise, a live main/minimap drag
     // must not start another expensive decode/upload between pointer frames.
     // The currently running background task may finish, but the sequential
@@ -580,8 +617,9 @@ export function WebGLRasterStage({
           // Admission uses actual uploaded texture bytes. Stop at the first texture that
           // cannot remain resident; farther candidates have lower retention priority.
           if (!pipeline.cache.has(key)) return;
-        } catch {
+        } catch (cause) {
           if (cancelled) return;
+          if (isAbortError(cause)) return;
           preloadCallbackRef.current?.(item, 'error');
         }
       }
@@ -605,11 +643,21 @@ export function WebGLRasterStage({
 
   useLayoutEffect(() => {
     const pipeline = pipelineRef.current;
-    if (!active || !pipeline || !entry) return;
-    pipeline.renderer.render(entry, viewport, transform);
+    if (!active || !pipeline || !entry || !resourceKey) return;
+    const drawableEntry = entry.resourceKey === resourceKey && pipeline.cache.isResident(entry)
+      ? entry
+      : pipeline.cache.bestResident(resourceKey);
+    // Cache 准入可能淘汰 React 仍引用的纹理。禁止绑定这种已删除句柄；否则
+    // WebGL 会沿用最近上传的邻图，并按当前图几何重绘，表现为低清轮播和变形裁切。
+    if (!drawableEntry) return;
+    if (drawableEntry !== entry) {
+      setEntry(drawableEntry);
+      return;
+    }
+    if (!pipeline.renderer.render(drawableEntry, viewport, transform)) return;
     const id = requestAnimationFrame(() => callbacksRef.current.onPresented());
     return () => cancelAnimationFrame(id);
-  }, [active, entry, viewport, transform]);
+  }, [active, entry, resourceKey, viewport, transform]);
 
   const entryMatchesActiveResource = !!(
     resourceKey &&

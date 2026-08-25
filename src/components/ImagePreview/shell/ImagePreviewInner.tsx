@@ -94,6 +94,43 @@ const DEFAULT_STOPS: NativePercent[] = [5, 10, 20, 35, 50, 75, 100, 125, 150, 17
 
 injectGlobalStyle('rip-spin', '@keyframes _rip_spin{to{transform:rotate(360deg)}}');
 
+/**
+ * WebGL draws into a viewport-sized canvas, so DOM targets cannot distinguish the rendered
+ * image from its black surround. Invert the image transform to test the real media rectangle.
+ */
+function isViewportPointInsideTransformedImage(
+  x: number,
+  y: number,
+  naturalWidth: number,
+  naturalHeight: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  scale: number,
+  translateX: number,
+  translateY: number,
+  rotation: number,
+): boolean {
+  if (
+    naturalWidth <= 0 ||
+    naturalHeight <= 0 ||
+    viewportWidth <= 0 ||
+    viewportHeight <= 0 ||
+    scale <= 0
+  ) {
+    return false;
+  }
+  const dx = x - viewportWidth / 2 - translateX;
+  const dy = y - viewportHeight / 2 - translateY;
+  const radians = rotation * Math.PI / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  // Inverse rotation. Flips do not alter the rectangular hit boundary.
+  const localX = dx * cos + dy * sin;
+  const localY = -dx * sin + dy * cos;
+  return Math.abs(localX) <= naturalWidth * scale / 2 &&
+    Math.abs(localY) <= naturalHeight * scale / 2;
+}
+
 // ── Inner dialog ───────────────────────────────────────────────────────────
 export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
   function ImagePreviewInner(props, ref) {
@@ -121,6 +158,9 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       showMinimap = true,
       showThumbnails = false,
       thumbnailsScope = 'group',
+      fullscreen,
+      onFullscreenError,
+      onThumbnailVisibleIndexesChange,
       presentation = 'overlay',
       preloadRadius = 'auto',
       preloadMaxCount = 128,
@@ -128,6 +168,8 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       holdMinVisibleMs = NAV_HOLD_MIN_VISIBLE_MS,
       fullResolutionSettleMs,
       preloadMemoryBudgetBytes,
+      rasterDecodeWorkers,
+      rasterDecodeWorkerMax,
       onPreloadIndexesChange,
       onPreloadStatusChange,
       onRasterPreloadPlanChange,
@@ -455,12 +497,14 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     ]);
     const rasterIndexByResourceKey = useMemo(() => {
       const index = new Map<string, number>();
-      images.forEach((item, flatIndex) => {
-        const resourceKey = item.id ?? item.src;
-        if (!index.has(resourceKey)) index.set(resourceKey, flatIndex);
+      // 运行时只可能回报当前图和有界预热走廊。不要在打开 5000+ 项目录时
+      // 为诊断状态同步扫描整表；历史项会在再次成为当前/候选时重新进入索引。
+      index.set(currentImage.id ?? currentImage.src, currentIndex);
+      rasterNeighborSources.forEach((item) => {
+        if (item.flatIndex != null) index.set(item.resourceKey, item.flatIndex);
       });
       return index;
-    }, [images]);
+    }, [currentImage.id, currentImage.src, currentIndex, rasterNeighborSources]);
     const [gpuPreloadStatus, setGpuPreloadStatus] = useState<NeighborPreloadStatusMap>({});
     const onRasterPreloadStateChange = useCallback((
       item: RasterPreloadSource,
@@ -731,44 +775,143 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
     });
 
     const [keyboardActive, setKeyboardActive] = useState(!isContained);
-    const [isFs, setIsFs] = useState(false);
+    const [browserIsFullscreen, setBrowserIsFullscreen] = useState(false);
+    const fullscreenActionInFlightRef = useRef(false);
 
-    const syncFullscreenState = useCallback(() => {
-      const root = overlayRef.current;
-      setIsFs(!!root && document.fullscreenElement === root);
-    }, []);
-
-    useEffect(() => {
-      document.addEventListener('fullscreenchange', syncFullscreenState);
-      return () => document.removeEventListener('fullscreenchange', syncFullscreenState);
-    }, [syncFullscreenState]);
-
-    const isFullscreen = useCallback(() => {
+    const browserFullscreenState = useCallback(() => {
       const root = overlayRef.current;
       return !!root && document.fullscreenElement === root;
     }, []);
 
+    const syncBrowserFullscreenState = useCallback(() => {
+      // During a component-initiated action, state is committed below only after both the
+      // API promise and its matching `fullscreenchange` confirmation have succeeded.
+      // Unrelated browser changes continue to synchronise normally.
+      if (!fullscreenActionInFlightRef.current) {
+        setBrowserIsFullscreen(browserFullscreenState());
+      }
+    }, [browserFullscreenState]);
+
+    useEffect(() => {
+      // A supplied adapter is the fullscreen state authority. In this mode, do not read
+      // or subscribe to any browser Fullscreen API state.
+      if (fullscreen) return;
+      syncBrowserFullscreenState();
+      document.addEventListener('fullscreenchange', syncBrowserFullscreenState);
+      return () => document.removeEventListener('fullscreenchange', syncBrowserFullscreenState);
+    }, [fullscreen, syncBrowserFullscreenState]);
+
+    const waitForBrowserFullscreenChange = useCallback((expected: boolean) => {
+      let cancel = () => {};
+      const confirmation = new Promise<boolean>((resolve) => {
+        let settled = false;
+        const finish = (confirmed: boolean) => {
+          if (settled) return;
+          settled = true;
+          document.removeEventListener('fullscreenchange', onFullscreenChange);
+          window.clearTimeout(timeout);
+          resolve(confirmed);
+        };
+        const onFullscreenChange = () => {
+          const active = browserFullscreenState();
+          finish(active === expected);
+        };
+        const timeout = window.setTimeout(() => finish(false), 500);
+        cancel = () => finish(false);
+        document.addEventListener('fullscreenchange', onFullscreenChange);
+      });
+      return { confirmation, cancel };
+    }, [browserFullscreenState]);
+
+    const isFullscreen = useCallback(() => {
+      // Do not even read `document.fullscreenElement` while the host owns fullscreen.
+      return fullscreen ? fullscreen.isFullscreen : browserFullscreenState();
+    }, [fullscreen, browserFullscreenState]);
+
     const requestFullscreen = useCallback(async (): Promise<boolean> => {
+      if (fullscreenActionInFlightRef.current) return false;
+      fullscreenActionInFlightRef.current = true;
+
+      if (fullscreen) {
+        try {
+          await fullscreen.enter();
+          return true;
+        } catch (error) {
+          onFullscreenError?.(error);
+          return false;
+        } finally {
+          fullscreenActionInFlightRef.current = false;
+        }
+      }
+
       const root = overlayRef.current;
-      if (!root || typeof root.requestFullscreen !== 'function') return false;
-      try {
-        await root.requestFullscreen();
-        syncFullscreenState();
-        return true;
-      } catch {
+      if (!root || typeof root.requestFullscreen !== 'function' ||
+        typeof document.exitFullscreen !== 'function') {
+        onFullscreenError?.(new Error('Browser Fullscreen API is not available for this preview.'));
+        fullscreenActionInFlightRef.current = false;
         return false;
       }
-    }, [syncFullscreenState]);
+
+      const { confirmation, cancel } = waitForBrowserFullscreenChange(true);
+      try {
+        await root.requestFullscreen();
+        const confirmed = await confirmation;
+        if (!confirmed) {
+          onFullscreenError?.(new Error('Browser fullscreen state did not change after the request.'));
+        } else {
+          setBrowserIsFullscreen(true);
+        }
+        return confirmed;
+      } catch (error) {
+        cancel();
+        onFullscreenError?.(error);
+        return false;
+      } finally {
+        fullscreenActionInFlightRef.current = false;
+      }
+    }, [fullscreen, onFullscreenError, waitForBrowserFullscreenChange]);
 
     const exitFullscreen = useCallback(async (): Promise<void> => {
-      if (!document.fullscreenElement || typeof document.exitFullscreen !== 'function') return;
+      if (fullscreenActionInFlightRef.current) return;
+      fullscreenActionInFlightRef.current = true;
+
+      if (fullscreen) {
+        try {
+          await fullscreen.exit();
+        } catch (error) {
+          onFullscreenError?.(error);
+        } finally {
+          fullscreenActionInFlightRef.current = false;
+        }
+        return;
+      }
+
+      if (!document.fullscreenElement) {
+        fullscreenActionInFlightRef.current = false;
+        return;
+      }
+      if (typeof document.exitFullscreen !== 'function') {
+        onFullscreenError?.(new Error('Browser Fullscreen API cannot exit fullscreen.'));
+        fullscreenActionInFlightRef.current = false;
+        return;
+      }
+
+      const { confirmation, cancel } = waitForBrowserFullscreenChange(false);
       try {
         await document.exitFullscreen();
-      } catch {
-        /* quiet degrade */
+        const confirmed = await confirmation;
+        if (!confirmed) {
+          onFullscreenError?.(new Error('Browser fullscreen state did not change after the exit request.'));
+        } else {
+          setBrowserIsFullscreen(false);
+        }
+      } catch (error) {
+        cancel();
+        onFullscreenError?.(error);
+      } finally {
+        fullscreenActionInFlightRef.current = false;
       }
-      syncFullscreenState();
-    }, [syncFullscreenState]);
+    }, [fullscreen, onFullscreenError, waitForBrowserFullscreenChange]);
 
     const toggleFullscreen = useCallback(() => {
       if (isFullscreen()) void exitFullscreen();
@@ -1001,6 +1144,8 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
               rasterFullResolutionPaused={holdingDirection != null}
               rasterFullResolutionSettleMs={fullResolutionSettleMs}
               textureBudgetBytes={preloadMemoryBudgetBytes}
+              decodeWorkers={rasterDecodeWorkers}
+              decodeWorkerMax={rasterDecodeWorkerMax}
               onPreloadStateChange={onRasterPreloadStateChange}
               onRasterRuntimeStateChange={onRasterRuntimeStateChange}
               onRasterPreloadPlanChange={onRasterPreloadPlanChange}
@@ -1058,6 +1203,24 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
             onPointerCancel={(e) => onPanEnd(e)}
             onLostPointerCapture={(e) => onPanEnd(e)}
             onDoubleClick={handleDoubleClick}
+            onClick={(e) => {
+              if (!closeOnMaskClick) return;
+              const rect = e.currentTarget.getBoundingClientRect();
+              const insideImage = imageDims && containerSize &&
+                isViewportPointInsideTransformedImage(
+                  e.clientX - rect.left,
+                  e.clientY - rect.top,
+                  imageDims.naturalWidth,
+                  imageDims.naturalHeight,
+                  containerSize.width,
+                  containerSize.height,
+                  transform.scale,
+                  transform.translateX,
+                  transform.translateY,
+                  transform.rotation,
+                );
+              if (!insideImage) onClose?.();
+            }}
           />
 
           {/* L3 — chrome: close, ←/→, toolbar/filename, minimap, filmstrip, EXIF */}
@@ -1176,6 +1339,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                 thumbAria={t.thumbStripItem}
                 onSelect={goTo}
                 onUserActivity={resetHideTimer}
+                onVisibleIndexesChange={onThumbnailVisibleIndexesChange}
               />
             )}
 
@@ -1206,7 +1370,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
               exifOpen={exifOpen}
               showDelete={showDelete}
               showFullscreen
-              isFullscreen={isFs}
+              isFullscreen={fullscreen ? fullscreen.isFullscreen : browserIsFullscreen}
               toolbarExtra={toolbarExtra}
               showToolbarArrows={showToolbarArrows}
               zoomLocked={zoomLocked}

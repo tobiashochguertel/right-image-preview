@@ -14,6 +14,7 @@ export type {
   ExifGroupId,
   ExifValue,
   FirstZoomInStrategy,
+  FullscreenAdapter,
   ImageExif,
   ImageExifExtraEntry,
   ImageGroup,
@@ -26,6 +27,7 @@ export type {
   NeighborPreloadPhase,
   NeighborPreloadStatusMap,
   PresentationMode,
+  RasterDecodeWorkerSetting,
   ThumbnailsScope,
   WheelStrategy,
   ZoomInAtMaxBehaviour,
@@ -62,6 +64,13 @@ export {
   suggestRasterTextureBudgetBytes,
 } from './renderers/raster-webgl/rasterMemoryBudget';
 export type { RasterHardwareProfile } from './renderers/raster-webgl/rasterMemoryBudget';
+export {
+  RASTER_DECODE_HEAVY_PIXEL_THRESHOLD,
+  RASTER_DECODE_WORKER_DEFAULT_MAX,
+  RASTER_DECODE_WORKER_HARD_MAX,
+  resolveRasterDecodeWorkerCount,
+} from './renderers/raster-webgl/rasterDecodePolicy';
+export type { ResolveRasterDecodeWorkerCountOptions } from './renderers/raster-webgl/rasterDecodePolicy';
 export type { MediaKind } from './core/media-kind';
 export type { MediaSource } from './core/media-source';
 export type {

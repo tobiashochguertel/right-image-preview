@@ -60,33 +60,43 @@ export class WebGLRasterRenderer {
     const gl = this.gl;
     const texture = gl.createTexture();
     if (!texture) throw new Error('Unable to create WebGL texture');
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
-    const fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
-    if (!fence) {
-      gl.deleteTexture(texture);
-      throw new Error('Unable to create WebGL upload fence');
-    }
-    gl.flush();
+    const previousTexture = gl.getParameter(gl.TEXTURE_BINDING_2D) as WebGLTexture | null;
     try {
-      await waitForFence(gl, fence);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
+      const fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+      if (!fence) throw new Error('Unable to create WebGL upload fence');
+      gl.flush();
+      try {
+        await waitForFence(gl, fence);
+      } finally {
+        gl.deleteSync(fence);
+      }
       return texture;
     } catch (error) {
       gl.deleteTexture(texture);
       throw error;
     } finally {
-      gl.deleteSync(fence);
+      // 上传邻图不能污染主舞台的 sampler 绑定；绘制路径还会再次显式绑定。
+      gl.bindTexture(
+        gl.TEXTURE_2D,
+        previousTexture && gl.isTexture(previousTexture) ? previousTexture : null,
+      );
     }
   }
 
-  render(entry: RasterTextureEntry, viewport: RasterViewport, transform: RasterQuadTransform): void {
-    if (this.gl.isContextLost()) return;
+  render(
+    entry: RasterTextureEntry,
+    viewport: RasterViewport,
+    transform: RasterQuadTransform,
+  ): boolean {
+    if (this.gl.isContextLost() || !this.gl.isTexture(entry.texture)) return false;
     if (!this.program || !this.buffer) throw new Error('WebGL renderer is not initialized');
     const gl = this.gl;
     this.resize(viewport);
@@ -104,6 +114,7 @@ export class WebGLRasterRenderer {
     gl.bindTexture(gl.TEXTURE_2D, entry.texture);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.flush();
+    return true;
   }
 
   dispose(): void {

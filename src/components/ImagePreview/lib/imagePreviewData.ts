@@ -16,3 +16,15 @@ export function resolveMinimapMediaSource(item: ImageItem): MediaSource {
   if (item.minimapSrc) return { type: 'url', href: item.minimapSrc };
   return item.source ?? { type: 'url', href: item.src };
 }
+
+/**
+ * Resolves only the bottom-strip visual. Explicit `null` is a host backpressure signal:
+ * keep the tile empty until a generated thumbnail arrives and never fall back to the original.
+ */
+export function resolveThumbnailMediaSource(item: ImageItem): MediaSource | null {
+  if (item.thumbnailSource !== undefined) return item.thumbnailSource;
+  if (item.thumbnailSrc !== undefined) {
+    return item.thumbnailSrc ? { type: 'url', href: item.thumbnailSrc } : null;
+  }
+  return resolveMinimapMediaSource(item);
+}

@@ -6,6 +6,19 @@ export type ZoomMode = 'fit' | 'native';
 
 /** Native zoom percentage: 100 means 1 CSS pixel = 1 image pixel. */
 export type NativePercent = number;
+export type RasterDecodeWorkerSetting = number | 'auto';
+
+/**
+ * Fullscreen implementation supplied by the embedding host.
+ *
+ * When provided as {@link ImagePreviewProps.fullscreen}, this is the sole source of
+ * fullscreen state and the component never calls the browser Fullscreen API.
+ */
+export interface FullscreenAdapter {
+  isFullscreen: boolean;
+  enter: () => void | Promise<void>;
+  exit: () => void | Promise<void>;
+}
 
 export interface ZoomState {
   mode: ZoomMode;
@@ -113,6 +126,14 @@ export interface ImageItem {
   minimapSrc?: string;
   /** Renderer-neutral progressive/minimap source. Takes precedence over `minimapSrc`. */
   minimapSource?: MediaSource;
+  /**
+   * Optional source used only by the bottom thumbnail strip. When omitted, the strip falls
+   * back to the minimap/main source for backwards compatibility. Pass `null` to keep the tile
+   * empty while a host generates a real thumbnail instead of loading the original image.
+   */
+  thumbnailSource?: MediaSource | null;
+  /** URL shorthand for {@link thumbnailSource}. An explicit `null` keeps the tile empty. */
+  thumbnailSrc?: string | null;
   /**
    * Optional custom minimap content (e.g. `<img />`). When set, replaces the default minimap image;
    * layout still follows the main image’s natural aspect ratio, rotation, and flips. Overrides {@link minimapSrc}.
@@ -441,6 +462,26 @@ export interface ImagePreviewProps {
   thumbnailsScope?: ThumbnailsScope;
 
   /**
+   * Optional host-owned fullscreen adapter. When present, its `isFullscreen` value is the
+   * only fullscreen state used by the toolbar, keyboard, and ref API; `enter` / `exit`
+   * receive all fullscreen requests. When omitted, the component falls back to the
+   * standard browser Fullscreen API when it is available.
+   */
+  fullscreen?: FullscreenAdapter;
+
+  /**
+   * Receives fullscreen capability, API, state-confirmation, or host-adapter failures.
+   * Fullscreen errors are never silently ignored.
+   */
+  onFullscreenError?: (error: unknown) => void;
+
+  /**
+   * Reports the flat indexes currently mounted by the virtualized bottom strip, including
+   * overscan. Desktop hosts can use this bounded window to generate thumbnails on demand.
+   */
+  onThumbnailVisibleIndexesChange?: (indexes: number[]) => void;
+
+  /**
    * Mount mode. Default: `'overlay'` (fullscreen modal dialog).
    * Use `'contained'` to fill a positioned host container without page-modal semantics.
    * See {@link PresentationMode}.
@@ -490,6 +531,18 @@ export interface ImagePreviewProps {
    * heuristic uses 192/256/384/512/768 MiB tiers (4K = 512 MiB).
    */
   preloadMemoryBudgetBytes?: number;
+
+  /**
+   * Dedicated Worker count for Raster Blob → ImageBitmap decode. `'auto'` derives a
+   * conservative 1–3 workers from logical CPU concurrency. Default: `'auto'`.
+   */
+  rasterDecodeWorkers?: RasterDecodeWorkerSetting;
+
+  /**
+   * Safety cap applied to automatic and explicit Raster decode concurrency.
+   * Values are clamped to the implementation hard maximum of 3. Default: `3`.
+   */
+  rasterDecodeWorkerMax?: number;
 
   /**
    * Optional hook listing flat indexes currently targeted by neighbor preload (for tests / debug).
@@ -677,13 +730,13 @@ export interface ImagePreviewRef {
    */
   goTo(index: number): void;
   /**
-   * Request browser fullscreen on the preview root. Resolves `true` on success, `false` on
-   * denial / unsupported (quiet degrade — never throws).
+   * Request fullscreen. Delegates to `fullscreen.enter()` when a host adapter is supplied;
+   * otherwise uses the browser Fullscreen API. Resolves `true` only after a successful request.
    */
   requestFullscreen(): Promise<boolean>;
-  /** Exit browser fullscreen if this preview owns it. */
+  /** Exit fullscreen through the host adapter or browser Fullscreen API. */
   exitFullscreen(): Promise<void>;
-  /** Whether the preview root is the current fullscreen element. */
+  /** Host-adapter state when supplied; otherwise whether the preview root is fullscreen. */
   isFullscreen(): boolean;
   getState(): ZoomState;
 }

@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createRef, useState, type ComponentProps } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ImagePreview } from '../src/components/ImagePreview';
 import type { ImagePreviewRef } from '../src/components/ImagePreview/types';
 
@@ -112,11 +112,83 @@ const GROUPED_IMAGES = [
 
 /** Tests assert Chinese copy; `resolveStrings(undefined)` is English. */
 const ZH = { language: 'zh' as const } satisfies Pick<ComponentProps<typeof ImagePreview>, 'language'>;
+const initialRequestFullscreenDescriptor = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  'requestFullscreen',
+);
+const initialExitFullscreenDescriptor = Object.getOwnPropertyDescriptor(document, 'exitFullscreen');
+const initialFullscreenElementDescriptor = Object.getOwnPropertyDescriptor(document, 'fullscreenElement');
+
+function restoreInitialFullscreenApi() {
+  if (initialRequestFullscreenDescriptor) {
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', initialRequestFullscreenDescriptor);
+  } else {
+    delete (HTMLElement.prototype as { requestFullscreen?: unknown }).requestFullscreen;
+  }
+  if (initialExitFullscreenDescriptor) {
+    Object.defineProperty(document, 'exitFullscreen', initialExitFullscreenDescriptor);
+  } else {
+    delete (document as { exitFullscreen?: unknown }).exitFullscreen;
+  }
+  if (initialFullscreenElementDescriptor) {
+    Object.defineProperty(document, 'fullscreenElement', initialFullscreenElementDescriptor);
+  } else {
+    delete (document as { fullscreenElement?: unknown }).fullscreenElement;
+  }
+}
+
+function installBrowserFullscreenMock(options: {
+  request?: (root: HTMLElement, setActive: (element: Element | null) => void) => void | Promise<void>;
+  exit?: (setActive: (element: Element | null) => void) => void | Promise<void>;
+} = {}) {
+  const requestDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'requestFullscreen');
+  const exitDescriptor = Object.getOwnPropertyDescriptor(document, 'exitFullscreen');
+  const fullscreenElementDescriptor = Object.getOwnPropertyDescriptor(document, 'fullscreenElement');
+  let active: Element | null = null;
+  const setActive = (element: Element | null) => {
+    active = element;
+  };
+  const requestFullscreen = vi.fn(function requestFullscreen(this: HTMLElement) {
+    return options.request?.(this, setActive);
+  });
+  const exitFullscreen = vi.fn(() => options.exit?.(setActive));
+
+  Object.defineProperty(document, 'fullscreenElement', {
+    configurable: true,
+    get: () => active,
+  });
+  Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
+    configurable: true,
+    value: requestFullscreen,
+  });
+  Object.defineProperty(document, 'exitFullscreen', {
+    configurable: true,
+    value: exitFullscreen,
+  });
+
+  return {
+    requestFullscreen,
+    exitFullscreen,
+    restore() {
+      if (requestDescriptor) Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', requestDescriptor);
+      else delete (HTMLElement.prototype as { requestFullscreen?: unknown }).requestFullscreen;
+      if (exitDescriptor) Object.defineProperty(document, 'exitFullscreen', exitDescriptor);
+      else delete (document as { exitFullscreen?: unknown }).exitFullscreen;
+      if (fullscreenElementDescriptor) Object.defineProperty(document, 'fullscreenElement', fullscreenElementDescriptor);
+      else delete (document as { fullscreenElement?: unknown }).fullscreenElement;
+    },
+  };
+}
 
 describe('ImagePreview component', () => {
   beforeEach(() => {
     // Give jsdom images predictable natural dimensions for transform calculations.
     mockImageLoad();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    restoreInitialFullscreenApi();
   });
 
   describe('visibility', () => {
@@ -158,6 +230,42 @@ describe('ImagePreview component', () => {
       render(<ImagePreview src={SINGLE_SRC} visible onClose={onClose} {...ZH} />);
       await userEvent.keyboard('{Escape}');
       expect(onClose).toHaveBeenCalled();
+    });
+
+    it('closes from the WebGL hit-floor black surround but not from the rendered image', async () => {
+      const onClose = vi.fn();
+      const { container } = render(
+        <ImagePreview
+          src={SINGLE_SRC}
+          exif={{ width: 800, height: 400 }}
+          visible
+          closeOnMaskClick
+          onClose={onClose}
+          {...ZH}
+        />,
+      );
+      const hitFloor = container.querySelector<HTMLElement>('[data-rip-floor="hit"]');
+      expect(hitFloor).not.toBeNull();
+      vi.spyOn(hitFloor!, 'getBoundingClientRect').mockReturnValue({
+        x: 0,
+        y: 0,
+        left: 0,
+        top: 0,
+        right: 800,
+        bottom: 600,
+        width: 800,
+        height: 600,
+        toJSON: () => ({}),
+      });
+      await waitFor(() => {
+        expect(screen.getByRole('toolbar').textContent).toContain('100%');
+      });
+
+      fireEvent.click(hitFloor!, { clientX: 400, clientY: 300 });
+      expect(onClose).not.toHaveBeenCalled();
+
+      fireEvent.click(hitFloor!, { clientX: 400, clientY: 50 });
+      expect(onClose).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -700,6 +808,189 @@ describe('ImagePreview component', () => {
     it('shows a fullscreen toolbar button', () => {
       render(<ImagePreview src={SINGLE_SRC} visible {...ZH} />);
       expect(screen.getByLabelText('进入全屏')).toBeInTheDocument();
+    });
+
+    it('gives a supplied host adapter exclusive control over fullscreen', async () => {
+      const enter = vi.fn();
+      const exit = vi.fn();
+      const requestFullscreen = vi.fn();
+      const exitFullscreen = vi.fn();
+      Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
+        configurable: true,
+        value: requestFullscreen,
+      });
+      Object.defineProperty(document, 'exitFullscreen', {
+        configurable: true,
+        value: exitFullscreen,
+      });
+      const fullscreenElement = vi.fn(() => null);
+      Object.defineProperty(document, 'fullscreenElement', {
+        configurable: true,
+        get: fullscreenElement,
+      });
+
+      const { rerender } = render(
+        <ImagePreview
+          src={SINGLE_SRC}
+          visible
+          fullscreen={{ isFullscreen: false, enter, exit }}
+          {...ZH}
+        />,
+      );
+      await userEvent.click(screen.getByLabelText('进入全屏'));
+      expect(enter).toHaveBeenCalledTimes(1);
+      expect(exit).not.toHaveBeenCalled();
+      expect(requestFullscreen).not.toHaveBeenCalled();
+      expect(exitFullscreen).not.toHaveBeenCalled();
+      expect(fullscreenElement).not.toHaveBeenCalled();
+
+      rerender(
+        <ImagePreview
+          src={SINGLE_SRC}
+          visible
+          fullscreen={{ isFullscreen: true, enter, exit }}
+          {...ZH}
+        />,
+      );
+      expect(screen.getByLabelText('退出全屏')).toBeInTheDocument();
+      await userEvent.keyboard('{Escape}');
+      expect(exit).toHaveBeenCalledTimes(1);
+      expect(requestFullscreen).not.toHaveBeenCalled();
+      expect(exitFullscreen).not.toHaveBeenCalled();
+      expect(fullscreenElement).not.toHaveBeenCalled();
+    });
+
+    it('delegates ref fullscreen methods to the supplied host adapter', async () => {
+      const ref = createRef<ImagePreviewRef>();
+      const enter = vi.fn(async () => {});
+      const exit = vi.fn(async () => {});
+      render(
+        <ImagePreview
+          ref={ref}
+          src={SINGLE_SRC}
+          visible
+          fullscreen={{ isFullscreen: false, enter, exit }}
+          {...ZH}
+        />,
+      );
+
+      await expect(ref.current?.requestFullscreen()).resolves.toBe(true);
+      await ref.current?.exitFullscreen();
+      expect(enter).toHaveBeenCalledTimes(1);
+      expect(exit).toHaveBeenCalledTimes(1);
+      expect(ref.current?.isFullscreen()).toBe(false);
+    });
+
+    it('prevents duplicate host adapter calls while an operation is pending', async () => {
+      let resolveEnter: (() => void) | undefined;
+      const enter = vi.fn(() => new Promise<void>((resolve) => {
+        resolveEnter = resolve;
+      }));
+      render(
+        <ImagePreview
+          src={SINGLE_SRC}
+          visible
+          fullscreen={{ isFullscreen: false, enter, exit: vi.fn() }}
+          {...ZH}
+        />,
+      );
+      await userEvent.click(screen.getByLabelText('进入全屏'));
+      await userEvent.click(screen.getByLabelText('进入全屏'));
+      expect(enter).toHaveBeenCalledTimes(1);
+      await act(async () => resolveEnter?.());
+    });
+
+    it('reports host adapter failures', async () => {
+      const error = new Error('host fullscreen failed');
+      const onFullscreenError = vi.fn();
+      render(
+        <ImagePreview
+          src={SINGLE_SRC}
+          visible
+          fullscreen={{ isFullscreen: false, enter: () => Promise.reject(error), exit: vi.fn() }}
+          onFullscreenError={onFullscreenError}
+          {...ZH}
+        />,
+      );
+      await userEvent.click(screen.getByLabelText('进入全屏'));
+      await waitFor(() => expect(onFullscreenError).toHaveBeenCalledWith(error));
+    });
+
+    it('uses the browser Fullscreen API and updates button state after fullscreenchange', async () => {
+      const browser = installBrowserFullscreenMock({
+        request(root, setActive) {
+          setActive(root);
+          fireEvent(document, new Event('fullscreenchange'));
+        },
+        exit(setActive) {
+          setActive(null);
+          fireEvent(document, new Event('fullscreenchange'));
+        },
+      });
+      try {
+        const ref = createRef<ImagePreviewRef>();
+        render(<ImagePreview ref={ref} src={SINGLE_SRC} visible {...ZH} />);
+        await userEvent.click(screen.getByLabelText('进入全屏'));
+        expect(browser.requestFullscreen).toHaveBeenCalledTimes(1);
+        expect(screen.getByLabelText('退出全屏')).toBeInTheDocument();
+        expect(ref.current?.isFullscreen()).toBe(true);
+        await userEvent.click(screen.getByLabelText('退出全屏'));
+        expect(browser.exitFullscreen).toHaveBeenCalledTimes(1);
+        expect(screen.getByLabelText('进入全屏')).toBeInTheDocument();
+        expect(ref.current?.isFullscreen()).toBe(false);
+      } finally {
+        browser.restore();
+      }
+    });
+
+    it('reports missing browser fullscreen capabilities without changing state', async () => {
+      const onFullscreenError = vi.fn();
+      const browser = installBrowserFullscreenMock();
+      Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
+        configurable: true,
+        value: undefined,
+      });
+      try {
+        render(<ImagePreview src={SINGLE_SRC} visible onFullscreenError={onFullscreenError} {...ZH} />);
+        await userEvent.click(screen.getByLabelText('进入全屏'));
+        expect(onFullscreenError).toHaveBeenCalledWith(expect.any(Error));
+        expect(screen.getByLabelText('进入全屏')).toBeInTheDocument();
+      } finally {
+        browser.restore();
+      }
+    });
+
+    it('reports browser request rejection and an unconfirmed fullscreenchange', async () => {
+      const rejected = new Error('denied');
+      const rejectedBrowser = installBrowserFullscreenMock({
+        request: () => Promise.reject(rejected),
+      });
+      const onRejected = vi.fn();
+      try {
+        const { unmount } = render(
+          <ImagePreview src={SINGLE_SRC} visible onFullscreenError={onRejected} {...ZH} />,
+        );
+        await userEvent.click(screen.getByLabelText('进入全屏'));
+        await waitFor(() => expect(onRejected).toHaveBeenCalledWith(rejected));
+        unmount();
+      } finally {
+        rejectedBrowser.restore();
+      }
+
+      const unconfirmedBrowser = installBrowserFullscreenMock({
+        request: () => {
+          fireEvent(document, new Event('fullscreenchange'));
+        },
+      });
+      const onUnconfirmed = vi.fn();
+      try {
+        render(<ImagePreview src={SINGLE_SRC} visible onFullscreenError={onUnconfirmed} {...ZH} />);
+        await userEvent.click(screen.getByLabelText('进入全屏'));
+        await waitFor(() => expect(onUnconfirmed).toHaveBeenCalledWith(expect.any(Error)));
+        expect(screen.getByLabelText('进入全屏')).toBeInTheDocument();
+      } finally {
+        unconfirmedBrowser.restore();
+      }
     });
   });
 

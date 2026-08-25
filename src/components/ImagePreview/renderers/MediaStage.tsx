@@ -25,6 +25,8 @@ export interface MediaStageProps {
   rasterFullResolutionPaused?: boolean;
   rasterFullResolutionSettleMs?: number;
   textureBudgetBytes?: number;
+  decodeWorkers?: WebGLRasterStageProps['decodeWorkers'];
+  decodeWorkerMax?: number;
   onPreloadStateChange?: WebGLRasterStageProps['onPreloadStateChange'];
   onRasterRuntimeStateChange?: WebGLRasterStageProps['onRuntimeStateChange'];
   onRasterPreloadPlanChange?: WebGLRasterStageProps['onPreloadPlanChange'];
@@ -136,6 +138,8 @@ export function MediaStage(props: MediaStageProps) {
         fullResolutionPaused={props.rasterFullResolutionPaused}
         fullResolutionSettleMs={props.rasterFullResolutionSettleMs}
         textureBudgetBytes={props.textureBudgetBytes}
+        decodeWorkers={props.decodeWorkers}
+        decodeWorkerMax={props.decodeWorkerMax}
         onPreloadStateChange={props.onPreloadStateChange}
         onRuntimeStateChange={props.onRasterRuntimeStateChange}
         onPreloadPlanChange={props.onRasterPreloadPlanChange}

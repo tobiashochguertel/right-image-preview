@@ -22,16 +22,65 @@ describe('TextureCache', () => {
     expect(cache.snapshot()).toMatchObject({ count: 2, usedBytes: 20, oversubscribed: false });
   });
 
-  it('allows one over-budget current texture and clears resources explicitly', () => {
+  it('rejects an oversized texture instead of ever retaining an over-budget entry', () => {
     const deleteTexture = vi.fn();
     const cache = new TextureCache({ deleteTexture } as unknown as WebGL2RenderingContext, 8);
     const oversized = entry('large', 16, 1);
-    cache.put(oversized);
+    expect(cache.put(oversized)).toBe(false);
 
-    expect(cache.snapshot()).toMatchObject({ count: 1, usedBytes: 16, oversubscribed: true });
-    cache.clear();
+    expect(cache.snapshot()).toMatchObject({ count: 0, usedBytes: 0, oversubscribed: false });
     expect(deleteTexture).toHaveBeenCalledWith(oversized.texture);
+    cache.clear();
     expect(cache.snapshot()).toMatchObject({ count: 0, usedBytes: 0 });
+  });
+
+  it('reserves bytes before upload and can evict protected LODs only for foreground work', () => {
+    const deleteTexture = vi.fn();
+    const cache = new TextureCache({ deleteTexture } as unknown as WebGL2RenderingContext, 20);
+    const current = entry('current|display', 12, 1);
+    cache.put(current, 100);
+    cache.protect([current.key]);
+
+    expect(cache.reserve('neighbor|browse', 12, false)).toBeNull();
+    expect(cache.has(current.key)).toBe(true);
+
+    const reservation = cache.reserve('current|full', 20, true);
+    expect(reservation).not.toBeNull();
+    expect(cache.has(current.key)).toBe(false);
+    expect(cache.snapshot()).toMatchObject({
+      count: 0,
+      usedBytes: 0,
+      reservedBytes: 20,
+      oversubscribed: false,
+    });
+
+    const full = { ...entry('current|full', 20, 2), quality: 'full' as const };
+    expect(reservation?.commit(full, 100)).toBe(true);
+    expect(cache.snapshot()).toMatchObject({
+      count: 1,
+      usedBytes: 20,
+      reservedBytes: 0,
+      oversubscribed: false,
+    });
+  });
+
+  it('invalidates an in-flight reservation when the live budget changes', () => {
+    const deleteTexture = vi.fn();
+    const cache = new TextureCache({ deleteTexture } as unknown as WebGL2RenderingContext, 20);
+    const reservation = cache.reserve('current|full', 20, true);
+    expect(reservation).not.toBeNull();
+
+    cache.setMaxBytes(8);
+    expect(cache.snapshot()).toMatchObject({
+      usedBytes: 0,
+      reservedBytes: 0,
+      maxBytes: 8,
+      oversubscribed: false,
+    });
+
+    const full = { ...entry('current|full', 20, 2), quality: 'full' as const };
+    expect(reservation?.commit(full, 100)).toBe(false);
+    expect(deleteTexture).toHaveBeenCalledWith(full.texture);
   });
 
   it('retains a higher-priority neighbor instead of a newer lower-priority one', () => {
@@ -130,6 +179,28 @@ describe('TextureCache', () => {
     cache.delete('photo-a');
 
     expect(cache.residentResourceKeys()).toEqual(['photo-b']);
+  });
+
+  it('does not treat an evicted stage handle as drawable and selects a same-resource fallback', () => {
+    const cache = new TextureCache(
+      { deleteTexture: vi.fn() } as unknown as WebGL2RenderingContext,
+      20,
+    );
+    const browse = { ...entry('current|browse', 8, 1), resourceKey: 'current', quality: 'browse' as const };
+    const display = {
+      ...entry('current|display', 12, 2),
+      resourceKey: 'current',
+      quality: 'display' as const,
+    };
+    cache.put(browse, 80);
+    cache.put(display, 100);
+
+    expect(cache.isResident(display)).toBe(true);
+    cache.delete(display.key);
+
+    expect(cache.isResident(display)).toBe(false);
+    expect(cache.bestResident('current')).toBe(browse);
+    expect(cache.bestResident('neighbor')).toBeUndefined();
   });
 });
 
