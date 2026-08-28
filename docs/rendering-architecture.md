@@ -9,7 +9,7 @@ The main stage dispatches by media kind:
 - `raster`: WebGL2 canvas, the only production main renderer for static JPEG, PNG/WebP, AVIF, BMP, TIFF, and similar images;
 - `svg`: native browser SVG decoding through `<img>` plus module-owned CSS transforms;
 - `animated-image`: native `<img>` playback for GIF/APNG/Animated WebP;
-- `video`: an independent `<video>` branch with intentionally limited beta transform capabilities;
+- `video`: an independent `<video>` branch with intentionally limited v0.4 transform capabilities;
 - `unknown`: an explicit unsupported state instead of guessing and sending arbitrary bytes to WebGL.
 
 Thumbnails and the minimap may still use `<img>`; the WebGL-only rule applies to the static-raster main stage.
@@ -73,7 +73,7 @@ The thumbnail strip is independent from the Raster-original pipeline. Long lists
 
 URL originals are acquired through streaming `fetch` inside a Worker; neither the chunk array nor final `new Blob(chunks)` crosses the main thread. When `Content-Length` is visible, transfer progress is based on received bytes and throttled to roughly 1% or 200 ms; an unknown total produces an explicit indeterminate state. Completed-download history is separate from GPU residency: green is a browser-cache hint after a complete response, while blue requires a signaled upload fence and a still-resident texture. Texture eviction or context loss downgrades blue to green without forgetting that the response completed. Cross-origin servers must allow CORS and expose `Content-Length` through `Access-Control-Expose-Headers` for a true percentage.
 
-Context loss enters `restoring`, discards invalid handles, rebuilds shaders/buffers after restoration, advances the generation, and reloads the current source. Images beyond `MAX_TEXTURE_SIZE` are downscaled in beta; tiled/LOD rendering remains a future 0.4.x extension.
+Context loss enters `restoring`, discards invalid handles, rebuilds shaders/buffers after restoration, advances the generation, and reloads the current source. Images beyond `MAX_TEXTURE_SIZE` are downscaled in v0.4; tiled/LOD rendering remains a future 0.4.x extension.
 
 ## Navigation backpressure and quality promotion
 

@@ -49,13 +49,17 @@ export interface UseImagePreviewKeyboardParams {
  */
 export function useImagePreviewKeyboard(p: UseImagePreviewKeyboardParams): void {
   const paramsRef = useRef(p);
-  paramsRef.current = p;
+  const { keyboardActive, endNavHold } = p;
+
+  useEffect(() => {
+    paramsRef.current = p;
+  }, [p]);
 
   // Contained: when focus leaves the preview, stop any in-flight hold.
   useEffect(() => {
-    if (p.keyboardActive !== false) return;
-    p.endNavHold?.();
-  }, [p.keyboardActive, p.endNavHold]);
+    if (keyboardActive !== false) return;
+    endNavHold?.();
+  }, [keyboardActive, endNavHold]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {

@@ -292,5 +292,5 @@
 - [x] 缩略图状态：蓝 = GPU texture 当前驻留；绿 = 原图真实下载进度/曾完整下载；texture 淘汰后蓝降绿
 - [x] URL 原图按流式字节回报真实进度；无可见 Content-Length 时显示不确定进度，不伪造固定比例
 - [x] 删除 DOM Raster keep-alive/outgoing/slot/decode 图层机与相关 API
-- [x] 主图、切图、缩放/平移/旋转/翻转、双语架构/API 文档与 0.4 beta API 第一轮迁移
+- [x] 主图、切图、缩放/平移/旋转/翻转、双语架构/API 文档与 0.4 正式 API 迁移
 - [ ] 完成与 v0.3.12、fast-images-viewer 的性能/内存对比

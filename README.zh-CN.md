@@ -8,7 +8,7 @@
 
 在浏览器中打开交互式演示（右上角可切换 **EN / 中文**），无需本地安装。
 
-> 无 UI 库依赖的 React 媒体预览组件。v0.4 beta 的静态位图主舞台使用 WebGL2；SVG、动画图与 Video 使用各自的原生浏览器模块，并共享同一套 Viewer Shell。
+> 无 UI 库依赖的 React 媒体预览组件。v0.4 的静态位图主舞台使用 WebGL2；SVG、动画图与 Video 使用各自的原生浏览器模块，并共享同一套 Viewer Shell。
 
 ---
 

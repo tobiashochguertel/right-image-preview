@@ -8,7 +8,7 @@
 
 Open the interactive demo in your browser (toggle **EN / 中文** in the top-right). No install required.
 
-> A dependency-free React media preview component. In v0.4 beta, static Raster main content uses WebGL2 while SVG, animated images, and video use dedicated native-browser modules behind one Viewer Shell.
+> A dependency-free React media preview component. In v0.4, static Raster main content uses WebGL2 while SVG, animated images, and video use dedicated native-browser modules behind one Viewer Shell.
 
 ---
 

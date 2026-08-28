@@ -15,7 +15,7 @@ export interface DelayedTooltipProps {
 
 /**
  * Hover tooltip with a configurable delay (native `title` shows immediately).
- * Merges mouse handlers / ref with the child element (typically a button).
+ * Merges hover handlers into the child while leaving the child's ref untouched.
  */
 export function DelayedTooltip({
   content,
@@ -40,16 +40,20 @@ export function DelayedTooltip({
     setOpen(false);
   }, [clearTimer]);
 
-  const show = useCallback(() => {
-    clearTimer();
-    timerRef.current = setTimeout(() => {
-      const el = anchorRef.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      setPos({ top: r.top, left: r.left + r.width / 2 });
-      setOpen(true);
-    }, delayMs);
-  }, [clearTimer, delayMs]);
+  const show = useCallback(
+    (anchor: HTMLElement) => {
+      clearTimer();
+      anchorRef.current = anchor;
+      timerRef.current = setTimeout(() => {
+        const el = anchorRef.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        setPos({ top: r.top, left: r.left + r.width / 2 });
+        setOpen(true);
+      }, delayMs);
+    },
+    [clearTimer, delayMs],
+  );
 
   useEffect(() => () => clearTimer(), [clearTimer]);
 
@@ -73,34 +77,24 @@ export function DelayedTooltip({
     return children;
   }
 
-  const mergeRef = (node: HTMLElement | null) => {
-    anchorRef.current = node;
-    const r = (children as React.ReactElement & { ref?: React.Ref<HTMLElement> }).ref;
-    if (typeof r === 'function') r(node);
-    else if (r != null && typeof r === 'object' && 'current' in r) {
-      // Merge into caller's ref object (standard cloneElement + ref forwarding).
-      // eslint-disable-next-line react-hooks/immutability -- ref is not a prop bag; assigning .current is required for forwarding
-      (r as React.MutableRefObject<HTMLElement | null>).current = node;
-    }
-  };
-
   const baseProps = children.props as Record<string, unknown>;
-  /* Ref callback is attached here but only runs after mount / on updates — not read during render. */
-  const merged = cloneElement(
-    children,
-    {
-      ...baseProps,
-      ref: mergeRef,
-      onMouseEnter: (e: React.MouseEvent) => {
-        (children.props as { onMouseEnter?: (ev: React.MouseEvent) => void }).onMouseEnter?.(e);
-        show();
-      },
-      onMouseLeave: (e: React.MouseEvent) => {
-        (children.props as { onMouseLeave?: (ev: React.MouseEvent) => void }).onMouseLeave?.(e);
-        hide();
-      },
-    } as React.HTMLAttributes<HTMLElement> & { ref: typeof mergeRef },
-  );
+  // cloneElement stores these handlers for the commit/event phases; it does not invoke them during render.
+  // eslint-disable-next-line react-hooks/refs
+  const merged = cloneElement(children, {
+    ...baseProps,
+    onMouseEnter: (event: React.MouseEvent) => {
+      (
+        children.props as { onMouseEnter?: (value: React.MouseEvent) => void }
+      ).onMouseEnter?.(event);
+      show(event.currentTarget as HTMLElement);
+    },
+    onMouseLeave: (event: React.MouseEvent) => {
+      (
+        children.props as { onMouseLeave?: (value: React.MouseEvent) => void }
+      ).onMouseLeave?.(event);
+      hide();
+    },
+  } as React.HTMLAttributes<HTMLElement>);
 
   const flipUp = pos.top < 72;
   const bubble = (

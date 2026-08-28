@@ -9,7 +9,7 @@
 - `raster`：WebGL2 canvas，是 JPEG、静态 PNG/WebP、AVIF、BMP、TIFF 等静态位图的唯一正式主渲染路径；
 - `svg`：浏览器原生 `<img>` 解码 SVG，并在自己的目录中处理 CSS transform；
 - `animated-image`：原生 `<img>` 保持 GIF/APNG/Animated WebP 播放；
-- `video`：独立 `<video>` 分支。beta 只提供基础播放元素和受限变换能力；
+- `video`：独立 `<video>` 分支。v0.4 只提供基础播放元素和受限变换能力；
 - `unknown`：明确显示 unsupported，不把未知内容误送进 WebGL。
 
 缩略图和 minimap 可以继续使用 `<img>`。这里的约束只针对静态位图的主舞台。
@@ -73,7 +73,7 @@ Browse/Screen 请求带 viewport generation。尺寸级别改变时，旧 Screen
 
 URL 原图在 Worker 内使用流式 `fetch` 获取：分块数组和最终 `new Blob(chunks)` 都不经过主线程。能读取 `Content-Length` 时按真实接收字节发布进度（约 1% 或 200ms 节流），不能读取总长时发布不确定进度。完整响应记录与 GPU residency 分离保存：下载完成为绿色缓存提示，texture fence 完成且仍驻留才是蓝色；texture 回收或 context loss 会把蓝色降为绿色，但不会抹掉“本 Viewer 生命周期内曾完整下载”的事实。跨域服务若希望显示真实百分比，必须允许 CORS，并通过 `Access-Control-Expose-Headers: Content-Length` 暴露总长。
 
-WebGL context loss 时阻止浏览器默认放弃恢复，清空失效句柄并进入 `restoring`；恢复后重建 shader/buffer、增加 generation 并重新解码上传。超过 `MAX_TEXTURE_SIZE` 的单图在 beta 中等比降采样；完整 tile/LOD 留给后续 0.4.x。
+WebGL context loss 时阻止浏览器默认放弃恢复，清空失效句柄并进入 `restoring`；恢复后重建 shader/buffer、增加 generation 并重新解码上传。超过 `MAX_TEXTURE_SIZE` 的单图在 v0.4 中等比降采样；完整 tile/LOD 留给后续 0.4.x。
 
 ## 导航背压与质量升级
 

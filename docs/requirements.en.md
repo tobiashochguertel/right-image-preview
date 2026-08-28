@@ -292,5 +292,5 @@ bilingual architecture in [`rendering-architecture.md`](./rendering-architecture
 - [x] Thumbnail status semantics: blue = currently GPU-resident texture; green = true original transfer / completed download; evicted blue downgrades to green
 - [x] Stream URL originals with true byte progress; use an indeterminate indicator when Content-Length is unavailable instead of a fabricated ratio
 - [x] Remove the DOM Raster keep-alive/outgoing/slot/decode layer machine and related APIs
-- [x] First migration of main rendering, navigation, zoom/pan/rotate/flip, tests, bilingual architecture/API docs, and beta API
+- [x] Main rendering, navigation, zoom/pan/rotate/flip, tests, bilingual architecture/API docs, and the stable v0.4 API
 - [ ] Compare performance and memory with v0.3.12 and fast-images-viewer

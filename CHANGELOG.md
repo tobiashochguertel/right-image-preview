@@ -9,6 +9,10 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ## [Unreleased]
 
+---
+
+## [0.4.0] — 2026-08-28
+
 ### Added
 
 - **Host-driven virtual thumbnail window** — `onThumbnailVisibleIndexesChange` reports the strip's mounted flat indexes; per-item `thumbnailSource` / `thumbnailSrc` can provide a strip-only image, while explicit `null` keeps a pending tile empty and never falls back to the original.
@@ -16,7 +20,7 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 - **Preemptible Raster decode Worker pool** — Preview/Browse/Screen/Full `createImageBitmap` work now runs in 1–3 Dedicated Workers behind a main-thread priority scheduler. Navigation aborts fetches, removes queued work, and terminates/replaces an obsolete current-image Worker so the next Screen can start without freezing UI chrome. Returned `ImageBitmap`s are transferred, GPU uploads are serialized, and >80MP sources decode exclusively. Adds `rasterDecodeWorkers`, `rasterDecodeWorkerMax`, and `resolveRasterDecodeWorkerCount`.
 - **`fitMaxNativePercent`** — optional cap for Fit / contain, as native percent. `100` keeps small images at actual size (centred) instead of upscaling them to fill the viewport. Wheel / keyboard / typed percent / zoom-lock can still go above 100%. Also exports `computeFitScale` and `resolveFitMaxScale`.
 - **Copyable Demo 6 GPU diagnostics** — every image-index change emits one delayed JSON console entry containing requested/sampled index, memory totals, live viewport/DPR, planned Screen/Browse indexes, actually resident Screen/Browse indexes, and nearby phases.
-- **v0.4 WebGL-first beta foundation** — static Raster main content now renders through a WebGL2 canvas with upload fences, DPR resize, transform quads, progressive preview/full replacement, texture cache eviction, priority neighbor warm-up, `MAX_TEXTURE_SIZE` clamping, and context-loss recovery.
+- **v0.4 WebGL-first foundation** — static Raster main content now renders through a WebGL2 canvas with upload fences, DPR resize, transform quads, progressive preview/full replacement, texture cache eviction, priority neighbor warm-up, `MAX_TEXTURE_SIZE` clamping, and context-loss recovery.
 - **Renderer-neutral media inputs** — exported `MediaSource` (`url` / `blob` / `bytes`), `MediaKind`, commands, capabilities, and view-state contracts; `ImageItem` and single-media props accept source/kind/MIME hints.
 - **Media dispatcher** — independent `raster-webgl/`, `svg/`, `animated/`, `video/`, and `unknown/` modules keep one Viewer Shell while declaring different capabilities.
 - **`npm run pack:local`** — builds into `.local-pack/right-image-preview/` for host `file:` installs (no npm publish needed for Media Lens iteration). Local packs show a top-center badge `local vX.Y.Z · YYYY-MM-DD HH:mm:ss`; npm publish builds have no badge.
@@ -30,8 +34,8 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 ### Changed
 
 - **Browse status uses calm violet** — the filmstrip and Demo 6 use `#c084fc` for immediately drawable medium-detail Browse textures, clearly separating it from blue Screen/Full and green transfer/cache status without the warning connotation of amber/orange.
-- Package version is `0.4.0-beta.1`. The existing local `v0.3.12` tag remains the DOM-generation archive; no tag or package was pushed/published.
-- **Bundle budget** — size-limit moves from 32 kB to 44 kB gzip; after removing the old DOM Raster engine, the current LOD build measures 39.81 kB versus the 31.93 kB v0.3.12 baseline. The increase is the persistent WebGL renderer/runtime, texture cache/adaptive queue, streamed progress tracking, header-only dimension parsing, Screen/Full scheduling, source sniffing, and dedicated media modules.
+- Package version is `0.4.0`. The existing `v0.3.12` tag remains the DOM-generation archive.
+- **Bundle budget** — size-limit moves from 32 kB to 47 kB gzip; the release build measures 46.6 kB versus the 31.93 kB v0.3.12 baseline. The increase is the persistent WebGL renderer/runtime, texture cache/adaptive queue, streamed progress tracking, header-only dimension parsing, Screen/Full scheduling, source sniffing, Worker decode scheduler, host thumbnail APIs, and dedicated media modules.
 - **Persistent Raster runtime** — the WebGL Canvas/context/cache stays mounted while SVG, animated images, or video is active. It becomes draw-dormant, pauses new preload uploads during animation/video playback, and redraws a retained texture when Raster becomes active again.
 - **Viewport-adaptive continuous Browse/Screen bands** — auto preload uses actual Screen texture bytes: small stages make every candidate Screen, while high pressure shrinks the contiguous core as far as one item per side before expanding a fixed Browse ring. Browse is not auto-upgraded to Screen.
 - **Separate history diagnostics** — `RasterPreloadPlanSnapshot` and Demo 6 report the non-contiguous retained Screen history independently, so a blue history item is not mistaken for a gap in the continuous directional plan.
@@ -42,6 +46,8 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 - **Removed v0.3 DOM Raster compatibility surface** — `preloadDisplaySlots`, `preloadDisplaySettleMs`, `preloadDisplayMode`, `estimateDecodedBytes`, progressive DOM timing props, related helpers, retained `<img>` layers, and obsolete tests/docs are gone. `preloadRadius`, the live viewport, and the texture budget are the only neighbor-quality inputs.
 
 ### Fixed
+
+- **React 19 hook lint compatibility** — keyboard parameters now sync after commit, zoom actions update their latest-state ref only while handling actions, and delayed tooltips observe hover without replacing the child's ref.
 
 - **`closeOnMaskClick` works with the WebGL hit floor** — the viewport-sized pan/zoom layer now inverse-tests the current scale, translation, and rotation against the real image rectangle. Clicking black space closes the preview while clicking the rendered image does not.
 - **100% zoom reliably upgrades to Full and dragging keeps the foreground frame budget** — neighbor cache churn no longer restarts the current-image Screen/Full effect or cancels the Full settle timer. Full demand, main-image dragging, and minimap dragging pause new neighbor decode/upload work; high-frequency pan events are coalesced to one React transform commit per animation frame to prevent queued pointer updates, multi-hundred-millisecond redraws, and black flashes under background texture pressure.
