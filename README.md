@@ -182,8 +182,8 @@ See [rendering architecture](./docs/rendering-architecture.md) for host integrat
 | `onZoomChange` | `(state: ZoomState) => void` | — | Called whenever zoom state changes |
 | `onIndexChange` | `(index: number) => void` | — | Called when the active image changes |
 | `onMaxStopReached` | `() => void` | — | Called when zooming in at max stop (requires `'notify'`) |
-| `onImageError` | `(index: number, src: string) => void` | — | Called when the current image fails to load; receives flat index and `src` URL |
-| `errorFallback` | `(index: number, src: string) => ReactNode` | — | Render custom content centred over the viewport when an image fails to load; navigating away resets the error state |
+| `onImageError` | `(index: number, src: string) => void` | — | Called when the current media fails to load, decode, or resolve to a supported kind; receives flat index and `src` URL |
+| `errorFallback` | `(index: number, src: string) => ReactNode` | — | Render custom content centred over the viewport when current media fails or is unsupported; navigating away resets the error state |
 | `pinchEnabled` | `boolean` | `true` | Enable two-finger pinch-to-zoom on touch screens and multi-touch trackpads |
 | `strings` | `Partial<LocaleStrings>` | — | Override individual UI strings; merged on top of the locale selected by `language`; supply only the keys you want to change |
 

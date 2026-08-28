@@ -71,6 +71,11 @@ export function MediaStage(props: MediaStageProps) {
     callbacksRef.current.onPhaseChange('error');
     callbacksRef.current.onError(error);
   }, []);
+  const onUnsupported = useCallback((error: Error) => {
+    // `unsupported` remains the renderer phase for diagnostics, while the public error
+    // contract still fires so hosts can replace the built-in message with errorFallback.
+    callbacksRef.current.onError(error);
+  }, []);
   const onPresented = useCallback(() => callbacksRef.current.onPresented(), []);
   const common = {
     transform: props.transform,
@@ -115,6 +120,7 @@ export function MediaStage(props: MediaStageProps) {
           key={props.resourceKey}
           label={props.label}
           onPhaseChange={onPhaseChange}
+          onError={onUnsupported}
         />
       );
       break;

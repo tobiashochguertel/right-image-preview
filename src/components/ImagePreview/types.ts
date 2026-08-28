@@ -612,7 +612,8 @@ export interface ImagePreviewProps {
   closeOnMaskClick?: boolean;
 
   /**
-   * Custom content rendered in place of the image when it fails to load.
+   * Custom content rendered in place of current media when it fails to load/decode
+   * or cannot be resolved to a supported media kind.
    * Receives the zero-based flat index and the `src` URL of the failing image.
    * When omitted, the spinner simply disappears on error and no placeholder is shown.
    *
@@ -688,7 +689,7 @@ export interface ImagePreviewProps {
   /** Called when attempting to zoom in at the maximum stop (only when zoomInAtMaxBehaviour === 'notify'). */
   onMaxStopReached?: () => void;
   /**
-   * Called when the current image fails to load (`<img onError>`).
+   * Called when current media fails to load/decode or resolves to an unsupported kind.
    * Receives the zero-based flat index and the `src` URL of the failing image.
    */
   onImageError?: (index: number, src: string) => void;

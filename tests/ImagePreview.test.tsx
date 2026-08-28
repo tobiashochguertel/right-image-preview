@@ -552,6 +552,31 @@ describe('ImagePreview component', () => {
       );
       expect(screen.queryByTestId('err-fallback')).not.toBeInTheDocument();
     });
+
+    it('routes unknown or unreadable media through onImageError and errorFallback', async () => {
+      const onImageError = vi.fn();
+      render(
+        <ImagePreview
+          images={[
+            {
+              id: 'missing-png',
+              src: '/missing.png',
+              name: 'missing.png',
+              kind: 'unknown',
+            },
+          ]}
+          visible
+          onImageError={onImageError}
+          errorFallback={() => <div data-testid="unknown-fallback">Could not open</div>}
+          {...ZH}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(onImageError).toHaveBeenCalledWith(0, '/missing.png');
+      });
+      expect(screen.getByTestId('unknown-fallback')).toBeInTheDocument();
+    });
   });
 
   describe('strings prop (locale overrides)', () => {

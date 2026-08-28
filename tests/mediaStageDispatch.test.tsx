@@ -50,11 +50,16 @@ describe('MediaStage dispatch', () => {
     );
   });
 
-  it('renders an explicit unsupported state for unknown media', async () => {
+  it('renders unsupported media and forwards it through the public error contract', async () => {
     const onPhaseChange = vi.fn();
-    renderStage('unknown', onPhaseChange);
+    const onError = vi.fn();
+    render(stageElement('unknown', 'sample-unknown', onPhaseChange, vi.fn(), onError));
     expect(screen.getByRole('status')).toHaveTextContent('Unsupported media: sample.bin');
     expect(onPhaseChange).toHaveBeenCalledWith('unsupported');
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0]?.[0]).toEqual(
+      new Error('Unsupported or unreadable media source'),
+    );
   });
 
   it('keeps the raster WebGL stage mounted across resource changes', () => {
@@ -119,6 +124,7 @@ function stageElement(
   resourceKey = 'sample-' + kind,
   onPhaseChange = vi.fn(),
   onPresented = vi.fn(),
+  onError = vi.fn(),
 ) {
   return (
     <MediaStage
@@ -130,7 +136,7 @@ function stageElement(
       transform={transform}
       onDimensions={vi.fn()}
       onPhaseChange={onPhaseChange}
-      onError={vi.fn()}
+      onError={onError}
       onPresented={onPresented}
     />
   );

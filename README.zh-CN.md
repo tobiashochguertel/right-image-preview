@@ -182,8 +182,8 @@ import { ImagePreview } from 'right-image-preview';
 | `onZoomChange` | `(state: ZoomState) => void` | — | 缩放状态变化回调 |
 | `onIndexChange` | `(index: number) => void` | — | 图片索引变化回调 |
 | `onMaxStopReached` | `() => void` | — | 到达最大档位回调（需配合 `'notify'`） |
-| `onImageError` | `(index: number, src: string) => void` | — | 当前图片加载失败时的回调，接收图片扁平下标与 `src` URL |
-| `errorFallback` | `(index: number, src: string) => ReactNode` | — | 图片加载失败时居中渲染的自定义占位内容；导航到其他图片后错误状态自动重置 |
+| `onImageError` | `(index: number, src: string) => void` | — | 当前媒体加载、解码或类型识别失败时的回调，接收扁平下标与 `src` URL |
+| `errorFallback` | `(index: number, src: string) => ReactNode` | — | 当前媒体失败或不受支持时居中渲染的自定义占位内容；导航到其他图片后错误状态自动重置 |
 | `pinchEnabled` | `boolean` | `true` | 是否启用双指捏合缩放（触屏 / 多点触控板） |
 | `strings` | `Partial<LocaleStrings>` | — | 覆盖任意 UI 文案字段；叠加在 `language` 所选语言之上；只需提供要改的字段 |
 
