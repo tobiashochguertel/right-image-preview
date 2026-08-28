@@ -19,7 +19,7 @@
   "homepage": "https://github.com/ZhangJian1713/right-image-preview#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ZhangJian1713/right-image-preview.git"
+    "url": "git+https://github.com/ZhangJian1713/right-image-preview.git"
   },
   "bugs": {
     "url": "https://github.com/ZhangJian1713/right-image-preview/issues"
