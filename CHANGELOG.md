@@ -11,6 +11,22 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ---
 
+## [0.4.2] — 2026-08-29
+
+### Fixed
+
+- **Ambiguous media detection no longer reports valid PNG/WebP as unsupported** — byte sniffing now exposes its pending state to the renderer. The public `onImageError` / `errorFallback` contract fires only after detection finishes and the source is still unknown.
+
+---
+
+## [0.4.1] — 2026-08-29
+
+### Fixed
+
+- **Unsupported or unreadable media reaches the host error contract** — a source that resolves to the unknown renderer now calls `onImageError` and activates `errorFallback`, while retaining the internal `unsupported` diagnostic phase.
+
+---
+
 ## [0.4.0] — 2026-08-28
 
 ### Added

@@ -11,11 +11,18 @@ export interface UseDetectedMediaKindOptions {
   fileName?: string;
 }
 
+export interface DetectedMediaKindState {
+  kind: MediaKind;
+  pending: boolean;
+}
+
 /**
  * Resolves cheap host/MIME/name hints synchronously, then sniffs ambiguous bytes.
  * A stale detection can never overwrite the kind of a newer source.
  */
-export function useDetectedMediaKind(options: UseDetectedMediaKindOptions): MediaKind {
+export function useDetectedMediaKind(
+  options: UseDetectedMediaKindOptions,
+): DetectedMediaKindState {
   const { source, kind, mimeType, href, fileName } = options;
   const hinted = useMemo(() => {
     const primary = resolveMediaKind({ kind, mimeType, href });
@@ -37,7 +44,13 @@ export function useDetectedMediaKind(options: UseDetectedMediaKindOptions): Medi
     return () => { active = false; };
   }, [source, kind, mimeType, href, hinted, detectionKey]);
 
-  return detection?.source === source && detection.key === detectionKey
-    ? detection.kind
-    : hinted;
+  const currentDetection = detection?.source === source && detection.key === detectionKey
+    ? detection
+    : null;
+  return {
+    kind: currentDetection?.kind ?? hinted,
+    // PNG/WebP and other ambiguous sources stay unknown while their bytes are being
+    // sniffed. Consumers must not report that transient state as an unsupported file.
+    pending: hinted === 'unknown' && currentDetection === null,
+  };
 }

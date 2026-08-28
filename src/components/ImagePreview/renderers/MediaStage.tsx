@@ -16,6 +16,8 @@ export interface MediaStageProps {
   resourceKey: string;
   currentFlatIndex?: number;
   kind: MediaKind;
+  /** True while an ambiguous source is still being byte-sniffed. */
+  kindPending?: boolean;
   source: MediaSource;
   previewSource?: MediaSource;
   preloadSources?: readonly RasterPreloadSource[];
@@ -119,6 +121,7 @@ export function MediaStage(props: MediaStageProps) {
         <UnknownMediaViewer
           key={props.resourceKey}
           label={props.label}
+          pending={props.kindPending}
           onPhaseChange={onPhaseChange}
           onError={onUnsupported}
         />

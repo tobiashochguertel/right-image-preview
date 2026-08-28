@@ -452,13 +452,14 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       [currentImage.source, currentImage.src],
     );
     const sourceHref = rasterSource.type === 'url' ? rasterSource.href : currentImage.src;
-    const currentMediaKind = useDetectedMediaKind({
+    const detectedMediaKind = useDetectedMediaKind({
       source: rasterSource,
       kind: currentImage.kind,
       mimeType: currentImage.mimeType,
       href: sourceHref,
       fileName: currentImage.name,
     });
+    const currentMediaKind = detectedMediaKind.kind;
     const currentMediaCapabilities = mediaCapabilitiesForKind(currentMediaKind);
     useLayoutEffect(() => {
       mediaCapabilitiesRef.current = currentMediaCapabilities;
@@ -1136,6 +1137,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
               resourceKey={currentImage.id ?? currentImage.src}
               currentFlatIndex={currentIndex}
               kind={currentMediaKind}
+              kindPending={detectedMediaKind.pending}
               source={rasterSource}
               previewSource={rasterPreviewSource}
               preloadSources={rasterNeighborSources}

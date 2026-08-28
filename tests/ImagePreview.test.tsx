@@ -59,6 +59,7 @@ vi.mock('../src/components/ImagePreview/renderers/raster-webgl/WebGLRasterStage'
       return (
         <canvas
           data-rip-raster-canvas=""
+          data-raster-active={active ? 'true' : 'false'}
           onClick={() => onError(new Error('mock Raster failure'))}
         />
       );
@@ -576,6 +577,38 @@ describe('ImagePreview component', () => {
         expect(onImageError).toHaveBeenCalledWith(0, '/missing.png');
       });
       expect(screen.getByTestId('unknown-fallback')).toBeInTheDocument();
+    });
+
+    it('does not report a valid PNG while byte detection is pending', async () => {
+      const onImageError = vi.fn();
+      const png = new Uint8Array([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+        0x00, 0x00, 0x00, 0x00, 0x49, 0x44, 0x41, 0x54,
+        0x00, 0x00, 0x00, 0x00,
+      ]);
+      render(
+        <ImagePreview
+          images={[
+            {
+              id: 'valid-png',
+              src: '/valid.png',
+              name: 'valid.png',
+              source: { type: 'bytes', data: png.buffer, mimeType: 'image/png' },
+            },
+          ]}
+          visible
+          onImageError={onImageError}
+          errorFallback={() => <div data-testid="png-fallback">Could not open</div>}
+          {...ZH}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole('dialog').querySelector('[data-rip-raster-canvas]'))
+          .toHaveAttribute('data-raster-active', 'true');
+      });
+      expect(onImageError).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('png-fallback')).not.toBeInTheDocument();
     });
   });
 

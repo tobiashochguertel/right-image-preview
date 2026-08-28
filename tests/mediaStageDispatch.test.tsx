@@ -62,6 +62,17 @@ describe('MediaStage dispatch', () => {
     );
   });
 
+  it('does not report transient unknown media while byte detection is pending', () => {
+    const onPhaseChange = vi.fn();
+    const onError = vi.fn();
+    render(stageElement('unknown', 'sample-pending', onPhaseChange, vi.fn(), onError, true));
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(onPhaseChange).toHaveBeenCalledWith('loading');
+    expect(onPhaseChange).not.toHaveBeenCalledWith('unsupported');
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('keeps the raster WebGL stage mounted across resource changes', () => {
     const view = renderStage('raster');
     const firstCanvas = view.container.querySelector('[data-rip-raster-canvas]');
@@ -125,11 +136,13 @@ function stageElement(
   onPhaseChange = vi.fn(),
   onPresented = vi.fn(),
   onError = vi.fn(),
+  kindPending = false,
 ) {
   return (
     <MediaStage
       resourceKey={resourceKey}
       kind={kind}
+      kindPending={kindPending}
       source={{ type: 'url', href: `/${resourceKey}.bin` }}
       alt="sample"
       label="sample.bin"
