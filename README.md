@@ -10,6 +10,8 @@ Open the interactive demo in your browser (toggle **EN / 中文** in the top-rig
 
 > A dependency-free React media preview component. In v0.4, static Raster main content uses WebGL2 while SVG, animated images, and video use dedicated native-browser modules behind one Viewer Shell.
 
+This project is public, open-source, and free under the MIT License. Stable releases are published to npm for general-purpose use; application-specific commercial or private product logic does not belong in this repository.
+
 ---
 
 ## ✨ Features
