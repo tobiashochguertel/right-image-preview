@@ -76,7 +76,7 @@ function readExifOrientation(
 }
 
 function readPngSize(bytes: Uint8Array): RasterNaturalSize | undefined {
-  if (bytes.length < 24 || bytes[0] !== 0x89 || ascii(bytes, 1, 4) !== 'PNG') return undefined;
+  if (bytes.length < 24 || bytes[0] !== 0x89 || ascii(bytes, 1, 3) !== 'PNG') return undefined;
   return positiveSize(readU32BE(bytes, 16), readU32BE(bytes, 20));
 }
 

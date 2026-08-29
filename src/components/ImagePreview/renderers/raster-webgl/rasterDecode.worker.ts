@@ -2,6 +2,7 @@ import type {
   RasterDecodeWorkerRequest,
   RasterDecodeWorkerResponse,
 } from './rasterDecodeProtocol';
+import { readRasterNaturalSize } from './rasterDimensions';
 
 interface RasterDecodeWorkerScope {
   onmessage: ((event: MessageEvent<RasterDecodeWorkerRequest>) => void) | null;
@@ -24,17 +25,36 @@ workerScope.onmessage = async (event) => {
   } = event.data;
   try {
     const decodeBlob = blob ?? await fetchRasterBlob(id, url, contentLength);
-    let bitmap = resizeWidth && resizeHeight
+    // Header metadata lets us send a bounded target into the decoder. Decoding a
+    // full bitmap first and shrinking it afterwards defeats the OOM guard.
+    const headerSize = await readRasterNaturalSize(decodeBlob).catch(() => undefined);
+    const headerTarget = headerSize
+      ? fitDecodeTarget(
+          headerSize.width,
+          headerSize.height,
+          fitWidth,
+          fitHeight,
+          maxTextureSize,
+        )
+      : undefined;
+    const directTarget = resizeWidth && resizeHeight
+      ? { width: resizeWidth, height: resizeHeight }
+      : headerTarget && headerSize && (
+          headerTarget.width !== headerSize.width || headerTarget.height !== headerSize.height
+        )
+        ? headerTarget
+        : undefined;
+    let bitmap = directTarget
       ? await createImageBitmap(decodeBlob, {
           imageOrientation: 'from-image',
-          resizeWidth,
-          resizeHeight,
+          resizeWidth: directTarget.width,
+          resizeHeight: directTarget.height,
           resizeQuality: 'high',
         })
       : await createImageBitmap(decodeBlob, { imageOrientation: 'from-image' });
-    const naturalWidth = bitmap.width;
-    const naturalHeight = bitmap.height;
-    if (!resizeWidth || !resizeHeight) {
+    const naturalWidth = headerSize?.width ?? bitmap.width;
+    const naturalHeight = headerSize?.height ?? bitmap.height;
+    if (!directTarget && !headerSize) {
       const target = fitDecodeTarget(
         naturalWidth,
         naturalHeight,
