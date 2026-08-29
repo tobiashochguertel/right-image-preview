@@ -17,6 +17,7 @@
 | 能力 | 说明 |
 |------|------|
 | **WebGL2 静态位图** | JPEG、静态 PNG/WebP、AVIF 等主图统一使用 canvas + GPU texture；不维护第二套完整 DOM Raster renderer |
+| **Raster 安全回退** | WebGL2、能力、纹理或 context 失败时保留同一 Viewer Shell，以原生 DOM renderer 显示当前静态图；context 恢复后切回 WebGL2 |
 | **多媒体分发** | SVG、GIF/APNG/Animated WebP、Video、unknown 各自独立模块；工具栏按 capability 自动禁用不支持的操作 |
 | **多宿主图源** | 导出 `MediaSource`，支持 URL、Blob、ArrayBuffer bytes；可由浏览器、VS Code Webview、Tauri 宿主提供 |
 | **Fit / Native 双模式** | `fit` 以 contain 语义完整显示图片；`native` 以原始像素为 100% 基准 |
@@ -162,6 +163,7 @@ import { ImagePreview } from 'right-image-preview';
 | `onFullscreenError` | `(error: unknown) => void` | — | 浏览器 API 缺失/拒绝/状态未确认及宿主适配器失败的错误回调 |
 | `rasterDecodeWorkers` | `number \| 'auto'` | `'auto'` | Raster 专用解码 Worker 数；auto 按逻辑 CPU 并发保守选择 1–3 |
 | `rasterDecodeWorkerMax` | `number` | `3` | 解码并发安全上限；超过 8000 万像素的来源仍独占解码 |
+| `onRasterRendererStateChange` | `(state: RasterRendererState) => void` | — | 回报 WebGL2/DOM renderer、能力值、fallback 原因及 context lost/restored 状态 |
 | `onThumbnailVisibleIndexesChange` | `(indexes: number[]) => void` | — | 底片虚拟列表实际挂载下标；宿主可只生成这批缩略图 |
 | `firstZoomInStrategy` | `'above-fit' \| 'first-stop' \| 'hundred'` | `'above-fit'` | 从 Fit 首次放大时的入档策略 |
 | `zoomOutBelowMinBehaviour` | `'fit' \| 'noop'` | `'noop'` | 缩小到最小档以下的行为 |

@@ -7,7 +7,7 @@ export interface MediaSourceImageProps extends Omit<ImgHTMLAttributes<HTMLImageE
   source: MediaSource;
 }
 
-/** DOM image adapter for thumbnails, minimaps, SVG, and animated media—not Raster main content. */
+/** DOM image adapter for thumbnails/minimaps and native media renderers. */
 export function MediaSourceImage({ source, ...props }: MediaSourceImageProps) {
   const href = useMediaSourceUrl(source);
   return <img {...props} src={href} />;

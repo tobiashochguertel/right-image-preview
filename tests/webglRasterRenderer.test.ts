@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { WebGLRasterRenderer } from '../src/components/ImagePreview/renderers/raster-webgl/WebGLRasterRenderer';
+import { RasterRendererFallbackError } from '../src/components/ImagePreview/renderers/raster-webgl/rasterRendererState';
 import type { RasterTextureEntry } from '../src/components/ImagePreview/renderers/raster-webgl/types';
 
 describe('WebGLRasterRenderer texture binding safety', () => {
@@ -21,6 +22,7 @@ describe('WebGLRasterRenderer texture binding safety', () => {
       LINEAR: 10,
       RGBA: 11,
       UNSIGNED_BYTE: 12,
+      NO_ERROR: 0,
       SYNC_GPU_COMMANDS_COMPLETE: 13,
       ALREADY_SIGNALED: 14,
       CONDITION_SATISFIED: 15,
@@ -34,6 +36,7 @@ describe('WebGLRasterRenderer texture binding safety', () => {
       pixelStorei: vi.fn(),
       texParameteri: vi.fn(),
       texImage2D: vi.fn(),
+      getError: vi.fn(() => 0),
       fenceSync: vi.fn(() => ({}) as WebGLSync),
       flush: vi.fn(),
       clientWaitSync: vi.fn(() => 14),
@@ -67,6 +70,91 @@ describe('WebGLRasterRenderer texture binding safety', () => {
       flipV: false,
     })).toBe(false);
     expect(drawArrays).not.toHaveBeenCalled();
+  });
+
+  it('classifies texture creation failure for the safe fallback route', async () => {
+    const gl = {
+      createTexture: vi.fn(() => null),
+    } as unknown as WebGL2RenderingContext;
+    const renderer = rendererWith(gl);
+
+    await expect(renderer.upload({ width: 1, height: 1 } as ImageBitmap)).rejects
+      .toEqual(expect.objectContaining<RasterRendererFallbackError>({
+        reason: 'texture-create-failed',
+      }));
+  });
+
+  it('classifies texture upload failure for the safe fallback route', async () => {
+    const texture = {} as WebGLTexture;
+    const gl = {
+      TEXTURE_2D: 1,
+      TEXTURE_BINDING_2D: 2,
+      UNPACK_FLIP_Y_WEBGL: 3,
+      UNPACK_PREMULTIPLY_ALPHA_WEBGL: 4,
+      TEXTURE_WRAP_S: 5,
+      TEXTURE_WRAP_T: 6,
+      CLAMP_TO_EDGE: 7,
+      TEXTURE_MIN_FILTER: 8,
+      TEXTURE_MAG_FILTER: 9,
+      LINEAR: 10,
+      RGBA: 11,
+      UNSIGNED_BYTE: 12,
+      NO_ERROR: 0,
+      createTexture: vi.fn(() => texture),
+      getParameter: vi.fn(() => null),
+      bindTexture: vi.fn(),
+      isTexture: vi.fn(() => false),
+      pixelStorei: vi.fn(),
+      texParameteri: vi.fn(),
+      texImage2D: vi.fn(() => {
+        throw new Error('driver rejected upload');
+      }),
+      getError: vi.fn(() => 0),
+      deleteTexture: vi.fn(),
+    } as unknown as WebGL2RenderingContext;
+    const renderer = rendererWith(gl);
+
+    await expect(renderer.upload({ width: 1, height: 1 } as ImageBitmap)).rejects
+      .toEqual(expect.objectContaining<RasterRendererFallbackError>({
+        reason: 'texture-upload-failed',
+      }));
+    expect(gl.deleteTexture).toHaveBeenCalledWith(texture);
+  });
+
+  it('treats a WebGL error flag after texImage2D as an upload failure', async () => {
+    const texture = {} as WebGLTexture;
+    const gl = {
+      TEXTURE_2D: 1,
+      TEXTURE_BINDING_2D: 2,
+      UNPACK_FLIP_Y_WEBGL: 3,
+      UNPACK_PREMULTIPLY_ALPHA_WEBGL: 4,
+      TEXTURE_WRAP_S: 5,
+      TEXTURE_WRAP_T: 6,
+      CLAMP_TO_EDGE: 7,
+      TEXTURE_MIN_FILTER: 8,
+      TEXTURE_MAG_FILTER: 9,
+      LINEAR: 10,
+      RGBA: 11,
+      UNSIGNED_BYTE: 12,
+      NO_ERROR: 0,
+      OUT_OF_MEMORY: 0x0505,
+      createTexture: vi.fn(() => texture),
+      getParameter: vi.fn(() => null),
+      bindTexture: vi.fn(),
+      isTexture: vi.fn(() => false),
+      pixelStorei: vi.fn(),
+      texParameteri: vi.fn(),
+      texImage2D: vi.fn(),
+      getError: vi.fn(() => 0x0505),
+      deleteTexture: vi.fn(),
+    } as unknown as WebGL2RenderingContext;
+    const renderer = rendererWith(gl);
+
+    await expect(renderer.upload({ width: 1, height: 1 } as ImageBitmap)).rejects
+      .toEqual(expect.objectContaining<RasterRendererFallbackError>({
+        reason: 'texture-upload-failed',
+      }));
+    expect(gl.deleteTexture).toHaveBeenCalledWith(texture);
   });
 });
 

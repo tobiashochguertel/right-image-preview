@@ -1,6 +1,6 @@
 {
   "name": "right-image-preview",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "type": "module",
   "description": "A dependency-free React image preview component with Lightroom-style discrete zoom stops, multi-group navigation, flip/rotate, auto-fade controls, and full keyboard support.",
   "keywords": [
@@ -60,7 +60,7 @@
   "size-limit": [
     {
       "path": "./dist/index.mjs",
-      "limit": "47 kB",
+      "limit": "49 kB",
       "gzip": true
     }
   ],

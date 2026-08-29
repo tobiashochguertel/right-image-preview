@@ -1,8 +1,9 @@
 import { buildRasterQuad, type RasterQuadTransform, type RasterViewport } from './rasterQuad';
 import { RASTER_FRAGMENT_SHADER, RASTER_VERTEX_SHADER } from './shaders';
 import type { RasterTextureEntry } from './types';
+import { RasterRendererFallbackError } from './rasterRendererState';
 
-export type WebGLContextEvent = 'lost' | 'restored';
+export type WebGLContextEvent = 'lost' | 'restored' | 'restore-failed';
 
 export class WebGLRasterRenderer {
   readonly canvas: HTMLCanvasElement;
@@ -15,6 +16,7 @@ export class WebGLRasterRenderer {
   private readonly listeners = new Set<(event: WebGLContextEvent) => void>();
   private readonly onContextLost: (event: Event) => void;
   private readonly onContextRestored: () => void;
+  private lastContextFailure: Error | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -27,17 +29,36 @@ export class WebGLRasterRenderer {
       preserveDrawingBuffer: false,
       stencil: false,
     });
-    if (!gl) throw new Error('WebGL2 is not available');
+    if (!gl) {
+      throw new RasterRendererFallbackError(
+        'webgl2-unavailable',
+        'WebGL2 is not available',
+      );
+    }
     this.gl = gl;
     this.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
-    this.initialize();
+    try {
+      this.initialize();
+    } catch (cause) {
+      throw new RasterRendererFallbackError(
+        'renderer-initialization-failed',
+        'Unable to initialize the WebGL2 Raster renderer',
+        cause,
+      );
+    }
     this.onContextLost = (event) => {
       event.preventDefault();
       this.listeners.forEach((listener) => listener('lost'));
     };
     this.onContextRestored = () => {
-      this.initialize();
-      this.listeners.forEach((listener) => listener('restored'));
+      try {
+        this.initialize();
+        this.lastContextFailure = null;
+        this.listeners.forEach((listener) => listener('restored'));
+      } catch (cause) {
+        this.lastContextFailure = cause instanceof Error ? cause : new Error(String(cause));
+        this.listeners.forEach((listener) => listener('restore-failed'));
+      }
     };
     canvas.addEventListener('webglcontextlost', this.onContextLost);
     canvas.addEventListener('webglcontextrestored', this.onContextRestored);
@@ -46,6 +67,10 @@ export class WebGLRasterRenderer {
   subscribeContext(listener: (event: WebGLContextEvent) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  get contextFailure(): Error | null {
+    return this.lastContextFailure;
   }
 
   resize(viewport: RasterViewport): void {
@@ -59,7 +84,12 @@ export class WebGLRasterRenderer {
   async upload(bitmap: ImageBitmap): Promise<WebGLTexture> {
     const gl = this.gl;
     const texture = gl.createTexture();
-    if (!texture) throw new Error('Unable to create WebGL texture');
+    if (!texture) {
+      throw new RasterRendererFallbackError(
+        'texture-create-failed',
+        'Unable to create WebGL texture',
+      );
+    }
     const previousTexture = gl.getParameter(gl.TEXTURE_BINDING_2D) as WebGLTexture | null;
     try {
       gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -70,6 +100,13 @@ export class WebGLRasterRenderer {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
+      const uploadError = gl.getError();
+      if (uploadError !== gl.NO_ERROR) {
+        throw new RasterRendererFallbackError(
+          'texture-upload-failed',
+          `WebGL texture upload failed with error 0x${uploadError.toString(16)}`,
+        );
+      }
       const fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
       if (!fence) throw new Error('Unable to create WebGL upload fence');
       gl.flush();
@@ -81,7 +118,12 @@ export class WebGLRasterRenderer {
       return texture;
     } catch (error) {
       gl.deleteTexture(texture);
-      throw error;
+      if (error instanceof RasterRendererFallbackError) throw error;
+      throw new RasterRendererFallbackError(
+        'texture-upload-failed',
+        'Unable to upload the Raster texture',
+        error,
+      );
     } finally {
       // 上传邻图不能污染主舞台的 sampler 绑定；绘制路径还会再次显式绑定。
       gl.bindTexture(

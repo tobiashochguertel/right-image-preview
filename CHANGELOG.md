@@ -11,6 +11,19 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ---
 
+## [0.5.0] — 2026-08-29
+
+### Added
+
+- **Safe static Raster fallback route** — WebGL2 unavailability, an unsafe `MAX_TEXTURE_SIZE × 90%` source edge, texture-budget rejection, texture creation/upload failure, invalid texture handles, and context loss now keep the Viewer Shell alive and display the current source through a native DOM image renderer. Zoom, pan, rotate, flip, navigation, and close remain shell-owned.
+- **`onRasterRendererStateChange`** — public read-only snapshots report the active renderer (`webgl2` / `dom-image`), fast-path or fallback route, exact fallback reason, WebGL capability values, source dimensions, and context lost/restored state. Also exports `resolveRasterRendererRoute`, `RASTER_SAFE_TEXTURE_EDGE_RATIO`, and the related state types for deterministic host diagnostics and tests.
+
+### Changed
+
+- **Bundle budget** — size-limit moves from 47 kB to 49 kB gzip; the release bundle measures 48.12 kB. The increase is the dependency-free DOM Raster fallback, route classifier, context recovery handoff, and public diagnostics contract.
+
+---
+
 ## [0.4.2] — 2026-08-29
 
 ### Fixed

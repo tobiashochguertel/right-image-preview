@@ -17,6 +17,7 @@ Open the interactive demo in your browser (toggle **EN / 中文** in the top-rig
 | Feature | Description |
 |---------|-------------|
 | **WebGL2 static Raster** | JPEG, static PNG/WebP, AVIF, and similar main content uses canvas + GPU textures, without a second full DOM Raster renderer |
+| **Safe Raster fallback** | WebGL2/capability/texture/context failures keep the same Viewer Shell and route the current static image through a native DOM renderer; context restoration returns to WebGL2 |
 | **Media dispatch** | Dedicated SVG, GIF/APNG/Animated WebP, video, and unknown modules; toolbar actions follow each module's capabilities |
 | **Multi-host sources** | Exported `MediaSource` supports URL, Blob, and ArrayBuffer bytes from web, VS Code Webview, or Tauri hosts |
 | **Fit / Native zoom modes** | `fit` displays the image fully within the viewport (contain); `native` uses the image's original pixel dimensions as 100% baseline |
@@ -162,6 +163,7 @@ See [rendering architecture](./docs/rendering-architecture.md) for host integrat
 | `onFullscreenError` | `(error: unknown) => void` | — | Receives unavailable/rejected/unconfirmed browser fullscreen and host-adapter failures |
 | `rasterDecodeWorkers` | `number \| 'auto'` | `'auto'` | Dedicated Raster decode Workers; auto selects a conservative 1–3 from logical CPU concurrency |
 | `rasterDecodeWorkerMax` | `number` | `3` | Safety cap for decode concurrency; >80MP sources still decode exclusively |
+| `onRasterRendererStateChange` | `(state: RasterRendererState) => void` | — | Reports WebGL2/DOM renderer selection, capability values, fallback reason, and context lost/restored state |
 | `onThumbnailVisibleIndexesChange` | `(indexes: number[]) => void` | — | Flat indexes actually mounted by the virtual strip; hosts can generate only this window |
 | `firstZoomInStrategy` | `'above-fit' \| 'first-stop' \| 'hundred'` | `'above-fit'` | Which stop to land on when zooming in from Fit for the first time |
 | `zoomOutBelowMinBehaviour` | `'fit' \| 'noop'` | `'noop'` | Behaviour when zooming out below the minimum stop |

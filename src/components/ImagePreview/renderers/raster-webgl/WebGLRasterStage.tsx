@@ -1,10 +1,13 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { MediaPresentationPhase } from '../../core/media-contract';
 import type { MediaSource } from '../../core/media-source';
-import type { RasterQuadTransform, RasterViewport } from './rasterQuad';
+import type { TransformState } from '../../useImageTransform';
+import { RasterFallbackViewer } from '../raster-dom/RasterFallbackViewer';
+import type { RasterViewport } from './rasterQuad';
 import {
   DEFAULT_RASTER_TEXTURE_BUDGET_BYTES,
   RasterPipeline,
+  type RasterPipelineOptions,
   type RasterRuntimeSnapshot,
 } from './RasterPipeline';
 import type { RasterTextureEntry } from './types';
@@ -28,6 +31,12 @@ import {
   type RasterPreloadPlanSnapshot,
   type RasterPreloadSource,
 } from './rasterPreloadPlan';
+import {
+  rasterFallbackReason,
+  resolveRasterRendererRoute,
+  type RasterFallbackReason,
+  type RasterRendererState,
+} from './rasterRendererState';
 
 export interface WebGLRasterStageProps {
   active: boolean;
@@ -49,13 +58,25 @@ export interface WebGLRasterStageProps {
     targetLod?: 'browse' | 'screen',
   ): void;
   onRuntimeStateChange?(snapshot: RasterRuntimeSnapshot): void;
+  onRendererStateChange?(state: RasterRendererState): void;
   onPreloadPlanChange?(snapshot: RasterPreloadPlanSnapshot): void;
-  transform: RasterQuadTransform;
+  transform: TransformState;
   knownSize?: { width: number; height: number };
   onDimensions(width: number, height: number): void;
   onPhaseChange(phase: MediaPresentationPhase): void;
   onError(error: Error): void;
   onPresented(): void;
+  /** Internal test injection; normal consumers always use the default WebGL pipeline. */
+  createPipeline?(
+    canvas: HTMLCanvasElement,
+    budgetBytes: number,
+    options: RasterPipelineOptions,
+  ): RasterPipeline;
+}
+
+interface ActiveRasterFallback {
+  resourceKey?: string;
+  reason: RasterFallbackReason;
 }
 
 function isAbortError(cause: unknown): boolean {
@@ -79,6 +100,31 @@ function sameResidentTextures(
   });
 }
 
+function sameRendererState(
+  previous: RasterRendererState | null,
+  next: RasterRendererState,
+): boolean {
+  return !!previous &&
+    previous.resourceKey === next.resourceKey &&
+    previous.renderer === next.renderer &&
+    previous.routeReason === next.routeReason &&
+    previous.fallbackReason === next.fallbackReason &&
+    previous.webgl2Available === next.webgl2Available &&
+    previous.maxTextureSize === next.maxTextureSize &&
+    previous.safeTextureSize === next.safeTextureSize &&
+    previous.sourceWidth === next.sourceWidth &&
+    previous.sourceHeight === next.sourceHeight &&
+    previous.contextStatus === next.contextStatus;
+}
+
+function defaultCreatePipeline(
+  canvas: HTMLCanvasElement,
+  budgetBytes: number,
+  options: RasterPipelineOptions,
+): RasterPipeline {
+  return new RasterPipeline(new WebGLRasterRenderer(canvas), budgetBytes, options);
+}
+
 export function WebGLRasterStage({
   active,
   resourceKey,
@@ -95,6 +141,7 @@ export function WebGLRasterStage({
   decodeWorkerMax,
   onPreloadStateChange,
   onRuntimeStateChange,
+  onRendererStateChange,
   onPreloadPlanChange,
   transform,
   knownSize,
@@ -102,6 +149,7 @@ export function WebGLRasterStage({
   onPhaseChange,
   onError,
   onPresented,
+  createPipeline = defaultCreatePipeline,
 }: WebGLRasterStageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -114,7 +162,9 @@ export function WebGLRasterStage({
   const callbacksRef = useRef({ onDimensions, onPhaseChange, onError, onPresented });
   const preloadCallbackRef = useRef(onPreloadStateChange);
   const runtimeCallbackRef = useRef(onRuntimeStateChange);
+  const rendererStateCallbackRef = useRef(onRendererStateChange);
   const planCallbackRef = useRef(onPreloadPlanChange);
+  const lastRendererStateRef = useRef<RasterRendererState | null>(null);
   const suppressCanvasUntilActiveEntryRef = useRef(true);
   const activeFullResourceRef = useRef<string | null>(null);
   const retentionKeysRef = useRef<readonly string[]>([]);
@@ -127,10 +177,16 @@ export function WebGLRasterStage({
   const [autoBudgetBytes] = useState(detectRasterTextureBudgetBytes);
   const [contextGeneration, setContextGeneration] = useState(0);
   const [rendererMaxTextureSize, setRendererMaxTextureSize] = useState(16_384);
+  const rendererMaxTextureSizeRef = useRef<number | undefined>(undefined);
+  const [fallback, setFallback] = useState<ActiveRasterFallback | null>(null);
   const [cacheSnapshot, setCacheSnapshot] = useState({ count: 0, usedBytes: 0, maxBytes: 0 });
   const [residentTextures, setResidentTextures] = useState<RasterRuntimeSnapshot['residentTextures']>([]);
   const knownWidth = knownSize?.width;
   const knownHeight = knownSize?.height;
+  const activeFallback = fallback &&
+    (fallback.resourceKey == null || fallback.resourceKey === resourceKey)
+    ? fallback
+    : null;
   const protectedKeys = useMemo(() => {
     if (!resourceKey) return [];
     const keys = [
@@ -243,12 +299,74 @@ export function WebGLRasterStage({
     )
   );
 
+  const publishRendererState = useCallback((next: RasterRendererState) => {
+    if (sameRendererState(lastRendererStateRef.current, next)) return;
+    lastRendererStateRef.current = next;
+    rendererStateCallbackRef.current?.(next);
+  }, []);
+
+  const activateFallback = useCallback((
+    reason: RasterFallbackReason,
+    targetResourceKey: string | undefined,
+    naturalSize?: { width: number; height: number },
+    contextStatus: RasterRendererState['contextStatus'] = 'healthy',
+  ) => {
+    setFallback((previous) =>
+      previous?.reason === reason && previous.resourceKey === targetResourceKey
+        ? previous
+        : { reason, resourceKey: targetResourceKey },
+    );
+    const maxTextureSize = rendererMaxTextureSizeRef.current;
+    const route = resolveRasterRendererRoute({
+      webgl2Available: reason !== 'webgl2-unavailable',
+      maxTextureSize,
+      naturalSize,
+    });
+    publishRendererState({
+      resourceKey: targetResourceKey ?? resourceKeyRef.current,
+      renderer: 'dom-image',
+      routeReason: 'fallback',
+      fallbackReason: reason,
+      webgl2Available: reason !== 'webgl2-unavailable',
+      maxTextureSize,
+      safeTextureSize: route.safeTextureSize,
+      sourceWidth: naturalSize?.width,
+      sourceHeight: naturalSize?.height,
+      contextStatus,
+    });
+  }, [publishRendererState]);
+
+  const publishWebGLFastPath = useCallback((
+    targetResourceKey: string | undefined,
+    naturalSize?: { width: number; height: number },
+    contextStatus: RasterRendererState['contextStatus'] = 'healthy',
+  ) => {
+    const maxTextureSize = rendererMaxTextureSizeRef.current;
+    const route = resolveRasterRendererRoute({
+      webgl2Available: true,
+      maxTextureSize,
+      naturalSize,
+    });
+    publishRendererState({
+      resourceKey: targetResourceKey,
+      renderer: 'webgl2',
+      routeReason: 'fast-path',
+      webgl2Available: true,
+      maxTextureSize,
+      safeTextureSize: route.safeTextureSize,
+      sourceWidth: naturalSize?.width,
+      sourceHeight: naturalSize?.height,
+      contextStatus,
+    });
+  }, [publishRendererState]);
+
   useLayoutEffect(() => {
     activeRef.current = active;
     resourceKeyRef.current = resourceKey;
     callbacksRef.current = { onDimensions, onPhaseChange, onError, onPresented };
     preloadCallbackRef.current = onPreloadStateChange;
     runtimeCallbackRef.current = onRuntimeStateChange;
+    rendererStateCallbackRef.current = onRendererStateChange;
     planCallbackRef.current = onPreloadPlanChange;
   }, [
     active,
@@ -259,6 +377,7 @@ export function WebGLRasterStage({
     onPresented,
     onPreloadStateChange,
     onRuntimeStateChange,
+    onRendererStateChange,
     onPreloadPlanChange,
   ]);
 
@@ -284,14 +403,16 @@ export function WebGLRasterStage({
     const canvas = canvasRef.current;
     if (!canvas) return;
     try {
-      const pipeline = new RasterPipeline(
-        new WebGLRasterRenderer(canvas),
+      const pipeline = createPipeline(
+        canvas,
         DEFAULT_RASTER_TEXTURE_BUDGET_BYTES,
         { decodeWorkers, decodeWorkerMax },
       );
       setRendererMaxTextureSize(pipeline.renderer.maxTextureSize);
+      rendererMaxTextureSizeRef.current = pipeline.renderer.maxTextureSize;
       pipelineErrorRef.current = null;
       pipelineRef.current = pipeline;
+      publishWebGLFastPath(resourceKeyRef.current);
       // Worker settings are runtime props. A recreated pipeline owns a new GL
       // cache, so never keep rendering an entry whose texture belonged to the
       // disposed instance.
@@ -322,9 +443,22 @@ export function WebGLRasterStage({
             : previous;
         });
         runtimeCallbackRef.current?.(runtime);
-        if (pipeline.isContextLost) {
+        if (pipeline.currentContextStatus === 'lost') {
+          activateFallback('context-lost', resourceKeyRef.current, undefined, 'lost');
           if (activeRef.current) callbacksRef.current.onPhaseChange('restoring');
           return;
+        }
+        if (pipeline.currentContextStatus === 'restore-failed') {
+          activateFallback(
+            'context-restore-failed',
+            resourceKeyRef.current,
+            undefined,
+            'restore-failed',
+          );
+          return;
+        }
+        if (pipeline.currentContextStatus === 'restored') {
+          activateFallback('context-lost', resourceKeyRef.current, undefined, 'restored');
         }
         setContextGeneration(pipeline.generation);
       });
@@ -337,13 +471,19 @@ export function WebGLRasterStage({
     } catch (cause) {
       const error = cause instanceof Error ? cause : new Error(String(cause));
       pipelineErrorRef.current = error;
-      if (activeRef.current) {
-        callbacksRef.current.onPhaseChange('unsupported');
-        callbacksRef.current.onError(error);
-      }
+      activateFallback(
+        rasterFallbackReason(cause) ?? 'renderer-initialization-failed',
+        undefined,
+      );
       return;
     }
-  }, [decodeWorkers, decodeWorkerMax]);
+  }, [
+    activateFallback,
+    createPipeline,
+    decodeWorkers,
+    decodeWorkerMax,
+    publishWebGLFastPath,
+  ]);
 
   useLayoutEffect(() => {
     pipelineRef.current?.reconcileViewportLods(screenBox, browseBox, resourceKey);
@@ -387,14 +527,41 @@ export function WebGLRasterStage({
     activeFullResourceRef.current = active && resourceKey ? resourceKey : null;
     if (!active || !resourceKey || !source) return;
     const activeFullKey = resourceKey + '|full';
-    if (!pipeline) {
-      const error = pipelineErrorRef.current;
-      if (error) {
-        callbacksRef.current.onPhaseChange('unsupported');
-        callbacksRef.current.onError(error);
-      }
+    const naturalSize = knownWidth && knownHeight
+      ? { width: knownWidth, height: knownHeight }
+      : undefined;
+    const route = resolveRasterRendererRoute({
+      webgl2Available: !!pipeline,
+      maxTextureSize: pipeline?.renderer.maxTextureSize,
+      naturalSize,
+    });
+    if (route.renderer === 'dom-image') {
+      activateFallback(
+        pipeline
+          ? route.fallbackReason ?? 'texture-too-large'
+          : rasterFallbackReason(pipelineErrorRef.current) ?? 'webgl2-unavailable',
+        pipeline ? resourceKey : undefined,
+        naturalSize,
+      );
+      callbacksRef.current.onPhaseChange('loading');
       return;
     }
+    if (!pipeline) {
+      return;
+    }
+    if (pipeline.isContextLost) {
+      activateFallback(
+        pipeline.currentContextStatus === 'restore-failed'
+          ? 'context-restore-failed'
+          : 'context-lost',
+        resourceKey,
+        naturalSize,
+        pipeline.currentContextStatus,
+      );
+      callbacksRef.current.onPhaseChange('restoring');
+      return;
+    }
+    if (activeFallback && activeFallback.reason !== 'context-lost') return;
     setEntry((previous) => previous?.resourceKey === resourceKey ? previous : null);
     const residentBrowse = pipeline.cache.get(resourceKey + '|browse');
     if (residentBrowse) {
@@ -411,9 +578,6 @@ export function WebGLRasterStage({
     } else {
       callbacksRef.current.onPhaseChange('loading');
     }
-    const naturalSize = knownWidth && knownHeight
-      ? { width: knownWidth, height: knownHeight }
-      : undefined;
     if (previewSource && !residentBrowse) {
       void pipeline.prepare(resourceKey, previewSource, 'preview', naturalSize, 80)
         .then((preview) => {
@@ -438,6 +602,16 @@ export function WebGLRasterStage({
       .then((display) => {
         if (generationRef.current !== generation) return;
         displayReadyGenerationRef.current = generation;
+        setFallback((previous) =>
+          previous?.resourceKey === resourceKey || previous?.resourceKey == null
+            ? null
+            : previous,
+        );
+        publishWebGLFastPath(
+          resourceKey,
+          { width: display.naturalWidth, height: display.naturalHeight },
+          pipeline.currentContextStatus,
+        );
         pipeline.cache.protect(retentionKeysRef.current);
         pipeline.release(resourceKey + '|preview');
         pipeline.release(resourceKey + '|browse');
@@ -448,6 +622,11 @@ export function WebGLRasterStage({
       .catch((cause) => {
         if (generationRef.current !== generation) return;
         if (isAbortError(cause)) return;
+        const fallbackReason = rasterFallbackReason(cause);
+        if (fallbackReason) {
+          activateFallback(fallbackReason, resourceKey, naturalSize);
+          return;
+        }
         const error = cause instanceof Error ? cause : new Error(String(cause));
         callbacksRef.current.onPhaseChange('error');
         callbacksRef.current.onError(error);
@@ -463,6 +642,9 @@ export function WebGLRasterStage({
     contextGeneration,
     decodeWorkers,
     decodeWorkerMax,
+    activeFallback,
+    activateFallback,
+    publishWebGLFastPath,
   ]);
 
   useEffect(() => {
@@ -489,7 +671,11 @@ export function WebGLRasterStage({
           setEntry(full);
           callbacksRef.current.onDimensions(full.naturalWidth, full.naturalHeight);
         })
-        .catch(() => undefined);
+        .catch((cause) => {
+          if (cancelled || isAbortError(cause)) return;
+          const reason = rasterFallbackReason(cause);
+          if (reason) activateFallback(reason, resourceKey, naturalSize);
+        });
     }, Math.max(0, fullResolutionSettleMs));
     return () => {
       cancelled = true;
@@ -511,11 +697,12 @@ export function WebGLRasterStage({
     viewport.dpr,
     contextGeneration,
     foregroundNeedsFull,
+    activateFallback,
   ]);
 
   useEffect(() => {
     const pipeline = pipelineRef.current;
-    if (!active || !pipeline) return;
+    if (!active || !pipeline || activeFallback) return;
     let cancelled = false;
     const activeScreenReady = !!(
       resourceKey &&
@@ -639,11 +826,12 @@ export function WebGLRasterStage({
     protectedKeys,
     retentionKeys,
     contextGeneration,
+    activeFallback,
   ]);
 
   useLayoutEffect(() => {
     const pipeline = pipelineRef.current;
-    if (!active || !pipeline || !entry || !resourceKey) return;
+    if (!active || activeFallback || !pipeline || !entry || !resourceKey) return;
     const drawableEntry = entry.resourceKey === resourceKey && pipeline.cache.isResident(entry)
       ? entry
       : pipeline.cache.bestResident(resourceKey);
@@ -654,10 +842,36 @@ export function WebGLRasterStage({
       setEntry(drawableEntry);
       return;
     }
-    if (!pipeline.renderer.render(drawableEntry, viewport, transform)) return;
+    try {
+      if (!pipeline.renderer.render(drawableEntry, viewport, transform)) {
+        activateFallback(
+          pipeline.isContextLost ? 'context-lost' : 'texture-invalid',
+          resourceKey,
+          { width: drawableEntry.naturalWidth, height: drawableEntry.naturalHeight },
+          pipeline.currentContextStatus,
+        );
+        return;
+      }
+    } catch (cause) {
+      activateFallback(
+        rasterFallbackReason(cause) ?? 'texture-invalid',
+        resourceKey,
+        { width: drawableEntry.naturalWidth, height: drawableEntry.naturalHeight },
+        pipeline.currentContextStatus,
+      );
+      return;
+    }
     const id = requestAnimationFrame(() => callbacksRef.current.onPresented());
     return () => cancelAnimationFrame(id);
-  }, [active, entry, resourceKey, viewport, transform]);
+  }, [
+    active,
+    activeFallback,
+    activateFallback,
+    entry,
+    resourceKey,
+    viewport,
+    transform,
+  ]);
 
   const entryMatchesActiveResource = !!(
     resourceKey &&
@@ -672,9 +886,11 @@ export function WebGLRasterStage({
       host.style.visibility = 'hidden';
       return;
     }
-    if (entryMatchesActiveResource) suppressCanvasUntilActiveEntryRef.current = false;
+    if (entryMatchesActiveResource || activeFallback) {
+      suppressCanvasUntilActiveEntryRef.current = false;
+    }
     host.style.visibility = suppressCanvasUntilActiveEntryRef.current ? 'hidden' : 'visible';
-  }, [active, entryMatchesActiveResource]);
+  }, [active, activeFallback, entryMatchesActiveResource]);
 
   return (
     <div
@@ -683,6 +899,8 @@ export function WebGLRasterStage({
       data-rip-raster-quality={entry?.quality ?? 'pending'}
       data-rip-raster-resource={entry?.resourceKey}
       data-rip-raster-active={active ? 'true' : 'false'}
+      data-rip-raster-renderer={activeFallback ? 'dom-image' : 'webgl2'}
+      data-rip-raster-fallback-reason={activeFallback?.reason}
       data-rip-raster-cache-count={cacheSnapshot.count}
       data-rip-raster-cache-bytes={cacheSnapshot.usedBytes}
       data-rip-raster-cache-max-bytes={cacheSnapshot.maxBytes}
@@ -699,6 +917,21 @@ export function WebGLRasterStage({
         data-rip-raster-canvas=""
         style={{ display: 'block', width: '100%', height: '100%' }}
       />
+      {active && activeFallback && source ? (
+        <RasterFallbackViewer
+          key={resourceKey}
+          source={source}
+          alt=""
+          transform={transform}
+          onDimensions={onDimensions}
+          onPhaseChange={onPhaseChange}
+          onPresented={onPresented}
+          onError={(error) => {
+            callbacksRef.current.onPhaseChange('error');
+            callbacksRef.current.onError(error);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

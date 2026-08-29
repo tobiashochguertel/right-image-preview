@@ -31,6 +31,7 @@ export interface MediaStageProps {
   decodeWorkerMax?: number;
   onPreloadStateChange?: WebGLRasterStageProps['onPreloadStateChange'];
   onRasterRuntimeStateChange?: WebGLRasterStageProps['onRuntimeStateChange'];
+  onRasterRendererStateChange?: WebGLRasterStageProps['onRendererStateChange'];
   onRasterPreloadPlanChange?: WebGLRasterStageProps['onPreloadPlanChange'];
   alt: string;
   label: string;
@@ -151,6 +152,7 @@ export function MediaStage(props: MediaStageProps) {
         decodeWorkerMax={props.decodeWorkerMax}
         onPreloadStateChange={props.onPreloadStateChange}
         onRuntimeStateChange={props.onRasterRuntimeStateChange}
+        onRendererStateChange={props.onRasterRendererStateChange}
         onPreloadPlanChange={props.onRasterPreloadPlanChange}
         knownSize={rasterActive ? props.knownSize : undefined}
         {...common}

@@ -65,6 +65,18 @@ export {
 } from './renderers/raster-webgl/rasterMemoryBudget';
 export type { RasterHardwareProfile } from './renderers/raster-webgl/rasterMemoryBudget';
 export {
+  RASTER_SAFE_TEXTURE_EDGE_RATIO,
+  resolveRasterRendererRoute,
+} from './renderers/raster-webgl/rasterRendererState';
+export type {
+  RasterContextStatus,
+  RasterFallbackReason,
+  RasterRendererKind,
+  RasterRendererRoute,
+  RasterRendererRouteInput,
+  RasterRendererState,
+} from './renderers/raster-webgl/rasterRendererState';
+export {
   RASTER_DECODE_HEAVY_PIXEL_THRESHOLD,
   RASTER_DECODE_WORKER_DEFAULT_MAX,
   RASTER_DECODE_WORKER_HARD_MAX,

@@ -173,6 +173,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       onPreloadIndexesChange,
       onPreloadStatusChange,
       onRasterPreloadPlanChange,
+      onRasterRendererStateChange,
       showThumbnailPreloadStatus = false,
       showSwitchLoader = true,
       chrome = 'default',
@@ -1150,6 +1151,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
               decodeWorkerMax={rasterDecodeWorkerMax}
               onPreloadStateChange={onRasterPreloadStateChange}
               onRasterRuntimeStateChange={onRasterRuntimeStateChange}
+              onRasterRendererStateChange={onRasterRendererStateChange}
               onRasterPreloadPlanChange={onRasterPreloadPlanChange}
               alt={currentImage.alt ?? ''}
               label={currentImage.name ?? currentImage.src}

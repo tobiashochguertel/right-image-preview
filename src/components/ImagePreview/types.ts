@@ -1,6 +1,7 @@
 import type { MediaKind } from './core/media-kind';
 import type { MediaSource } from './core/media-source';
 import type { RasterPreloadPlanSnapshot } from './renderers/raster-webgl/rasterPreloadPlan';
+import type { RasterRendererState } from './renderers/raster-webgl/rasterRendererState';
 
 export type ZoomMode = 'fit' | 'native';
 
@@ -560,6 +561,13 @@ export interface ImagePreviewProps {
 
   /** Development/diagnostic snapshot of the viewport-driven Raster LOD planner. */
   onRasterPreloadPlanChange?: (snapshot: RasterPreloadPlanSnapshot) => void;
+
+  /**
+   * Reports the current static Raster renderer route and WebGL capability snapshot.
+   * Fires for the WebGL2 fast path, every fallback reason, context loss/restoration,
+   * and a successful return to WebGL2. Hosts must not inspect private DOM to infer it.
+   */
+  onRasterRendererStateChange?: (state: RasterRendererState) => void;
 
   /**
    * When true, thumbnail tiles show bottom-edge indicators for preload status. Default: `false`.

@@ -16,6 +16,11 @@ import {
   type RasterDecodeWorkerPoolOptions,
 } from './RasterDecodeWorkerPool';
 import type { RasterDecodeWorkerSetting } from './rasterDecodePolicy';
+import {
+  RasterRendererFallbackError,
+  resolveRasterRendererRoute,
+  type RasterContextStatus,
+} from './rasterRendererState';
 
 export const DEFAULT_RASTER_TEXTURE_BUDGET_BYTES = RASTER_TEXTURE_BUDGET_4K_BYTES;
 
@@ -29,6 +34,10 @@ export interface RasterRuntimeSnapshot {
     reservedBytes: number;
     maxBytes: number;
     oversubscribed: boolean;
+  };
+  context: {
+    status: RasterContextStatus;
+    generation: number;
   };
 }
 
@@ -80,6 +89,7 @@ export class RasterPipeline {
   private readonly unsubscribeContext: () => void;
   private contextGeneration = 0;
   private contextLost = false;
+  private contextStatus: RasterContextStatus = 'healthy';
   private readonly listeners = new Set<() => void>();
   private readonly downloads = new Map<string, MediaDownloadProgress>();
   /** Only the foreground original is retained between Screen and Full LOD. */
@@ -103,11 +113,18 @@ export class RasterPipeline {
     this.unsubscribeContext = renderer.subscribeContext((event) => {
       if (event === 'lost') {
         this.contextLost = true;
+        this.contextStatus = 'lost';
         this.cancelAllInFlight(true, 'WebGL context lost');
         this.cache.clear(false);
-      } else {
+      } else if (event === 'restored') {
         this.contextLost = false;
+        this.contextStatus = 'restored';
         this.contextGeneration += 1;
+      } else {
+        this.contextLost = true;
+        this.contextStatus = 'restore-failed';
+        this.cancelAllInFlight(true, 'WebGL context restoration failed');
+        this.cache.clear(false);
       }
       this.emit();
     });
@@ -126,6 +143,10 @@ export class RasterPipeline {
     return this.contextLost;
   }
 
+  get currentContextStatus(): RasterContextStatus {
+    return this.contextStatus;
+  }
+
   runtimeSnapshot(): RasterRuntimeSnapshot {
     const cache = this.cache.snapshot();
     return {
@@ -141,6 +162,10 @@ export class RasterPipeline {
         bytes: entry.estimatedBytes,
       })),
       cache,
+      context: {
+        status: this.contextStatus,
+        generation: this.contextGeneration,
+      },
     };
   }
 
@@ -352,6 +377,20 @@ export class RasterPipeline {
       ? undefined
       : await readRasterNaturalSize(blob).catch(() => undefined);
     let resolvedNaturalSize = naturalSize ?? headerSize;
+    if (resolvedNaturalSize && quality !== 'preview') {
+      const route = resolveRasterRendererRoute({
+        webgl2Available: true,
+        maxTextureSize: this.renderer.maxTextureSize,
+        naturalSize: resolvedNaturalSize,
+      });
+      if (route.renderer === 'dom-image') {
+        if (this.foregroundBlob?.resourceKey === resourceKey) this.foregroundBlob = null;
+        throw new RasterRendererFallbackError(
+          route.fallbackReason ?? 'texture-too-large',
+          `Raster dimensions exceed the safe WebGL texture edge (${route.safeTextureSize ?? 0}px)`,
+        );
+      }
+    }
     const textureSize = resolvedNaturalSize
       ? resolveTextureSize(
           quality,
@@ -402,6 +441,21 @@ export class RasterPipeline {
 
     if (!resolvedNaturalSize) {
       resolvedNaturalSize = decoded.naturalSize ?? { width: bitmap.width, height: bitmap.height };
+    }
+    if (quality !== 'preview') {
+      const route = resolveRasterRendererRoute({
+        webgl2Available: true,
+        maxTextureSize: this.renderer.maxTextureSize,
+        naturalSize: resolvedNaturalSize,
+      });
+      if (route.renderer === 'dom-image') {
+        bitmap.close();
+        if (this.foregroundBlob?.resourceKey === resourceKey) this.foregroundBlob = null;
+        throw new RasterRendererFallbackError(
+          route.fallbackReason ?? 'texture-too-large',
+          `Raster dimensions exceed the safe WebGL texture edge (${route.safeTextureSize ?? 0}px)`,
+        );
+      }
     }
     const naturalWidth = resolvedNaturalSize.width;
     const naturalHeight = resolvedNaturalSize.height;

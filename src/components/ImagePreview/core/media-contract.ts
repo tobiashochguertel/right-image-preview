@@ -69,8 +69,13 @@ export interface MediaError {
     | 'decode-failed'
     | 'unsupported-kind'
     | 'webgl2-unavailable'
+    | 'renderer-initialization-failed'
     | 'texture-too-large'
+    | 'texture-budget-exceeded'
+    | 'texture-create-failed'
+    | 'texture-upload-failed'
     | 'context-lost'
+    | 'context-restore-failed'
     | 'unknown';
   message: string;
   cause?: unknown;
