@@ -29,4 +29,18 @@ describe('DelayedTooltip', () => {
     fireEvent.mouseLeave(screen.getByRole('button', { name: 'Anchor' }));
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
+
+  it('does not wrap or show a tooltip when content is empty', () => {
+    vi.useFakeTimers();
+
+    render(
+      <DelayedTooltip content="">
+        <button type="button">Anchor</button>
+      </DelayedTooltip>,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole('button', { name: 'Anchor' }));
+    act(() => vi.advanceTimersByTime(2000));
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
 });

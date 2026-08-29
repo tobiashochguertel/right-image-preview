@@ -42,6 +42,21 @@ describe('resolveStrings', () => {
     const t = resolveStrings('en');
     expect(t.fitApprox(75)).toBe('Fit (75%)');
   });
+
+  it('leaves obvious control tooltips empty', () => {
+    for (const language of ['en', 'zh'] as const) {
+      const t = resolveStrings(language);
+      expect(t.tipClose).toBe('');
+      expect(t.tipPrev).toBe('');
+      expect(t.tipNext).toBe('');
+      expect(t.tipRotateCW).toBe('');
+      expect(t.tipRotateCCW).toBe('');
+      expect(t.tipZoomIn).toBe('');
+      expect(t.tipZoomOut).toBe('');
+      expect(t.tipFlipH).toBe('');
+      expect(t.tipFlipV).toBe('');
+    }
+  });
 });
 
 describe('mergeStrings', () => {

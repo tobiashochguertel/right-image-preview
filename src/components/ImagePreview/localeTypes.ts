@@ -36,7 +36,11 @@ export interface LocaleStrings {
   /** Per-tile label in the classic strip — 1-based index within the visible set. */
   thumbStripItem(index: number, total: number): string;
 
-  // Longer hover tooltips for non-expert users
+  /**
+   * Delayed hover tooltips. Empty string skips the tooltip (used for obvious
+   * chrome such as close, prev/next, rotate, zoom ±). Screen readers still use
+   * the short `aria-label` fields above.
+   */
   tipFitToViewport: string;
   tipActualSize: string;
   tipZoomIn: string;
@@ -52,7 +56,7 @@ export interface LocaleStrings {
   tipPrevGroup: string;
   tipNextGroup: string;
   tipClose: string;
-  /** Zoom % control: type value or open preset list. */
+  /** Zoom % control: type value or open preset list. Empty skips the tooltip. */
   tipZoomLevel: string;
   tipZoomRowPercent(pct: number): string;
   tipZoomRowFit: string;
