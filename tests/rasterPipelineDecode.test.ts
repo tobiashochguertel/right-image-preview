@@ -162,6 +162,36 @@ describe('RasterPipeline Worker decode integration', () => {
     await expect(prepared).resolves.toMatchObject({ resourceKey: 'asset-photo' });
     pipeline.dispose();
   });
+
+  it('rejects Full decode above the configured RGBA limit before Worker allocation', async () => {
+    const workers: FakeWorker[] = [];
+    const decodePool = new RasterDecodeWorkerPool({
+      workers: 1,
+      workerFactory: () => {
+        const worker = new FakeWorker();
+        workers.push(worker);
+        return worker;
+      },
+    });
+    const pipeline = new RasterPipeline(createRenderer(), 1024 * 1024, {
+      decodePool,
+      fullDecodeMaxBytes: 1024,
+    });
+
+    await expect(pipeline.prepare(
+      'too-large-for-full',
+      { type: 'blob', blob: new Blob(['image']) },
+      'full',
+      { width: 100, height: 100 },
+      90,
+    )).rejects.toMatchObject({
+      name: 'RasterFullDecodeBlockedError',
+      estimatedBytes: 40_000,
+      limitBytes: 1024,
+    });
+    expect(workers[0].messages).toHaveLength(0);
+    pipeline.dispose();
+  });
 });
 
 function createRenderer(): WebGLRasterRenderer {

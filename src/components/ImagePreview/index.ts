@@ -44,11 +44,21 @@ export type { Rotation } from './useImageTransform';
 export { computeFitScale, resolveFitMaxScale } from './useImageTransform';
 export {
   RASTER_FULL_RESOLUTION_SETTLE_MS,
+  RASTER_FULL_DECODE_MAX_BYTES,
+  RASTER_PREVIEW_MAX_EDGE,
   RASTER_BROWSE_LOD_SCALE,
   RASTER_SCREEN_LOD_OVERSAMPLE,
+  capRasterSizeToEdge,
   fitRasterToScreenLod,
+  normalizeRasterFullDecodeMaxBytes,
   rgbaTextureBytes,
+  resolveRasterFullDecodePolicy,
   scaleRasterLodBox,
+} from './renderers/raster-webgl/rasterLod';
+export type {
+  RasterFullDecodePolicy,
+  RasterFullDecodeStatus,
+  RasterSize,
 } from './renderers/raster-webgl/rasterLod';
 export type {
   RasterNeighborLod,
@@ -71,6 +81,7 @@ export {
 } from './renderers/raster-webgl/rasterRendererState';
 export type {
   RasterContextStatus,
+  RasterDecodeSourceKind,
   RasterFallbackReason,
   RasterRendererKind,
   RasterRendererRoute,

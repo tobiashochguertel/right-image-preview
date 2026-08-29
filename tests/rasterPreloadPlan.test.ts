@@ -96,6 +96,42 @@ describe('buildRasterPreloadPlan', () => {
     expect(plan.map((item) => item.resourceKey)).toEqual(['b']);
   });
 
+  it('carries a bounded Preview source for oversized-neighbor admission', () => {
+    const plan = buildRasterPreloadPlan({
+      images: [
+        { id: 'current', src: '/current.jpg' },
+        {
+          id: 'huge',
+          src: '/huge.jpg',
+          minimapSrc: '/huge-preview.jpg',
+          exif: { width: 20_000, height: 20_000 },
+        },
+      ],
+      currentIndex: 0,
+      direction: 1,
+      range: 1,
+      maxCount: 1,
+    });
+
+    expect(plan[0]).toMatchObject({
+      resourceKey: 'huge',
+      source: { type: 'url', href: '/huge.jpg' },
+      previewSource: { type: 'url', href: '/huge-preview.jpg' },
+      knownSize: { width: 20_000, height: 20_000 },
+    });
+    expect(buildRasterPreloadPlan({
+      images: [
+        { id: 'current', src: '/current.jpg' },
+        { id: 'huge', src: '/huge.jpg', minimapSrc: '/huge-preview.jpg' },
+      ],
+      currentIndex: 0,
+      direction: 1,
+      range: 1,
+      maxCount: 1,
+      allowPreviewSource: false,
+    })[0].previewSource).toBeUndefined();
+  });
+
   it('uses only Screen when the small image-stage viewport can fit every candidate', () => {
     const rows: ImageItem[] = Array.from({ length: 31 }, (_, index) => ({
       id: String(index),
@@ -138,7 +174,7 @@ describe('buildRasterPreloadPlan', () => {
       large.snapshot.browseBackwardIndexes.length).toBeGreaterThan(0);
   });
 
-  it('shrinks the Screen core to one neighbour per side under full-screen pressure', () => {
+  it('keeps a bounded bilateral Screen core under full-screen pressure', () => {
     const rows: ImageItem[] = Array.from({ length: 21 }, (_, index) => ({
       id: String(index),
       src: `/${index}.jpg`,
@@ -158,10 +194,11 @@ describe('buildRasterPreloadPlan', () => {
       maxTextureSize: 16_384,
     });
 
-    expect(plan.snapshot.screenForwardIndexes).toEqual([11]);
-    expect(plan.snapshot.screenBackwardIndexes).toEqual([9]);
-    expect(plan.snapshot.browseForwardIndexes.length +
-      plan.snapshot.browseBackwardIndexes.length).toBeGreaterThan(0);
+    expect(plan.snapshot.screenForwardIndexes[0]).toBe(11);
+    expect(plan.snapshot.screenBackwardIndexes[0]).toBe(9);
+    expect(plan.snapshot.screenForwardIndexes.length +
+      plan.snapshot.screenBackwardIndexes.length).toBeLessThanOrEqual(5);
+    expect(plan.entries.length).toBeLessThan(20);
   });
 
   it('keeps each direction as a contiguous Screen core followed by a Browse ring', () => {

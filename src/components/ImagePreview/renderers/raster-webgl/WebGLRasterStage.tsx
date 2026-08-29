@@ -14,8 +14,11 @@ import type { RasterTextureEntry } from './types';
 import type { RasterDecodeWorkerSetting } from './rasterDecodePolicy';
 import { WebGLRasterRenderer } from './WebGLRasterRenderer';
 import {
+  RASTER_FULL_DECODE_MAX_BYTES,
   RASTER_FULL_RESOLUTION_SETTLE_MS,
+  capRasterSizeToEdge,
   needsRasterFullResolution,
+  resolveRasterFullDecodePolicy,
   scaleRasterLodBox,
 } from './rasterLod';
 import { detectRasterTextureBudgetBytes } from './rasterMemoryBudget';
@@ -33,6 +36,7 @@ import {
 } from './rasterPreloadPlan';
 import {
   rasterFallbackReason,
+  rasterFallbackNaturalSize,
   resolveRasterRendererRoute,
   type RasterFallbackReason,
   type RasterRendererState,
@@ -49,6 +53,7 @@ export interface WebGLRasterStageProps {
   preloadPaused?: boolean;
   fullResolutionPaused?: boolean;
   fullResolutionSettleMs?: number;
+  fullDecodeMaxBytes?: number;
   textureBudgetBytes?: number;
   decodeWorkers?: RasterDecodeWorkerSetting;
   decodeWorkerMax?: number;
@@ -77,6 +82,7 @@ export interface WebGLRasterStageProps {
 interface ActiveRasterFallback {
   resourceKey?: string;
   reason: RasterFallbackReason;
+  naturalSize?: { width: number; height: number };
 }
 
 function isAbortError(cause: unknown): boolean {
@@ -114,7 +120,11 @@ function sameRendererState(
     previous.safeTextureSize === next.safeTextureSize &&
     previous.sourceWidth === next.sourceWidth &&
     previous.sourceHeight === next.sourceHeight &&
-    previous.contextStatus === next.contextStatus;
+    previous.contextStatus === next.contextStatus &&
+    previous.decodeSource === next.decodeSource &&
+    previous.fullDecodeStatus === next.fullDecodeStatus &&
+    previous.fullDecodeEstimatedBytes === next.fullDecodeEstimatedBytes &&
+    previous.fullDecodeLimitBytes === next.fullDecodeLimitBytes;
 }
 
 function defaultCreatePipeline(
@@ -136,6 +146,7 @@ export function WebGLRasterStage({
   preloadPaused = false,
   fullResolutionPaused = false,
   fullResolutionSettleMs = RASTER_FULL_RESOLUTION_SETTLE_MS,
+  fullDecodeMaxBytes = RASTER_FULL_DECODE_MAX_BYTES,
   textureBudgetBytes,
   decodeWorkers,
   decodeWorkerMax,
@@ -199,7 +210,7 @@ export function WebGLRasterStage({
     ];
     return keys;
   }, [resourceKey]);
-  const screenBox = useMemo(() => ({
+  const screenBox = useMemo(() => capRasterSizeToEdge({
     width: Math.max(1, Math.round(viewport.width * viewport.dpr)),
     height: Math.max(1, Math.round(viewport.height * viewport.dpr)),
   }), [viewport.width, viewport.height, viewport.dpr]);
@@ -286,11 +297,20 @@ export function WebGLRasterStage({
       .filter((flatIndex): flatIndex is number => flatIndex != null),
     historyScreenBytes: historyReservedBytes,
   }), [lodPlan.snapshot, historyPins, historyReservedBytes]);
+  const foregroundFullDecodePolicy = resolveRasterFullDecodePolicy(
+    entry && entry.resourceKey === resourceKey
+      ? { width: entry.naturalWidth, height: entry.naturalHeight }
+      : knownWidth && knownHeight
+        ? { width: knownWidth, height: knownHeight }
+        : undefined,
+    fullDecodeMaxBytes,
+  );
   const foregroundNeedsFull = !!(
     active &&
     resourceKey &&
     entry?.resourceKey === resourceKey &&
     entry.quality === 'display' &&
+    foregroundFullDecodePolicy.allowed &&
     needsRasterFullResolution(
       { width: entry.naturalWidth, height: entry.naturalHeight },
       { width: entry.textureWidth, height: entry.textureHeight },
@@ -310,11 +330,15 @@ export function WebGLRasterStage({
     targetResourceKey: string | undefined,
     naturalSize?: { width: number; height: number },
     contextStatus: RasterRendererState['contextStatus'] = 'healthy',
+    decodeSource: RasterRendererState['decodeSource'] = 'original',
   ) => {
     setFallback((previous) =>
-      previous?.reason === reason && previous.resourceKey === targetResourceKey
+      previous?.reason === reason &&
+      previous.resourceKey === targetResourceKey &&
+      previous.naturalSize?.width === naturalSize?.width &&
+      previous.naturalSize?.height === naturalSize?.height
         ? previous
-        : { reason, resourceKey: targetResourceKey },
+        : { reason, resourceKey: targetResourceKey, naturalSize },
     );
     const maxTextureSize = rendererMaxTextureSizeRef.current;
     const route = resolveRasterRendererRoute({
@@ -322,6 +346,7 @@ export function WebGLRasterStage({
       maxTextureSize,
       naturalSize,
     });
+    const decodePolicy = resolveRasterFullDecodePolicy(naturalSize, fullDecodeMaxBytes);
     publishRendererState({
       resourceKey: targetResourceKey ?? resourceKeyRef.current,
       renderer: 'dom-image',
@@ -333,13 +358,18 @@ export function WebGLRasterStage({
       sourceWidth: naturalSize?.width,
       sourceHeight: naturalSize?.height,
       contextStatus,
+      decodeSource,
+      fullDecodeStatus: decodePolicy.status,
+      fullDecodeEstimatedBytes: decodePolicy.estimatedBytes,
+      fullDecodeLimitBytes: decodePolicy.limitBytes,
     });
-  }, [publishRendererState]);
+  }, [fullDecodeMaxBytes, publishRendererState]);
 
   const publishWebGLFastPath = useCallback((
     targetResourceKey: string | undefined,
     naturalSize?: { width: number; height: number },
     contextStatus: RasterRendererState['contextStatus'] = 'healthy',
+    decodeSource: RasterRendererState['decodeSource'] = 'original',
   ) => {
     const maxTextureSize = rendererMaxTextureSizeRef.current;
     const route = resolveRasterRendererRoute({
@@ -347,6 +377,7 @@ export function WebGLRasterStage({
       maxTextureSize,
       naturalSize,
     });
+    const decodePolicy = resolveRasterFullDecodePolicy(naturalSize, fullDecodeMaxBytes);
     publishRendererState({
       resourceKey: targetResourceKey,
       renderer: 'webgl2',
@@ -357,8 +388,12 @@ export function WebGLRasterStage({
       sourceWidth: naturalSize?.width,
       sourceHeight: naturalSize?.height,
       contextStatus,
+      decodeSource,
+      fullDecodeStatus: decodePolicy.status,
+      fullDecodeEstimatedBytes: decodePolicy.estimatedBytes,
+      fullDecodeLimitBytes: decodePolicy.limitBytes,
     });
-  }, [publishRendererState]);
+  }, [fullDecodeMaxBytes, publishRendererState]);
 
   useLayoutEffect(() => {
     activeRef.current = active;
@@ -406,7 +441,7 @@ export function WebGLRasterStage({
       const pipeline = createPipeline(
         canvas,
         DEFAULT_RASTER_TEXTURE_BUDGET_BYTES,
-        { decodeWorkers, decodeWorkerMax },
+        { decodeWorkers, decodeWorkerMax, fullDecodeMaxBytes },
       );
       setRendererMaxTextureSize(pipeline.renderer.maxTextureSize);
       rendererMaxTextureSizeRef.current = pipeline.renderer.maxTextureSize;
@@ -482,6 +517,7 @@ export function WebGLRasterStage({
     createPipeline,
     decodeWorkers,
     decodeWorkerMax,
+    fullDecodeMaxBytes,
     publishWebGLFastPath,
   ]);
 
@@ -530,6 +566,43 @@ export function WebGLRasterStage({
     const naturalSize = knownWidth && knownHeight
       ? { width: knownWidth, height: knownHeight }
       : undefined;
+    const decodePolicy = resolveRasterFullDecodePolicy(naturalSize, fullDecodeMaxBytes);
+    const originalDecodeBlocked = decodePolicy.status === 'blocked';
+    const displaySource = originalDecodeBlocked ? previewSource : source;
+    const displayDecodeSource: RasterRendererState['decodeSource'] = originalDecodeBlocked
+      ? 'preview'
+      : 'original';
+    if (!displaySource) {
+      const error = new Error(
+        `Raster original decode requires ${decodePolicy.estimatedBytes ?? 0} bytes, ` +
+        `exceeding the ${decodePolicy.limitBytes}-byte safety limit; provide a Preview source`,
+      );
+      error.name = 'RasterDecodeSafetyError';
+      const blockedRoute = resolveRasterRendererRoute({
+        webgl2Available: !!pipeline,
+        maxTextureSize: pipeline?.renderer.maxTextureSize,
+        naturalSize,
+      });
+      publishRendererState({
+        resourceKey,
+        renderer: blockedRoute.renderer,
+        routeReason: blockedRoute.renderer === 'webgl2' ? 'fast-path' : 'fallback',
+        fallbackReason: blockedRoute.fallbackReason,
+        webgl2Available: !!pipeline,
+        maxTextureSize: pipeline?.renderer.maxTextureSize,
+        safeTextureSize: blockedRoute.safeTextureSize,
+        sourceWidth: naturalSize?.width,
+        sourceHeight: naturalSize?.height,
+        contextStatus: pipeline?.currentContextStatus ?? 'healthy',
+        decodeSource: 'preview',
+        fullDecodeStatus: decodePolicy.status,
+        fullDecodeEstimatedBytes: decodePolicy.estimatedBytes,
+        fullDecodeLimitBytes: decodePolicy.limitBytes,
+      });
+      callbacksRef.current.onPhaseChange('error');
+      callbacksRef.current.onError(error);
+      return;
+    }
     const route = resolveRasterRendererRoute({
       webgl2Available: !!pipeline,
       maxTextureSize: pipeline?.renderer.maxTextureSize,
@@ -542,6 +615,8 @@ export function WebGLRasterStage({
           : rasterFallbackReason(pipelineErrorRef.current) ?? 'webgl2-unavailable',
         pipeline ? resourceKey : undefined,
         naturalSize,
+        pipeline?.currentContextStatus ?? 'healthy',
+        displayDecodeSource,
       );
       callbacksRef.current.onPhaseChange('loading');
       return;
@@ -557,6 +632,7 @@ export function WebGLRasterStage({
         resourceKey,
         naturalSize,
         pipeline.currentContextStatus,
+        displayDecodeSource,
       );
       callbacksRef.current.onPhaseChange('restoring');
       return;
@@ -578,7 +654,7 @@ export function WebGLRasterStage({
     } else {
       callbacksRef.current.onPhaseChange('loading');
     }
-    if (previewSource && !residentBrowse) {
+    if (previewSource && !residentBrowse && !originalDecodeBlocked) {
       void pipeline.prepare(resourceKey, previewSource, 'preview', naturalSize, 80)
         .then((preview) => {
           if (generationRef.current !== generation) return;
@@ -598,7 +674,7 @@ export function WebGLRasterStage({
       callbacksRef.current.onPhaseChange('display-ready');
       return;
     }
-    void pipeline.prepare(resourceKey, source, 'display', naturalSize, 100, screenBox)
+    void pipeline.prepare(resourceKey, displaySource, 'display', naturalSize, 100, screenBox)
       .then((display) => {
         if (generationRef.current !== generation) return;
         displayReadyGenerationRef.current = generation;
@@ -611,6 +687,7 @@ export function WebGLRasterStage({
           resourceKey,
           { width: display.naturalWidth, height: display.naturalHeight },
           pipeline.currentContextStatus,
+          displayDecodeSource,
         );
         pipeline.cache.protect(retentionKeysRef.current);
         pipeline.release(resourceKey + '|preview');
@@ -624,7 +701,28 @@ export function WebGLRasterStage({
         if (isAbortError(cause)) return;
         const fallbackReason = rasterFallbackReason(cause);
         if (fallbackReason) {
-          activateFallback(fallbackReason, resourceKey, naturalSize);
+          const fallbackSize = rasterFallbackNaturalSize(cause) ?? naturalSize;
+          const fallbackPolicy = resolveRasterFullDecodePolicy(
+            fallbackSize,
+            fullDecodeMaxBytes,
+          );
+          if (fallbackPolicy.status === 'blocked' && !previewSource) {
+            const error = new Error(
+              `Raster fallback requires a Preview because original decode exceeds ` +
+              `${fallbackPolicy.limitBytes} bytes`,
+            );
+            error.name = 'RasterDecodeSafetyError';
+            callbacksRef.current.onPhaseChange('error');
+            callbacksRef.current.onError(error);
+            return;
+          }
+          activateFallback(
+            fallbackReason,
+            resourceKey,
+            fallbackSize,
+            pipeline.currentContextStatus,
+            fallbackPolicy.status === 'blocked' ? 'preview' : displayDecodeSource,
+          );
           return;
         }
         const error = cause instanceof Error ? cause : new Error(String(cause));
@@ -642,9 +740,11 @@ export function WebGLRasterStage({
     contextGeneration,
     decodeWorkers,
     decodeWorkerMax,
+    fullDecodeMaxBytes,
     activeFallback,
     activateFallback,
     publishWebGLFastPath,
+    publishRendererState,
   ]);
 
   useEffect(() => {
@@ -790,10 +890,21 @@ export function WebGLRasterStage({
           'loading',
           quality === 'display' ? 'screen' : 'browse',
         );
+        const decodePolicy = resolveRasterFullDecodePolicy(
+          item.knownSize,
+          fullDecodeMaxBytes,
+        );
+        const preloadSource = decodePolicy.status === 'blocked'
+          ? item.previewSource
+          : item.source;
+        if (!preloadSource) {
+          preloadCallbackRef.current?.(item, 'error');
+          continue;
+        }
         try {
           await pipeline.prepare(
             item.resourceKey,
-            item.source,
+            preloadSource,
             quality,
             item.knownSize,
             item.priority,
@@ -827,6 +938,7 @@ export function WebGLRasterStage({
     retentionKeys,
     contextGeneration,
     activeFallback,
+    fullDecodeMaxBytes,
   ]);
 
   useLayoutEffect(() => {
@@ -878,6 +990,17 @@ export function WebGLRasterStage({
     entry &&
     (entry.resourceKey === resourceKey || entry.resourceKey === resourceKey + '|preview')
   );
+  const fallbackNaturalSize = activeFallback?.naturalSize ?? (knownWidth && knownHeight
+    ? { width: knownWidth, height: knownHeight }
+    : entry && entry.resourceKey === resourceKey
+      ? { width: entry.naturalWidth, height: entry.naturalHeight }
+      : undefined);
+  const fallbackDecodePolicy = resolveRasterFullDecodePolicy(
+    fallbackNaturalSize,
+    fullDecodeMaxBytes,
+  );
+  const fallbackUsesPreview = fallbackDecodePolicy.status === 'blocked' && !!previewSource;
+  const fallbackSource = fallbackUsesPreview ? previewSource : source;
   useLayoutEffect(() => {
     const host = hostRef.current;
     if (!host) return;
@@ -917,10 +1040,11 @@ export function WebGLRasterStage({
         data-rip-raster-canvas=""
         style={{ display: 'block', width: '100%', height: '100%' }}
       />
-      {active && activeFallback && source ? (
+      {active && activeFallback && fallbackSource ? (
         <RasterFallbackViewer
           key={resourceKey}
-          source={source}
+          source={fallbackSource}
+          naturalSize={fallbackUsesPreview ? fallbackNaturalSize : undefined}
           alt=""
           transform={transform}
           onDimensions={onDimensions}

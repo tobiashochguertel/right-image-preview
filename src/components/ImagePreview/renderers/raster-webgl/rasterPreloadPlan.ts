@@ -1,7 +1,12 @@
 import { resolveMediaKind } from '../../core/media-kind';
 import type { MediaSource } from '../../core/media-source';
 import type { ImageItem } from '../../types';
-import { fitRasterToScreenLod, scaleRasterLodBox, type RasterSize } from './rasterLod';
+import {
+  capRasterSizeToEdge,
+  fitRasterToScreenLod,
+  scaleRasterLodBox,
+  type RasterSize,
+} from './rasterLod';
 
 export type RasterPreloadRange = number | 'auto';
 
@@ -12,6 +17,7 @@ export const RASTER_SCREEN_BACKWARD_MIN = 2;
 export interface RasterPreloadSource {
   resourceKey: string;
   source: MediaSource;
+  previewSource?: MediaSource;
   flatIndex?: number;
   knownSize?: RasterSize;
   side: 'forward' | 'backward';
@@ -61,6 +67,7 @@ export interface RasterPreloadPlanOptions {
   direction: 1 | -1;
   range: RasterPreloadRange;
   maxCount: number;
+  allowPreviewSource?: boolean;
 }
 
 /** Builds a direction-aware candidate pool. LOD and retained count are decided later by the viewport planner. */
@@ -70,10 +77,17 @@ export function buildRasterPreloadPlan({
   direction,
   range,
   maxCount,
+  allowPreviewSource = true,
 }: RasterPreloadPlanOptions): RasterPreloadSource[] {
   if (range === 0 || maxCount <= 0 || images.length <= 1) return [];
   if (range === 'auto') {
-    return buildAutoPlan(images, currentIndex, direction, Math.max(1, Math.floor(maxCount)));
+    return buildAutoPlan(
+      images,
+      currentIndex,
+      direction,
+      Math.max(1, Math.floor(maxCount)),
+      allowPreviewSource,
+    );
   }
   const distanceLimit = Math.max(0, Math.floor(range));
   const result: RasterPreloadSource[] = [];
@@ -87,6 +101,7 @@ export function buildRasterPreloadPlan({
         index,
         index === forwardIndex ? 'forward' : 'backward',
         distance,
+        allowPreviewSource,
       );
       if (candidate) result.push(candidate);
       if (result.length >= maxCount) return result;
@@ -100,6 +115,7 @@ function buildAutoPlan(
   currentIndex: number,
   direction: 1 | -1,
   maxCount: number,
+  allowPreviewSource: boolean,
 ): RasterPreloadSource[] {
   const forward: RasterPreloadSource[] = [];
   const backward: RasterPreloadSource[] = [];
@@ -117,7 +133,13 @@ function buildAutoPlan(
       if (index < 0 || index >= images.length) {
         forwardDone = true;
       } else {
-        const ahead = toRasterPreloadSource(images, index, 'forward', distance);
+        const ahead = toRasterPreloadSource(
+          images,
+          index,
+          'forward',
+          distance,
+          allowPreviewSource,
+        );
         if (ahead) forward.push(ahead);
         if (forward.length >= maxCount) forwardDone = true;
       }
@@ -127,7 +149,13 @@ function buildAutoPlan(
       if (index < 0 || index >= images.length) {
         backwardDone = true;
       } else {
-        const behind = toRasterPreloadSource(images, index, 'backward', distance);
+        const behind = toRasterPreloadSource(
+          images,
+          index,
+          'backward',
+          distance,
+          allowPreviewSource,
+        );
         if (behind) backward.push(behind);
         if (backward.length >= maxCount) backwardDone = true;
       }
@@ -162,6 +190,7 @@ function toRasterPreloadSource(
   index: number,
   side: RasterPreloadSource['side'],
   distance: number,
+  allowPreviewSource: boolean,
 ): RasterPreloadSource | undefined {
   const item = images[index];
   if (!item) return undefined;
@@ -172,6 +201,11 @@ function toRasterPreloadSource(
   return {
     resourceKey: item.id ?? item.src,
     source: item.source ?? { type: 'url', href: item.src },
+    previewSource: allowPreviewSource
+      ? item.minimapSource ?? (item.minimapSrc
+          ? { type: 'url', href: item.minimapSrc }
+          : undefined)
+      : undefined,
     flatIndex: index,
     side,
     distance,
@@ -200,10 +234,10 @@ export function planRasterNeighborLods({
   entries: RasterPlannedPreload[];
   snapshot: RasterPreloadPlanSnapshot;
 } {
-  const screenBox = {
+  const screenBox = capRasterSizeToEdge({
     width: Math.max(1, Math.round(viewport.width * viewport.dpr)),
     height: Math.max(1, Math.round(viewport.height * viewport.dpr)),
-  };
+  });
   const browseBox = scaleRasterLodBox(screenBox);
   const budgetLeft = Math.max(0, Math.floor(budgetBytes - reservedBytes));
   const costs = new Map(candidates.map((candidate) => [candidate.resourceKey, {

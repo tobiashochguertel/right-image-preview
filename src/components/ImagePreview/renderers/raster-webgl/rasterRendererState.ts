@@ -1,3 +1,5 @@
+import type { RasterFullDecodeStatus } from './rasterLod';
+
 export const RASTER_SAFE_TEXTURE_EDGE_RATIO = 0.9;
 
 export type RasterRendererKind = 'webgl2' | 'dom-image';
@@ -14,6 +16,7 @@ export type RasterFallbackReason =
   | 'texture-invalid';
 
 export type RasterContextStatus = 'healthy' | 'lost' | 'restored' | 'restore-failed';
+export type RasterDecodeSourceKind = 'original' | 'preview';
 
 export interface RasterRendererState {
   resourceKey?: string;
@@ -26,6 +29,10 @@ export interface RasterRendererState {
   sourceWidth?: number;
   sourceHeight?: number;
   contextStatus: RasterContextStatus;
+  decodeSource?: RasterDecodeSourceKind;
+  fullDecodeStatus?: RasterFullDecodeStatus;
+  fullDecodeEstimatedBytes?: number;
+  fullDecodeLimitBytes?: number;
 }
 
 export interface RasterRendererRouteInput {
@@ -69,13 +76,26 @@ export function resolveRasterRendererRoute(
 export class RasterRendererFallbackError extends Error {
   readonly reason: RasterFallbackReason;
   readonly cause?: unknown;
+  readonly naturalSize?: { width: number; height: number };
 
-  constructor(reason: RasterFallbackReason, message: string, cause?: unknown) {
+  constructor(
+    reason: RasterFallbackReason,
+    message: string,
+    cause?: unknown,
+    naturalSize?: { width: number; height: number },
+  ) {
     super(message);
     this.name = 'RasterRendererFallbackError';
     this.reason = reason;
     this.cause = cause;
+    this.naturalSize = naturalSize;
   }
+}
+
+export function rasterFallbackNaturalSize(
+  cause: unknown,
+): { width: number; height: number } | undefined {
+  return cause instanceof RasterRendererFallbackError ? cause.naturalSize : undefined;
 }
 
 export function rasterFallbackReason(cause: unknown): RasterFallbackReason | null {

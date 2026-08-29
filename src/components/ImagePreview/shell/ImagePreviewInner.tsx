@@ -168,6 +168,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       holdRepeatDelayMs = NAV_HOLD_REPEAT_DELAY_MS,
       holdMinVisibleMs = NAV_HOLD_MIN_VISIBLE_MS,
       fullResolutionSettleMs,
+      rasterFullDecodeMaxBytes,
       preloadMemoryBudgetBytes,
       rasterDecodeWorkers,
       rasterDecodeWorkerMax,
@@ -486,6 +487,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
         direction: rasterPreloadDirection,
         range: preloadRadius,
         maxCount: preloadMaxCount,
+        allowPreviewSource: progressiveMain,
       }).map((item) => ({
         ...item,
         knownSize: item.knownSize ?? rasterKnownSizes[item.resourceKey],
@@ -497,6 +499,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
       images,
       rasterPreloadDirection,
       rasterKnownSizes,
+      progressiveMain,
     ]);
     const rasterIndexByResourceKey = useMemo(() => {
       const index = new Map<string, number>();
@@ -1148,6 +1151,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
               rasterPreloadPaused={isPanning || minimapDragging}
               rasterFullResolutionPaused={holdingDirection != null}
               rasterFullResolutionSettleMs={fullResolutionSettleMs}
+              rasterFullDecodeMaxBytes={rasterFullDecodeMaxBytes}
               textureBudgetBytes={preloadMemoryBudgetBytes}
               decodeWorkers={rasterDecodeWorkers}
               decodeWorkerMax={rasterDecodeWorkerMax}

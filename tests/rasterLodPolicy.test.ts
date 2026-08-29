@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  RASTER_FULL_DECODE_MAX_BYTES,
+  RASTER_PREVIEW_MAX_EDGE,
+  capRasterSizeToEdge,
   fitRasterToScreenLod,
   needsRasterFullResolution,
+  resolveRasterFullDecodePolicy,
 } from '../src/components/ImagePreview/renderers/raster-webgl/rasterLod';
 import { readRasterNaturalSize } from '../src/components/ImagePreview/renderers/raster-webgl/rasterDimensions';
 import {
@@ -25,6 +29,37 @@ describe('Raster LOD policy', () => {
       width: 1200,
       height: 800,
     });
+  });
+
+  it('caps Screen and Browse-sized work at the 4096px Preview edge', () => {
+    expect(fitRasterToScreenLod(12_000, 8000, 7680, 4320)).toEqual({
+      width: 4096,
+      height: 2731,
+    });
+    expect(capRasterSizeToEdge({ width: 7680, height: 4320 })).toEqual({
+      width: RASTER_PREVIEW_MAX_EDGE,
+      height: 2304,
+    });
+  });
+
+  it('blocks Full decode above 1 GiB without allocating a bitmap', () => {
+    expect(resolveRasterFullDecodePolicy({ width: 16_384, height: 16_384 }))
+      .toMatchObject({
+        status: 'eligible',
+        allowed: true,
+        estimatedBytes: RASTER_FULL_DECODE_MAX_BYTES,
+      });
+    expect(resolveRasterFullDecodePolicy({ width: 16_385, height: 16_384 }))
+      .toMatchObject({
+        status: 'blocked',
+        allowed: false,
+        estimatedBytes: RASTER_FULL_DECODE_MAX_BYTES + 65_536,
+      });
+    expect(resolveRasterFullDecodePolicy({ width: Number.MAX_VALUE, height: 100 }))
+      .toMatchObject({
+        status: 'blocked',
+        estimatedBytes: Number.MAX_SAFE_INTEGER,
+      });
   });
 
   it('promotes to Full only after zoom outgrows the Screen texture', () => {

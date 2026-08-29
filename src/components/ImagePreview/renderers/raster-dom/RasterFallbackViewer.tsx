@@ -5,11 +5,22 @@ import type { MediaStageTransformProps } from '../media-stage-types';
 export interface RasterFallbackViewerProps extends MediaStageTransformProps {
   source: MediaSource;
   alt: string;
+  /** Full-image dimensions retained when `source` is a bounded Preview. */
+  naturalSize?: { width: number; height: number };
 }
 
 /** Native browser Raster fallback used only when the WebGL2 route is unsafe. */
 export function RasterFallbackViewer(props: RasterFallbackViewerProps) {
-  const { source, alt, transform, onDimensions, onPhaseChange, onError, onPresented } = props;
+  const {
+    source,
+    alt,
+    naturalSize,
+    transform,
+    onDimensions,
+    onPhaseChange,
+    onError,
+    onPresented,
+  } = props;
   const href = useMediaSourceUrl(source);
   return (
     <div data-rip-raster-fallback="" style={stageStyle}>
@@ -18,7 +29,10 @@ export function RasterFallbackViewer(props: RasterFallbackViewerProps) {
         alt={alt}
         draggable={false}
         onLoad={(event) => {
-          onDimensions(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight);
+          onDimensions(
+            naturalSize?.width ?? event.currentTarget.naturalWidth,
+            naturalSize?.height ?? event.currentTarget.naturalHeight,
+          );
           onPhaseChange('display-ready');
           onPresented();
         }}
@@ -27,6 +41,8 @@ export function RasterFallbackViewer(props: RasterFallbackViewerProps) {
           display: 'block',
           maxWidth: 'none',
           maxHeight: 'none',
+          width: naturalSize?.width,
+          height: naturalSize?.height,
           transform: transform.cssTransform,
           transformOrigin: 'center center',
         }}

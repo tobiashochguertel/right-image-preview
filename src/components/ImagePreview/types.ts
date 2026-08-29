@@ -539,6 +539,13 @@ export interface ImagePreviewProps {
   fullResolutionSettleMs?: number;
 
   /**
+   * Maximum estimated natural RGBA8 bytes allowed for an original Full decode.
+   * Larger known images stay on `minimapSource`/`minimapSrc`; without one they
+   * fail safely instead of probing memory with a bitmap allocation. Default: `1 GiB`.
+   */
+  rasterFullDecodeMaxBytes?: number;
+
+  /**
    * GPU texture-cache byte budget. The current Raster texture is protected; neighbors are
    * evicted by preload priority and then approximate LRU. When omitted, a physical-display
    * heuristic uses 192/256/384/512/768 MiB tiers (4K = 512 MiB).

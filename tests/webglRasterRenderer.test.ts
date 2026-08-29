@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { WebGLRasterRenderer } from '../src/components/ImagePreview/renderers/raster-webgl/WebGLRasterRenderer';
-import { RasterRendererFallbackError } from '../src/components/ImagePreview/renderers/raster-webgl/rasterRendererState';
 import type { RasterTextureEntry } from '../src/components/ImagePreview/renderers/raster-webgl/types';
 
 describe('WebGLRasterRenderer texture binding safety', () => {
@@ -79,7 +78,7 @@ describe('WebGLRasterRenderer texture binding safety', () => {
     const renderer = rendererWith(gl);
 
     await expect(renderer.upload({ width: 1, height: 1 } as ImageBitmap)).rejects
-      .toEqual(expect.objectContaining<RasterRendererFallbackError>({
+      .toEqual(expect.objectContaining({
         reason: 'texture-create-failed',
       }));
   });
@@ -115,7 +114,7 @@ describe('WebGLRasterRenderer texture binding safety', () => {
     const renderer = rendererWith(gl);
 
     await expect(renderer.upload({ width: 1, height: 1 } as ImageBitmap)).rejects
-      .toEqual(expect.objectContaining<RasterRendererFallbackError>({
+      .toEqual(expect.objectContaining({
         reason: 'texture-upload-failed',
       }));
     expect(gl.deleteTexture).toHaveBeenCalledWith(texture);
@@ -151,7 +150,7 @@ describe('WebGLRasterRenderer texture binding safety', () => {
     const renderer = rendererWith(gl);
 
     await expect(renderer.upload({ width: 1, height: 1 } as ImageBitmap)).rejects
-      .toEqual(expect.objectContaining<RasterRendererFallbackError>({
+      .toEqual(expect.objectContaining({
         reason: 'texture-upload-failed',
       }));
     expect(gl.deleteTexture).toHaveBeenCalledWith(texture);

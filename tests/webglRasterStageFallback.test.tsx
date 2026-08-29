@@ -171,6 +171,114 @@ describe('WebGLRasterStage safe fallback', () => {
       fallbackReason: 'texture-upload-failed',
     }));
   });
+
+  it('uses only the bounded Preview in DOM fallback when original RGBA exceeds 1 GiB', async () => {
+    const pipeline = new FakeRasterPipeline();
+    const onDimensions = vi.fn();
+    const onRendererStateChange = vi.fn();
+    const view = render(
+      <WebGLRasterStage
+        active
+        resourceKey="huge"
+        source={{ type: 'url', href: '/huge.jpg' }}
+        previewSource={{ type: 'url', href: '/huge-preview.jpg' }}
+        knownSize={{ width: 20_000, height: 20_000 }}
+        transform={transform}
+        onDimensions={onDimensions}
+        onPhaseChange={vi.fn()}
+        onError={vi.fn()}
+        onPresented={vi.fn()}
+        onRendererStateChange={onRendererStateChange}
+        createPipeline={() => pipeline as unknown as RasterPipeline}
+      />,
+    );
+
+    const fallback = await waitFor(() => {
+      const image = view.container.querySelector<HTMLImageElement>(
+        '[data-rip-raster-fallback] img',
+      );
+      expect(image).not.toBeNull();
+      return image!;
+    });
+    expect(fallback.getAttribute('src')).toBe('/huge-preview.jpg');
+    expect(fallback.style.width).toBe('20000px');
+    expect(fallback.style.height).toBe('20000px');
+    fireEvent.load(fallback);
+    expect(onDimensions).toHaveBeenCalledWith(20_000, 20_000);
+    expect(onRendererStateChange).toHaveBeenCalledWith(expect.objectContaining({
+      renderer: 'dom-image',
+      decodeSource: 'preview',
+      fullDecodeStatus: 'blocked',
+      fullDecodeEstimatedBytes: 1_600_000_000,
+    }));
+    expect(pipeline.prepareCalls).toHaveLength(0);
+  });
+
+  it('fails safely without reading an oversized original when no Preview exists', async () => {
+    const pipeline = new FakeRasterPipeline();
+    const onError = vi.fn();
+    const view = render(
+      <WebGLRasterStage
+        active
+        resourceKey="huge-without-preview"
+        source={{ type: 'url', href: '/never-read.jpg' }}
+        knownSize={{ width: 20_000, height: 20_000 }}
+        transform={transform}
+        onDimensions={vi.fn()}
+        onPhaseChange={vi.fn()}
+        onError={onError}
+        onPresented={vi.fn()}
+        createPipeline={() => pipeline as unknown as RasterPipeline}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'RasterDecodeSafetyError',
+      }));
+    });
+    expect(view.container.querySelector('[data-rip-raster-fallback] img')).toBeNull();
+    expect(pipeline.prepareCalls).toHaveLength(0);
+  });
+
+  it('keeps WebGL but decodes only Preview when a within-edge original exceeds 1 GiB', async () => {
+    const pipeline = new FakeRasterPipeline();
+    pipeline.renderer.maxTextureSize = 32_768;
+    const onRendererStateChange = vi.fn();
+    render(
+      <WebGLRasterStage
+        active
+        resourceKey="large-square"
+        source={{ type: 'url', href: '/large-square.jpg' }}
+        previewSource={{ type: 'url', href: '/large-square-preview.jpg' }}
+        knownSize={{ width: 17_000, height: 17_000 }}
+        fullResolutionSettleMs={0}
+        transform={transform}
+        onDimensions={vi.fn()}
+        onPhaseChange={vi.fn()}
+        onError={vi.fn()}
+        onPresented={vi.fn()}
+        onRendererStateChange={onRendererStateChange}
+        createPipeline={() => pipeline as unknown as RasterPipeline}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(pipeline.prepareCalls).toHaveLength(1);
+    });
+    expect(pipeline.prepareCalls[0]).toMatchObject({
+      resourceKey: 'large-square',
+      source: { type: 'url', href: '/large-square-preview.jpg' },
+      quality: 'display',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(pipeline.prepareCalls).toHaveLength(1);
+    expect(onRendererStateChange).toHaveBeenCalledWith(expect.objectContaining({
+      renderer: 'webgl2',
+      decodeSource: 'preview',
+      fullDecodeStatus: 'blocked',
+    }));
+  });
 });
 
 class FakeRasterPipeline {
@@ -179,8 +287,12 @@ class FakeRasterPipeline {
   currentContextStatus: 'healthy' | 'lost' | 'restored' = 'healthy';
   private listener: (() => void) | undefined;
   private entry: RasterTextureEntry | null = null;
+  readonly prepareCalls: Array<{ resourceKey: string; source: unknown; quality: string }> = [];
+  private readonly prepareFailure?: Error;
 
-  constructor(private readonly prepareFailure?: Error) {}
+  constructor(prepareFailure?: Error) {
+    this.prepareFailure = prepareFailure;
+  }
 
   renderer = {
     maxTextureSize: 8192,
@@ -231,9 +343,15 @@ class FakeRasterPipeline {
     };
   }
 
-  prepare(resourceKey: string) {
+  prepare(
+    resourceKey: string,
+    source: unknown,
+    quality: string,
+    naturalSize?: { width: number; height: number },
+  ) {
+    this.prepareCalls.push({ resourceKey, source, quality });
     if (this.prepareFailure) return Promise.reject(this.prepareFailure);
-    this.entry = rasterEntry(resourceKey);
+    this.entry = rasterEntry(resourceKey, naturalSize);
     return Promise.resolve(this.entry);
   }
 
@@ -253,7 +371,10 @@ class FakeRasterPipeline {
   dispose() {}
 }
 
-function rasterEntry(resourceKey: string): RasterTextureEntry {
+function rasterEntry(
+  resourceKey: string,
+  naturalSize: { width: number; height: number } = { width: 800, height: 600 },
+): RasterTextureEntry {
   return {
     key: resourceKey + '|display',
     resourceKey,
@@ -261,8 +382,8 @@ function rasterEntry(resourceKey: string): RasterTextureEntry {
     texture: {} as WebGLTexture,
     textureWidth: 800,
     textureHeight: 600,
-    naturalWidth: 800,
-    naturalHeight: 600,
+    naturalWidth: naturalSize.width,
+    naturalHeight: naturalSize.height,
     estimatedBytes: 800 * 600 * 4,
     lastUsedAt: 0,
     readyAt: 0,

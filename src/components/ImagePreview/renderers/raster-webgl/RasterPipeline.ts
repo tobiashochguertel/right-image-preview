@@ -9,7 +9,13 @@ import { WebGLRasterRenderer } from './WebGLRasterRenderer';
 import type { RasterTextureEntry, RasterTextureQuality } from './types';
 import { PriorityTaskQueue } from './PriorityTaskQueue';
 import { readRasterNaturalSize } from './rasterDimensions';
-import { fitRasterToScreenLod, type RasterSize } from './rasterLod';
+import {
+  RASTER_FULL_DECODE_MAX_BYTES,
+  fitRasterToScreenLod,
+  normalizeRasterFullDecodeMaxBytes,
+  resolveRasterFullDecodePolicy,
+  type RasterSize,
+} from './rasterLod';
 import { RASTER_TEXTURE_BUDGET_4K_BYTES } from './rasterMemoryBudget';
 import {
   RasterDecodeWorkerPool,
@@ -56,6 +62,22 @@ export interface RasterPipelineOptions {
   decodeWorkerMax?: number;
   /** Test/host injection point; normal consumers use the Worker settings above. */
   decodePool?: RasterDecodeWorkerPool;
+  fullDecodeMaxBytes?: number;
+}
+
+export class RasterFullDecodeBlockedError extends Error {
+  readonly estimatedBytes: number;
+  readonly limitBytes: number;
+
+  constructor(
+    estimatedBytes: number,
+    limitBytes: number,
+  ) {
+    super(`Raster Full decode requires ${estimatedBytes} bytes, exceeding ${limitBytes}`);
+    this.name = 'RasterFullDecodeBlockedError';
+    this.estimatedBytes = estimatedBytes;
+    this.limitBytes = limitBytes;
+  }
 }
 
 interface RasterSchedulingState {
@@ -98,6 +120,7 @@ export class RasterPipeline {
   private displayBox: RasterSize | null = null;
   private activeResourceKey: string | undefined;
   private requestSequence = 0;
+  private readonly fullDecodeMaxBytes: number;
 
   constructor(
     renderer: WebGLRasterRenderer,
@@ -110,6 +133,9 @@ export class RasterPipeline {
       workers: options.decodeWorkers,
       maxWorkers: options.decodeWorkerMax,
     } satisfies RasterDecodeWorkerPoolOptions);
+    this.fullDecodeMaxBytes = normalizeRasterFullDecodeMaxBytes(
+      options.fullDecodeMaxBytes ?? RASTER_FULL_DECODE_MAX_BYTES,
+    );
     this.unsubscribeContext = renderer.subscribeContext((event) => {
       if (event === 'lost') {
         this.contextLost = true;
@@ -377,6 +403,18 @@ export class RasterPipeline {
       ? undefined
       : await readRasterNaturalSize(blob).catch(() => undefined);
     let resolvedNaturalSize = naturalSize ?? headerSize;
+    if (quality === 'full' && resolvedNaturalSize) {
+      const decodePolicy = resolveRasterFullDecodePolicy(
+        resolvedNaturalSize,
+        this.fullDecodeMaxBytes,
+      );
+      if (!decodePolicy.allowed) {
+        throw new RasterFullDecodeBlockedError(
+          decodePolicy.estimatedBytes ?? Number.MAX_SAFE_INTEGER,
+          decodePolicy.limitBytes,
+        );
+      }
+    }
     if (resolvedNaturalSize && quality !== 'preview') {
       const route = resolveRasterRendererRoute({
         webgl2Available: true,
@@ -388,6 +426,8 @@ export class RasterPipeline {
         throw new RasterRendererFallbackError(
           route.fallbackReason ?? 'texture-too-large',
           `Raster dimensions exceed the safe WebGL texture edge (${route.safeTextureSize ?? 0}px)`,
+          undefined,
+          resolvedNaturalSize,
         );
       }
     }
@@ -454,6 +494,8 @@ export class RasterPipeline {
         throw new RasterRendererFallbackError(
           route.fallbackReason ?? 'texture-too-large',
           `Raster dimensions exceed the safe WebGL texture edge (${route.safeTextureSize ?? 0}px)`,
+          undefined,
+          resolvedNaturalSize,
         );
       }
     }
