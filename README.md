@@ -163,8 +163,10 @@ See [rendering architecture](./docs/rendering-architecture.md) for host integrat
 | `fitMaxNativePercent` | `number` | none (uncapped) | Cap for Fit / contain, as native %. `100` keeps small images at actual size; omit to allow CSS-contain upscaling |
 | `fullscreen` | `FullscreenAdapter` | — | Host-owned fullscreen state and enter/exit actions; takes priority over browser Fullscreen API |
 | `onFullscreenError` | `(error: unknown) => void` | — | Receives unavailable/rejected/unconfirmed browser fullscreen and host-adapter failures |
+| `shiftArrowAction` | `'pan' \| 'rotate'` | `'pan'` | Shift + Arrow pans by default; `'rotate'` keeps Shift + Left/Right as 90° rotation |
 | `rasterDecodeWorkers` | `number \| 'auto'` | `'auto'` | Dedicated Raster decode Workers; auto selects a conservative 1–3 from logical CPU concurrency |
 | `rasterDecodeWorkerMax` | `number` | `3` | Safety cap for decode concurrency; >80MP sources still decode exclusively |
+| `rasterFullDecodeMaxBytes` | `number` | `1 GiB` | Cap estimated natural RGBA8 bytes for original Full decode; oversized known images stay on the minimap |
 | `onRasterRendererStateChange` | `(state: RasterRendererState) => void` | — | Reports WebGL2/DOM renderer selection, capability values, fallback reason, and context lost/restored state |
 | `onThumbnailVisibleIndexesChange` | `(indexes: number[]) => void` | — | Flat indexes actually mounted by the virtual strip; hosts can generate only this window |
 | `firstZoomInStrategy` | `'above-fit' \| 'first-stop' \| 'hundred'` | `'above-fit'` | Which stop to land on when zooming in from Fit for the first time |

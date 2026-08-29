@@ -11,6 +11,20 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ---
 
+## [0.6.0] — 2026-08-29
+
+### Added
+
+- **`shiftArrowAction`** — Shift + Arrow defaults to four/eight-direction pan (`'pan'`). Set `'rotate'` to keep Shift + Left/Right as 90° rotation while Up/Down still zoom. Ctrl/Command + Arrow always pans and wins when both modifiers are held. Also exports the `ShiftArrowAction` type.
+- **`rasterFullDecodeMaxBytes`** — estimated natural RGBA8 byte cap for original Full decode (default 1 GiB). Known images over the cap stay on `minimapSource` / `minimapSrc`, or fail safely, instead of probing with a bitmap allocation. Also exports `RASTER_FULL_DECODE_MAX_BYTES`, `resolveRasterFullDecodePolicy`, `normalizeRasterFullDecodeMaxBytes`, and related types.
+
+### Fixed
+
+- **Decode Worker bounds the bitmap before allocation** — oversized decode jobs are rejected in the worker instead of building a full ImageBitmap working set.
+- **Hover tooltips on obvious chrome** — close, prev/next, rotate, zoom ±, and flip no longer show delayed hover copy; remaining tips are short. Empty tooltip strings skip the tooltip; screen-reader `aria-label`s are unchanged.
+
+---
+
 ## [0.5.0] — 2026-08-29
 
 ### Added

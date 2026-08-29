@@ -163,8 +163,10 @@ import { ImagePreview } from 'right-image-preview';
 | `fitMaxNativePercent` | `number` | 无上限 | Fit / contain 的上限（按 native %）。`100` 表示小图保持 1:1，不铺满窗口；省略则允许 CSS contain 放大 |
 | `fullscreen` | `FullscreenAdapter` | — | 宿主拥有的全屏状态与进出动作；优先于浏览器 Fullscreen API |
 | `onFullscreenError` | `(error: unknown) => void` | — | 浏览器 API 缺失/拒绝/状态未确认及宿主适配器失败的错误回调 |
+| `shiftArrowAction` | `'pan' \| 'rotate'` | `'pan'` | Shift + 方向键默认平移；`'rotate'` 时左右键仍为 90° 旋转 |
 | `rasterDecodeWorkers` | `number \| 'auto'` | `'auto'` | Raster 专用解码 Worker 数；auto 按逻辑 CPU 并发保守选择 1–3 |
 | `rasterDecodeWorkerMax` | `number` | `3` | 解码并发安全上限；超过 8000 万像素的来源仍独占解码 |
+| `rasterFullDecodeMaxBytes` | `number` | `1 GiB` | 原图 Full decode 的预估自然 RGBA8 字节上限；超限已知尺寸图留在缩略图路径 |
 | `onRasterRendererStateChange` | `(state: RasterRendererState) => void` | — | 回报 WebGL2/DOM renderer、能力值、fallback 原因及 context lost/restored 状态 |
 | `onThumbnailVisibleIndexesChange` | `(indexes: number[]) => void` | — | 底片虚拟列表实际挂载下标；宿主可只生成这批缩略图 |
 | `firstZoomInStrategy` | `'above-fit' \| 'first-stop' \| 'hundred'` | `'above-fit'` | 从 Fit 首次放大时的入档策略 |
