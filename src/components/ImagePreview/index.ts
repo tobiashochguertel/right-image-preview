@@ -28,6 +28,7 @@ export type {
   NeighborPreloadStatusMap,
   PresentationMode,
   RasterDecodeWorkerSetting,
+  ShiftArrowAction,
   ThumbnailsScope,
   WheelStrategy,
   ZoomInAtMaxBehaviour,

@@ -217,6 +217,9 @@ export type ThumbnailsScope = 'group' | 'flat';
  */
 export type PresentationMode = 'overlay' | 'contained';
 
+/** Behaviour of Shift + Arrow keyboard shortcuts. Default: `'pan'`. */
+export type ShiftArrowAction = 'pan' | 'rotate';
+
 /**
  * Chrome density for chrome controls (toolbar, side arrows, close, strip).
  *
@@ -488,6 +491,15 @@ export interface ImagePreviewProps {
    * See {@link PresentationMode}.
    */
   presentation?: PresentationMode;
+
+  /**
+   * Behaviour of Shift + Arrow shortcuts. Default: `'pan'`.
+   * - `'pan'`: all four arrows pan toward that part of the image.
+   * - `'rotate'`: Shift + Left/Right rotate 90° counter-clockwise/clockwise;
+   *   Shift + Up/Down keep their normal zoom behaviour.
+   * Ctrl/Command + Arrow always pans and takes precedence when both modifiers are held.
+   */
+  shiftArrowAction?: ShiftArrowAction;
 
   /**
    * Raster texture warm-up range. `'auto'` walks outward in navigation-priority order and

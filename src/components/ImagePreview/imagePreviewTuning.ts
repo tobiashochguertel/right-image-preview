@@ -44,10 +44,10 @@ export const MINIMAP_PAN_MIN_VIEWPORT_COVERAGE =
 export const ZOOM_CLAMP_MIN_VIEWPORT_COVERAGE = MAIN_DRAG_MIN_VIEWPORT_COVERAGE;
 
 /**
- * Keyboard pan step in native mode: each `Shift + Arrow` moves by this fraction of the
- * current viewport's shorter side (width/height).
+ * Keyboard pan step in native mode: each `Ctrl/Command + Arrow` (or legacy
+ * `Shift + Arrow`) moves by this fraction of the current viewport's shorter side.
  */
-export const KEYBOARD_PAN_STEP_VIEWPORT_FRACTION = 0.08;
+export const KEYBOARD_PAN_STEP_VIEWPORT_FRACTION = 0.15;
 
 // ── Wheel zoom (`ImagePreview` overlay) ──────────────────────────────────────
 
