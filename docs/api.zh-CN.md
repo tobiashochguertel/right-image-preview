@@ -66,6 +66,7 @@
 | `fullscreen` | `FullscreenAdapter` | — | 宿主拥有的全屏适配器；传入后它是唯一状态来源并优先于浏览器 API |
 | `onFullscreenError` | `(error: unknown) => void` | — | 宿主适配器错误，以及浏览器 API 缺失、拒绝或状态未确认时调用 |
 | `presentation` | `'overlay' \| 'contained'` | `'overlay'` | `overlay` 全屏对话框；`contained` 填满已定位宿主 |
+| `shiftArrowAction` | `'pan' \| 'rotate'` | `'pan'` | `Shift + 方向键` 的行为；`pan` 为四/八方向平移，`rotate` 时左右键分别逆/顺时针旋转，上下键仍缩放。`Ctrl/Command + 方向键` 始终优先执行平移。 |
 | `preloadRadius` | `number \| 'auto'` | `'auto'` | `'auto'` 按导航优先级向外逐张准入，直到 GPU 预算满；数字为扁平下标硬半径；`0` 关闭 |
 | `preloadMaxCount` | `number` | `128` | auto 候选安全上限；实际驻留数量由上传后的 texture 字节数与预算决定 |
 | `holdRepeatDelayMs` | `number` | `NAV_HOLD_REPEAT_DELAY_MS`（300） | ←/→ 按下时第一张仍立即切换；只有持续按住达到此时长后，才允许第一次自动续播。它与每张图片的最短展示时长互相独立。 |
@@ -193,6 +194,7 @@ interface DefaultGroupedSelection {
 }
 
 type ArrowsConfig = 'both' | 'side' | 'toolbar' | 'none';
+type ShiftArrowAction = 'pan' | 'rotate';
 
 interface ZoomState {
   mode: 'fit' | 'native';

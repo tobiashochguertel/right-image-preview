@@ -66,6 +66,7 @@
 | `fullscreen` | `FullscreenAdapter` | — | Host-owned fullscreen adapter. When present it is the sole fullscreen state source and takes priority over the browser API |
 | `onFullscreenError` | `(error: unknown) => void` | — | Called for host-adapter errors and unavailable, rejected, or unconfirmed browser fullscreen actions |
 | `presentation` | `'overlay' \| 'contained'` | `'overlay'` | `overlay` fullscreen dialog; `contained` fills a positioned host |
+| `shiftArrowAction` | `'pan' \| 'rotate'` | `'pan'` | Behaviour of `Shift + Arrow`: `pan` enables four/eight-direction panning; with `rotate`, Left/Right rotate counter-clockwise/clockwise while Up/Down still zoom. `Ctrl/Command + Arrow` always takes precedence and pans. |
 | `preloadRadius` | `number \| 'auto'` | `'auto'` | `'auto'` walks outward by navigation priority and admits textures until the GPU budget is full; a number is a hard flat-index radius; `0` disables |
 | `preloadMaxCount` | `number` | `128` | Safety ceiling for auto candidates; actual resident count is decided by uploaded texture bytes and budget |
 | `holdRepeatDelayMs` | `number` | `NAV_HOLD_REPEAT_DELAY_MS` (300) | The first ←/→ step remains immediate; the first automatic continuation is allowed only after the press has remained held for this long. Independent from the per-image dwell. |
@@ -193,6 +194,7 @@ interface DefaultGroupedSelection {
 }
 
 type ArrowsConfig = 'both' | 'side' | 'toolbar' | 'none';
+type ShiftArrowAction = 'pan' | 'rotate';
 
 interface ZoomState {
   mode: 'fit' | 'native';
