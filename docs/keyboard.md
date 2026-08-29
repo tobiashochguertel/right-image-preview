@@ -31,12 +31,18 @@ With **`presentation="contained"`**, shortcuts are handled only while focus is i
 | `PageUp` | Jump to first image of the previous group (requires non-empty `groupedImages`) |
 | `PageDown` | Jump to first image of the next group (requires non-empty `groupedImages`) |
 
-## Rotation
+## Pan
 
 | Key | Action |
 |-----|--------|
-| `Ctrl / ⌘` + `←` | Rotate 90° counter-clockwise |
-| `Ctrl / ⌘` + `→` | Rotate 90° clockwise |
+| `Ctrl / ⌘` + `Arrow key` | Pan toward that part of the image by 15% of the viewport's shorter side |
+| `Shift` + `Arrow key` | Controlled by `shiftArrowAction`; pans by default |
+
+> Arrow keys indicate the area to reveal. For example, `Ctrl / ⌘` + `→` reveals content to the right. Direction state strictly follows the keys that are actually held: perpendicular arrows combine into normalized 45° diagonal panning, releasing either one immediately restores the remaining cardinal direction, and opposite directions cancel on their axis. Panning is available only in Native mode and stops at the image boundary.
+
+> **macOS limitation:** Some browsers may omit arrow `keyup` events while Command remains held, so a web page cannot reliably observe the true released state. Keep the default `shiftArrowAction="pan"` and use right-side `Shift + Arrow key` when strict, continuous game-style eight-direction input is required. `Ctrl + Arrow key` on Windows/Linux is not affected by this macOS limitation.
+
+With `shiftArrowAction="rotate"`, `Shift + ←` rotates 90° counter-clockwise and `Shift + →` rotates 90° clockwise; `Shift + ↑/↓` retain their normal zoom actions. Toolbar rotation remains available in either mode.
 
 ## Close
 

@@ -288,8 +288,8 @@ interface ImagePreviewRef {
 | `1` | Native 100 % |
 | `Space` | Toggle Fit ↔ 100 % |
 | `←` / `→` | Previous / next image |
-| `Ctrl/⌘ + ←` | Rotate 90° counter-clockwise |
-| `Ctrl/⌘ + →` | Rotate 90° clockwise |
+| `Ctrl/⌘ + Arrow key` | Pan toward that part of the image (15% of the viewport's shorter side) |
+| `Shift + Arrow key` | Controlled by `shiftArrowAction`; pans by default, or Left/Right rotate when set to `rotate` |
 | `PageUp` | Jump to first image of the previous group (non-empty `groupedImages`) |
 | `PageDown` | Jump to first image of the next group (non-empty `groupedImages`) |
 

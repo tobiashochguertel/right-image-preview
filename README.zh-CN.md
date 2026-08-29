@@ -288,8 +288,8 @@ interface ImagePreviewRef {
 | `1` | 原图 100% |
 | `Space` | 切换 Fit ↔ 100% |
 | `←` / `→` | 上一张 / 下一张 |
-| `Ctrl/⌘ + ←` | 逆时针旋转 90° |
-| `Ctrl/⌘ + →` | 顺时针旋转 90° |
+| `Ctrl/⌘ + 方向键` | 向对应方向平移视野（步长为视口较短边的 15%） |
+| `Shift + 方向键` | 由 `shiftArrowAction` 决定，默认平移；设为 `rotate` 时左右键旋转 |
 | `PageUp` | 跳到上一组第一张（需非空 `groupedImages`） |
 | `PageDown` | 跳到下一组第一张（需非空 `groupedImages`） |
 
