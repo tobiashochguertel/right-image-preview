@@ -255,7 +255,7 @@ export default function App() {
             display: 'flex',
             flexDirection: 'column',
             gap: 8,
-            maxWidth: 560,
+            maxWidth: 640,
           }}
         >
           {t.opsRows.map(([key, desc]) => (
@@ -274,7 +274,8 @@ export default function App() {
               <span
                 style={{
                   flex: '0 0 auto',
-                  minWidth: 120,
+                  minWidth: 168,
+                  whiteSpace: 'nowrap',
                   fontSize: 12,
                   fontWeight: 600,
                   color: '#9db0d8',
@@ -324,7 +325,7 @@ export default function App() {
 
       <hr style={dividerStyle} />
 
-      {/* Demo 3: full `src` + `minimapSrc` from COS; progressive load */}
+      {/* Demo 3: Wikimedia Commons `src` + `minimapSrc` (CORS-enabled for WebGL fetch) */}
       <Demo3HighRes t={t} locale={locale} previewLanguage={previewLanguage} />
 
       <hr style={dividerStyle} />
@@ -337,13 +338,9 @@ export default function App() {
       {/* Demo 5: contained workspace + flat strip + neighbor preload */}
       <Demo5ContainedWorkspace t={t} previewLanguage={previewLanguage} />
 
-      {import.meta.env.DEV && (
-        <>
-          <hr style={dividerStyle} />
-          {/* Demo 6: local 20–30MB JPGs — progressive underlay vs display-ready */}
-          <Demo6LocalLarge t={t} previewLanguage={previewLanguage} />
-        </>
-      )}
+      <hr style={dividerStyle} />
+      {/* Demo 6: remote Wikimedia set by default; local ./test-images via toggle */}
+      <Demo6LocalLarge t={t} previewLanguage={previewLanguage} />
     </div>
   );
 }

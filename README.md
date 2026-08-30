@@ -41,7 +41,7 @@ This project is public, open-source, and free under the MIT License. Stable rele
 | **Minimap source per item** | Each **`ImageItem`** (and single-**`src`** mode) can set **`minimapSrc`** / **`minimap`** so the map uses a lighter tile or custom node; defaults to the main **`src`** |
 | **Touch pinch-to-zoom** | Two-finger pinch/spread for continuous zoom; anchor follows the midpoint between fingers; disable with **`pinchEnabled`** |
 | **Localized toolbar** | **`language`** prop with built-in **English** and **Simplified Chinese** (`en`, `zh`, `zh-CN`, …); override individual strings with **`strings`** |
-| **Rich keyboard shortcuts** | Esc · +/- · arrow keys · Space · PageUp/Down · Ctrl+arrow |
+| **Rich keyboard shortcuts** | Esc · +/- · arrow keys · Space · PageUp/Down · Ctrl/⌘+arrow pan · Shift+arrow pan (or rotate) |
 | **Accessibility** | Overlay: `role="dialog"` + `aria-modal` with focus management; `presentation="contained"`: `role="region"` (not page-modal), keyboard only while the preview is focused. Controls use `aria-label` |
 | **TypeScript first** | Full type exports, `forwardRef` imperative ref API |
 | **Zero production dependencies** | Only requires React |
@@ -66,12 +66,14 @@ npm test
 npm run build     # Vite production build of the demo
 ```
 
-Open `http://localhost:5173` for the demo page (**EN / 中文** toggle in the top-right):
+Open `http://localhost:5173/right-image-preview/` for the demo page (**EN / 中文** toggle in the top-right):
+- **Demo 0** — trigger mode: a single child opens the preview (uncontrolled)
 - **Demo 1** — single gallery, close-on-mask-click, no flip buttons
 - **Demo 2** — folder groups, side arrows, flip buttons
-- **Demo 3** — thumbnail-first progressive loading (small `minimapSrc` preview, then full image; wheel / pan stress test; assets from demo CDN)
+- **Demo 3** — thumbnail-first progressive loading from Wikimedia Commons (`minimapSrc` then full `src`; needs CORS for the WebGL `fetch`)
 - **Demo 4** — host-provided EXIF + delete
 - **Demo 5** — contained workspace + flat strip + neighbor preload + minimal chrome
+- **Demo 6** — preload lab: Wikimedia CORS JPEGs (~1280–1920px) by default; switch to local `./test-images` when running `npm run dev`
 
 ---
 
@@ -166,7 +168,7 @@ See [rendering architecture](./docs/rendering-architecture.md) for host integrat
 | `shiftArrowAction` | `'pan' \| 'rotate'` | `'pan'` | Shift + Arrow pans by default; `'rotate'` keeps Shift + Left/Right as 90° rotation |
 | `rasterDecodeWorkers` | `number \| 'auto'` | `'auto'` | Dedicated Raster decode Workers; auto selects a conservative 1–3 from logical CPU concurrency |
 | `rasterDecodeWorkerMax` | `number` | `3` | Safety cap for decode concurrency; >80MP sources still decode exclusively |
-| `rasterFullDecodeMaxBytes` | `number` | `1 GiB` | Cap estimated natural RGBA8 bytes for original Full decode; oversized known images stay on the minimap |
+| `rasterFullDecodeMaxBytes` | `number` | `1 GiB` | Cap estimated natural RGBA8 bytes for original Full decode; oversized known images stay on the minimap and show a persistent notice |
 | `onRasterRendererStateChange` | `(state: RasterRendererState) => void` | — | Reports WebGL2/DOM renderer selection, capability values, fallback reason, and context lost/restored state |
 | `onThumbnailVisibleIndexesChange` | `(indexes: number[]) => void` | — | Flat indexes actually mounted by the virtual strip; hosts can generate only this window |
 | `firstZoomInStrategy` | `'above-fit' \| 'first-stop' \| 'hundred'` | `'above-fit'` | Which stop to land on when zooming in from Fit for the first time |
@@ -326,6 +328,10 @@ src/
     index.ts                   # Public exports
   App.tsx                      # Demo shell
   demos/                       # Demo sections + demo-only copy (not published to npm)
+test-images/                   # gitignored local rasters for Demo 6 (`npm run dev` only)
+scripts/
+  localTestImages.ts           # Recursive Demo 6 file listing / optional thumbs
+  generate-test-image-thumbs.sh
 docs/
   main-display-flow.md / .zh-CN.md  # Main display & navigation flow (thumb then original)
   api.md / api.zh-CN.md        # Full API reference

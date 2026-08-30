@@ -37,15 +37,26 @@ export function RasterFallbackViewer(props: RasterFallbackViewerProps) {
           onPresented();
         }}
         onError={() => onError(new Error('Unable to load Raster fallback source'))}
-        style={{
-          display: 'block',
-          maxWidth: 'none',
-          maxHeight: 'none',
-          width: naturalSize?.width,
-          height: naturalSize?.height,
-          transform: transform.cssTransform,
-          transformOrigin: 'center center',
-        }}
+        style={
+          naturalSize && (naturalSize.width > 8192 || naturalSize.height > 8192)
+            ? {
+                display: 'block',
+                maxWidth: '100%',
+                maxHeight: '100%',
+                width: 'auto',
+                height: 'auto',
+                objectFit: 'contain',
+              }
+            : {
+                display: 'block',
+                maxWidth: 'none',
+                maxHeight: 'none',
+                width: naturalSize?.width,
+                height: naturalSize?.height,
+                transform: transform.cssTransform,
+                transformOrigin: 'center center',
+              }
+        }
       />
     </div>
   );

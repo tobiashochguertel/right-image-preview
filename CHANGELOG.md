@@ -11,6 +11,27 @@ Versioning follows [Semantic Versioning](https://semver.org/) (see `README.md` f
 
 ---
 
+## [0.6.1] — 2026-08-30
+
+### Added
+
+- **Original-too-large notice** — when known `exif.width`/`height` push estimated RGBA over `rasterFullDecodeMaxBytes` and a `minimapSrc` is present, the main stage stays on the thumbnail and shows a persistent banner (EN/ZH; override `strings.originalTooLargeNotice`). `onMainImageLoadStageChange` reports `'thumb-only'`.
+
+### Fixed
+
+- **DOM Raster fallback** — sources whose natural edge exceeds 8192 CSS px use `object-fit: contain` instead of a full-natural-pixel layout box.
+- **WebGL prepare failure** — if a Preview source exists, fall back to it instead of blanking the stage.
+
+### Changed
+
+- **Bundle budget** — size-limit moves from 49 kB to 50 kB gzip; the release bundle measures 49.12 kB. The increase is the original-too-large notice, locale copy, and DOM fallback contain path.
+- **Demo 3** loads Wikimedia Commons originals (CORS `*`) instead of Tencent COS copies that omitted `Access-Control-Allow-Origin`, which left the overlay blank while grid `<img>` thumbs still worked.
+- **Demo 6** lists Wikimedia Commons JPEGs (~1280–1920px, CORS) by default so the public demo can measure network preload. A **Remote / Local** switch still uses nested files under `./test-images` in `npm run dev`. Nested local files no longer require a matching `thumbs/` pair.
+- **Demo 3 / Demo 6 Wikimedia thumbs** — stop requesting 500px Commons derivatives (they 400 for some files, including North America Nebula). Demo 6 grid thumbs use 120px with a fallback to the 1280–1920px `src`. Demo 3’s North America overlay progressive layer uses the 1280px derivative that actually loads.
+- **Demo “How to use it”** — documents `⌘ / Ctrl + Arrow` pan and `Shift + Arrow` pan (or rotate).
+
+---
+
 ## [0.6.0] — 2026-08-29
 
 ### Added

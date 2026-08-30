@@ -24,6 +24,7 @@ export const enStrings: LocaleStrings = {
   toolbar: 'Image preview toolbar',
   close: 'Close (Esc)',
   loadingImage: 'Loading image',
+  originalTooLargeNotice: 'Original is too large to decode. Showing the thumbnail.',
   minimapNav: 'Navigation minimap',
   thumbnailsNav: 'Image thumbnails',
   thumbStripItem: (index, total) => `Image ${index} of ${total}`,

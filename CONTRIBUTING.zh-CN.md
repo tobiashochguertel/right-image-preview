@@ -35,6 +35,7 @@
    ```bash
    npm run dev
    ```
+   打开 `http://localhost:5173/right-image-preview/`。**Demo 6** 默认用 Wikimedia 图；切到**本地**后把 JPG/PNG/WebP 放进 gitignored 的 `./test-images`（含子目录）。
 4. 运行测试，确认一切正常：
    ```bash
    npm test

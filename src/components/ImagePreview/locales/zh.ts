@@ -24,6 +24,7 @@ export const zhStrings: LocaleStrings = {
   toolbar: '图片预览工具栏',
   close: '关闭 (Esc)',
   loadingImage: '图片加载中',
+  originalTooLargeNotice: '原图太大，只能显示缩略图。',
   minimapNav: '导航缩略图',
   thumbnailsNav: '缩略图导航',
   thumbStripItem: (index, total) => `第 ${index} 张，共 ${total} 张`,

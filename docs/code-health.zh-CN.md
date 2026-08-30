@@ -31,7 +31,7 @@
 ### 1.5 其它
 
 - **`flattenGroupedImages` 在 dev 下 `console.warn`**：合理，属唯一库内 warn。
-- **Demo 3 资源策略**：大图与渐进用缩略图均走作者提供的 COS（新加坡）；著作权与原件说明仍以 Commons 页面为准。
+- **Demo 3 资源策略**：大图与渐进用缩略图走 Wikimedia Commons（`Access-Control-Allow-Origin: *`）。著作权与原件说明仍以 Commons 页面为准。WebGL 用 `fetch`，没有 CORS 的图床会出现「网格缩略图能显示、预览一直空白」。
 - **自动化测试**：对 Minimap、渐进图、滚轮路径覆盖偏薄，大改时防回归压力较大。
 
 ---
@@ -55,7 +55,7 @@
 - **DelayedTooltip**：评估改为「wrapper + portal」或小型 headless 方案，减少对 `cloneElement` 的依赖。
 - **设计 token**：可选 `tokens.ts` 供 Toolbar 与 demo 共用（或明确「demo 不保证与库视觉一致」）。
 - **补充测试**：渐进加载、分组键盘边界、滚轮聚合一类场景。
-- **Demo 资源**：README 已说明 Demo 3 依赖外链大图与本地 thumb；fork 后需联网。
+- **Demo 资源**：Demo 3 依赖 Wikimedia 大图（需联网且图床支持 CORS）；Demo 6 默认同一图床的 1280–1920px 图集，本地 `./test-images` 通过页面开关使用。
 
 ---
 

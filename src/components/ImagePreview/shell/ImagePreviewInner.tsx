@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { Minimap, MINIMAP_BOTTOM } from '../Minimap';
 import { ImagePreviewCloseButton } from '../parts/ImagePreviewCloseButton';
+import { OriginalTooLargeNotice } from '../parts/OriginalTooLargeNotice';
 import { ExifInfoPanel } from '../parts/ExifInfoPanel';
 import { ThumbnailsStrip } from '../parts/ThumbnailsStrip';
 import { ImagePreviewNavArrow } from '../parts/ImagePreviewNavArrow';
@@ -27,6 +28,7 @@ import type { RasterRuntimeSnapshot } from '../renderers/raster-webgl/RasterPipe
 import { buildRasterPreloadPlan } from '../renderers/raster-webgl/rasterPreloadPlan';
 import { MediaStage } from '../renderers/MediaStage';
 import { mediaCapabilitiesForKind } from '../renderers/media-capabilities';
+import { resolveRasterFullDecodePolicy } from '../renderers/raster-webgl/rasterLod';
 import {
   KEYBOARD_PAN_STEP_VIEWPORT_FRACTION,
   NAV_HOLD_REPEAT_DELAY_MS,
@@ -62,6 +64,13 @@ import { resolveFitMaxScale, useImageTransform } from '../useImageTransform';
 import { usePinchZoom } from '../usePinchZoom';
 import { useWheelZoom } from '../useWheelZoom';
 import { useZoomState } from '../useZoomState';
+
+function rasterKnownSizeFromExif(exif: ImagePreviewProps['exif']): { width: number; height: number } | undefined {
+  const width = Number(exif?.width);
+  const height = Number(exif?.height);
+  if (width > 0 && height > 0) return { width, height };
+  return undefined;
+}
 
 function sameNeighborPreloadEntry(
   left: NeighborPreloadEntry | undefined,
@@ -475,6 +484,13 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
         : undefined,
       [currentImage.minimapSource, currentImage.minimapSrc, progressiveMain],
     );
+    const originalTooLargeThumbOnly = useMemo(() => {
+      if (!rasterPreviewSource) return false;
+      return resolveRasterFullDecodePolicy(
+        rasterKnownSizeFromExif(currentImage.exif),
+        rasterFullDecodeMaxBytes,
+      ).status === 'blocked';
+    }, [rasterPreviewSource, currentImage.exif, rasterFullDecodeMaxBytes]);
     const [rasterKnownSizes, setRasterKnownSizes] = useState<Readonly<Record<string, {
       width: number;
       height: number;
@@ -1162,14 +1178,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
               alt={currentImage.alt ?? ''}
               label={currentImage.name ?? currentImage.src}
               transform={transform}
-              knownSize={
-                Number(currentImage.exif?.width) > 0 && Number(currentImage.exif?.height) > 0
-                  ? {
-                      width: Number(currentImage.exif?.width),
-                      height: Number(currentImage.exif?.height),
-                    }
-                  : undefined
-              }
+              knownSize={rasterKnownSizeFromExif(currentImage.exif)}
               onDimensions={(width, height) => {
                 onImageLoad({ naturalWidth: width, naturalHeight: height });
               }}
@@ -1181,7 +1190,7 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
                     : phase === 'preview-ready'
                       ? 'thumbnail-placeholder'
                       : phase === 'display-ready'
-                        ? 'full-ready'
+                        ? (originalTooLargeThumbOnly ? 'thumb-only' : 'full-ready')
                         : 'preloading',
                 );
               }}
@@ -1245,6 +1254,10 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
               label={t.close}
               tip={t.tipClose}
             />
+
+            {originalTooLargeThumbOnly && t.originalTooLargeNotice ? (
+              <OriginalTooLargeNotice message={t.originalTooLargeNotice} />
+            ) : null}
 
             {showMinimap && currentMediaCapabilities.minimap && imageDims && containerSize && (
               <Minimap

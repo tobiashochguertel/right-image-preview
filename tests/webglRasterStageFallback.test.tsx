@@ -201,8 +201,9 @@ describe('WebGLRasterStage safe fallback', () => {
       return image!;
     });
     expect(fallback.getAttribute('src')).toBe('/huge-preview.jpg');
-    expect(fallback.style.width).toBe('20000px');
-    expect(fallback.style.height).toBe('20000px');
+    expect(fallback.style.width).toBe('auto');
+    expect(fallback.style.height).toBe('auto');
+    expect(fallback.style.objectFit).toBe('contain');
     fireEvent.load(fallback);
     expect(onDimensions).toHaveBeenCalledWith(20_000, 20_000);
     expect(onRendererStateChange).toHaveBeenCalledWith(expect.objectContaining({

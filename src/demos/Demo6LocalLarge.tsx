@@ -10,12 +10,12 @@ import {
 } from '../components/ImagePreview';
 import { gridStyle, sectionDescStyle, sectionHeadStyle } from './demoStyles';
 import type { DemoStrings } from './demoLocale';
+import { demoRemotePreloadItems } from './demoRemotePreloadSources';
 import { ThumbCard } from './shared';
 
 /**
- * Dev-only gallery backed by gitignored `./test-images` (+ `thumbs/`).
- * Filenames are discovered at runtime via middleware — nothing private is hardcoded
- * or shipped in the published demo / git history.
+ * Preload lab: Wikimedia CORS JPEGs by default (works on GitHub Pages), plus optional
+ * gitignored `./test-images` for local large-file tests (`npm run dev`).
  */
 const MANIFEST_URL = '/__local_test_images__/manifest.json';
 
@@ -25,6 +25,7 @@ const DEMO6_SIDEBAR_W = 300;
 const DEMO6_HISTORY_MAX_H = 120;
 const DEMO6_CONSOLE_SAMPLE_DELAY_MS = 800;
 
+type Demo6Source = 'remote' | 'local';
 type NavPath = 'fast-reveal' | 'cold';
 
 interface NavTiming {
@@ -69,10 +70,15 @@ export function Demo6LocalLarge({
   t: DemoStrings;
   previewLanguage: string;
 }) {
-  const [images, setImages] = useState<ImageItem[]>([]);
+  const remoteImages = useMemo(
+    () => demoRemotePreloadItems(previewLanguage.startsWith('zh') ? 'zh' : 'en'),
+    [previewLanguage],
+  );
+  const [sourceMode, setSourceMode] = useState<Demo6Source>('remote');
+  const [localImages, setLocalImages] = useState<ImageItem[]>([]);
   const [index, setIndex] = useState(0);
   const [open, setOpen] = useState(true);
-  const [available, setAvailable] = useState<boolean | null>(null);
+  const [localAvailable, setLocalAvailable] = useState<boolean | null>(null);
   /** When off: no display-ready pool — every ←/→ is cold progressive (easier A/B). */
   const [slotsOn, setSlotsOn] = useState(true);
   const [preloadStatus, setPreloadStatus] = useState<NeighborPreloadStatusMap>({});
@@ -110,19 +116,31 @@ export function Demo6LocalLarge({
           alt: row.name,
           name: row.name,
         }));
-        setImages(list);
-        setAvailable(list.length > 0);
+        setLocalImages(list);
+        setLocalAvailable(list.length > 0);
       })
       .catch(() => {
         if (!cancelled) {
-          setImages([]);
-          setAvailable(false);
+          setLocalImages([]);
+          setLocalAvailable(false);
         }
       });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  const images = sourceMode === 'remote' ? remoteImages : localImages;
+
+  useEffect(() => {
+    setIndex(0);
+    indexRef.current = 0;
+    setPreloadStatus({});
+    setLodPlan(null);
+    setHistory([]);
+    setLastTiming(null);
+    lastScheduledDiagnosticIndexRef.current = null;
+  }, [sourceMode]);
 
   // Probe natural size for display-ready / current (cache hit → dims without product API).
   useEffect(() => {
@@ -139,6 +157,7 @@ export function Demo6LocalLarge({
       if (dimBySrc[src] || dimProbeRef.current.has(src)) continue;
       dimProbeRef.current.add(src);
       const img = new Image();
+      img.referrerPolicy = 'no-referrer';
       img.onload = () => {
         if (img.naturalWidth > 0 && img.naturalHeight > 0) {
           setDimBySrc((prev) =>
@@ -296,7 +315,7 @@ export function Demo6LocalLarge({
   }, [diagnosticSnapshot]);
 
   useEffect(() => {
-    if (!import.meta.env.DEV || available !== true || images.length === 0) return;
+    if (!import.meta.env.DEV || images.length === 0) return;
     if (lastScheduledDiagnosticIndexRef.current === index) return;
     lastScheduledDiagnosticIndexRef.current = index;
     const requestedIndex = index;
@@ -316,16 +335,12 @@ export function Demo6LocalLarge({
       );
     }, DEMO6_CONSOLE_SAMPLE_DELAY_MS);
     diagnosticTimersRef.current.add(timer);
-  }, [available, images.length, index]);
+  }, [images.length, index]);
 
   useEffect(() => () => {
     diagnosticTimersRef.current.forEach((timer) => window.clearTimeout(timer));
     diagnosticTimersRef.current.clear();
   }, []);
-
-  if (!import.meta.env.DEV) {
-    return null;
-  }
 
   const currentPhase = preloadStatus[index]?.phase ?? '—';
   const nextPhase = preloadStatus[index + 1]?.phase ?? '—';
@@ -356,11 +371,44 @@ export function Demo6LocalLarge({
       <h2 style={sectionHeadStyle}>{t.demo6Title}</h2>
       <p style={sectionDescStyle}>{t.demo6Desc}</p>
 
-      {available === false && (
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: 8,
+          margin: '0 0 14px',
+        }}
+      >
+        {(['remote', 'local'] as const).map((mode) => {
+          const active = sourceMode === mode;
+          return (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setSourceMode(mode)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 8,
+                border: active ? '1px solid rgba(88,101,242,0.7)' : '1px solid rgba(255,255,255,0.12)',
+                background: active ? 'rgba(88,101,242,0.28)' : 'rgba(18,21,30,0.6)',
+                color: active ? '#e8ecf8' : '#9aa3b5',
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: active ? 650 : 500,
+              }}
+            >
+              {mode === 'remote' ? t.demo6SourceRemote : t.demo6SourceLocal}
+            </button>
+          );
+        })}
+      </div>
+
+      {sourceMode === 'local' && localAvailable === false && (
         <p style={{ ...sectionDescStyle, color: '#e8a0a0' }}>{t.demo6Missing}</p>
       )}
 
-      {available === true && images.length > 0 && (
+      {images.length > 0 && (
         <>
           <div
             style={{
@@ -387,6 +435,7 @@ export function Demo6LocalLarge({
               <ThumbCard
                 key={img.src}
                 src={img.minimapSrc ?? img.src}
+                fallbackSrc={img.minimapSrc && img.minimapSrc !== img.src ? img.src : undefined}
                 alt={img.alt ?? ''}
                 label={img.name ?? img.alt ?? ''}
                 ariaLabel={t.thumbAria(img.name ?? img.alt ?? '')}
@@ -706,6 +755,7 @@ export function Demo6LocalLarge({
             >
               {open ? (
                 <ImagePreview
+                  key={sourceMode}
                   presentation="contained"
                   images={images}
                   visible

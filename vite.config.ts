@@ -4,13 +4,19 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+import {
+  listLocalTestImages,
+  mimeForImageFilename,
+  resolveLocalTestOriginal,
+  resolveLocalTestThumb,
+} from './scripts/localTestImages'
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
 const testImagesDir = path.join(rootDir, 'test-images')
 const MOUNT = '/__local_test_images__'
 
 /**
- * Dev-only static serve of `./test-images` (large local JPGs for Demo 6).
+ * Dev-only static serve of `./test-images` (any nested JPG/PNG/WebP for Demo 6).
  * Not copied into the GitHub Pages build. Never commit `test-images/` (gitignored).
  */
 function serveLocalTestImages(): Plugin {
@@ -26,24 +32,11 @@ function serveLocalTestImages(): Plugin {
         const rel = decodeURIComponent(url.slice(MOUNT.length).replace(/^\//, ''))
 
         if (rel === 'manifest.json') {
-          if (!fs.existsSync(testImagesDir)) {
-            res.statusCode = 404
-            res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({ images: [] }))
-            return
-          }
-          const thumbsDir = path.join(testImagesDir, 'thumbs')
-          const names = fs
-            .readdirSync(testImagesDir)
-            .filter((n) => /\.(jpe?g|png|webp)$/i.test(n) && fs.statSync(path.join(testImagesDir, n)).isFile())
-            .sort()
-          const images = names
-            .filter((n) => fs.existsSync(path.join(thumbsDir, n)))
-            .map((n) => ({
-              name: n,
-              src: `${MOUNT}/${encodeURIComponent(n)}`,
-              minimapSrc: `${MOUNT}/thumbs/${encodeURIComponent(n)}`,
-            }))
+          const images = listLocalTestImages(testImagesDir, MOUNT).map(({ name, src, minimapSrc }) => ({
+            name,
+            src,
+            minimapSrc,
+          }))
           res.statusCode = 200
           res.setHeader('Content-Type', 'application/json')
           res.setHeader('Cache-Control', 'no-store')
@@ -56,21 +49,26 @@ function serveLocalTestImages(): Plugin {
           res.end('bad path')
           return
         }
-        const filePath = path.join(testImagesDir, rel)
-        if (!filePath.startsWith(testImagesDir) || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+        const isThumb = rel === 'thumbs' || rel.startsWith('thumbs/')
+        const imageRel = rel.replace(/^thumbs\/?/, '')
+        const filePath = isThumb
+          ? resolveLocalTestThumb(testImagesDir, imageRel)
+          : resolveLocalTestOriginal(testImagesDir, rel)
+        if (!filePath) {
           res.statusCode = 404
           res.end('not found')
           return
         }
+        const contentType = mimeForImageFilename(filePath)
         if (req.method === 'HEAD') {
           res.statusCode = 200
-          res.setHeader('Content-Type', 'image/jpeg')
+          res.setHeader('Content-Type', contentType)
           res.setHeader('Cache-Control', 'no-store')
           res.end()
           return
         }
         res.statusCode = 200
-        res.setHeader('Content-Type', 'image/jpeg')
+        res.setHeader('Content-Type', contentType)
         res.setHeader('Cache-Control', 'no-store')
         fs.createReadStream(filePath).pipe(res)
       })

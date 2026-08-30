@@ -35,6 +35,7 @@ Please be respectful and constructive in all interactions. We follow the standar
    ```bash
    npm run dev
    ```
+   Open `http://localhost:5173/right-image-preview/`. **Demo 6** defaults to Wikimedia images. Switch to **Local** and put JPG/PNG/WebP under gitignored `./test-images` (nested folders are fine).
 4. Run the test suite to confirm everything is working:
    ```bash
    npm test

@@ -29,6 +29,11 @@ export interface LocaleStrings {
   toolbar: string;
   close: string;
   loadingImage: string;
+  /**
+   * Banner when the original exceeds {@link ImagePreviewProps.rasterFullDecodeMaxBytes}
+   * and the main stage stays on `minimapSrc` / `minimapSource`.
+   */
+  originalTooLargeNotice: string;
   /** Minimap landmark (aria). */
   minimapNav: string;
   /** Classic thumbnail strip landmark (aria). */

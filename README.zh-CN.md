@@ -41,7 +41,7 @@
 | **小地图独立图源** | 每条 **`ImageItem`**（及单图 **`src`** 模式）可设 **`minimapSrc`** / **`minimap`**，用小缩略图或自定义节点；默认仍用主图 **`src`** |
 | **触控双指捏合缩放** | 双指捏合/展开实现连续缩放；缩放锚点跟随双指中点；可用 **`pinchEnabled`** 关闭 |
 | **界面语言** | **`language`** 内置 **英文**与**简体中文**（`en`、`zh`、`zh-CN` 等）；可用 **`strings`** 覆盖任意文案 |
-| **丰富的键盘快捷键** | Esc / ±方向键 / Space / PageUp-Down / Ctrl+方向键 |
+| **丰富的键盘快捷键** | Esc / ±方向键 / Space / PageUp-Down / Ctrl+方向键平移 / Shift+方向键平移（或旋转） |
 | **可访问性** | Overlay：`role="dialog"` + `aria-modal` 与焦点管理；`presentation="contained"`：`role="region"`（非整页模态），仅预览聚焦时响应键盘。控件带 `aria-label` |
 | **TypeScript 一等类型** | 完整类型导出，`forwardRef` 支持命令式 ref API |
 | **零生产依赖** | 仅依赖 React，无任何第三方 UI 库 |
@@ -66,12 +66,14 @@ npm test
 npm run build     # 演示站的 Vite 生产构建
 ```
 
-浏览器访问 `http://localhost:5173`，页面**右上角**可切换 **EN / 中文**：
+浏览器访问 `http://localhost:5173/right-image-preview/`，页面**右上角**可切换 **EN / 中文**：
+- **Demo 0**：触发器模式，单个子节点打开预览（非受控）
 - **Demo 1**：单组相册，点击遮罩关闭，无翻转按钮
 - **Demo 2**：多文件夹分组，侧边箭头，含翻转按钮
-- **Demo 3**：先小图占位、再载入全图（渐进加载；滚轮/平移；演示资源走 CDN）
+- **Demo 3**：先小图占位、再载入全图（Wikimedia Commons；WebGL 用 `fetch`，需要 CORS）
 - **Demo 4**：宿主 EXIF + 删除
 - **Demo 5**：嵌入式工作区 + 扁平缩略图条 + 相邻预加载 + minimal chrome
+- **Demo 6**：预加载实验室。默认 Wikimedia（约 1280–1920px，带 CORS）；`npm run dev` 时可切到本地 `./test-images`
 
 ---
 
@@ -166,7 +168,7 @@ import { ImagePreview } from 'right-image-preview';
 | `shiftArrowAction` | `'pan' \| 'rotate'` | `'pan'` | Shift + 方向键默认平移；`'rotate'` 时左右键仍为 90° 旋转 |
 | `rasterDecodeWorkers` | `number \| 'auto'` | `'auto'` | Raster 专用解码 Worker 数；auto 按逻辑 CPU 并发保守选择 1–3 |
 | `rasterDecodeWorkerMax` | `number` | `3` | 解码并发安全上限；超过 8000 万像素的来源仍独占解码 |
-| `rasterFullDecodeMaxBytes` | `number` | `1 GiB` | 原图 Full decode 的预估自然 RGBA8 字节上限；超限已知尺寸图留在缩略图路径 |
+| `rasterFullDecodeMaxBytes` | `number` | `1 GiB` | 原图 Full decode 的预估自然 RGBA8 字节上限；超限已知尺寸图留在缩略图路径并显示常驻说明 |
 | `onRasterRendererStateChange` | `(state: RasterRendererState) => void` | — | 回报 WebGL2/DOM renderer、能力值、fallback 原因及 context lost/restored 状态 |
 | `onThumbnailVisibleIndexesChange` | `(indexes: number[]) => void` | — | 底片虚拟列表实际挂载下标；宿主可只生成这批缩略图 |
 | `firstZoomInStrategy` | `'above-fit' \| 'first-stop' \| 'hundred'` | `'above-fit'` | 从 Fit 首次放大时的入档策略 |
@@ -326,6 +328,10 @@ src/
     index.ts                   # 公开导出
   App.tsx                      # 演示页外壳
   demos/                       # 各 Demo 与演示站文案（不打进 npm 包）
+test-images/                   # gitignored 本地图，仅 Demo 6（`npm run dev`）
+scripts/
+  localTestImages.ts           # Demo 6 递归列目录 / 按需缩略图
+  generate-test-image-thumbs.sh
 docs/
   main-display-flow.zh-CN.md / .md   # 主图显示与切图主流程（先缩略再原图）
   api.md / api.zh-CN.md              # Props & Ref API 参考

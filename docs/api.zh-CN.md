@@ -72,7 +72,7 @@
 | `holdRepeatDelayMs` | `number` | `NAV_HOLD_REPEAT_DELAY_MS`（300） | ←/→ 按下时第一张仍立即切换；只有持续按住达到此时长后，才允许第一次自动续播。它与每张图片的最短展示时长互相独立。 |
 | `holdMinVisibleMs` | `number` | `NAV_HOLD_MIN_VISIBLE_MS`（200） | 自动续播时，每张需由当前 renderer 回报主区域**已呈现**，再实际展示满此时长，且仍按住才切下一张。仅有布局尺寸、下载完成或 decode 完成都不计时。松开取消唯一的定时器，**不堆积**步进；`0` 表示呈现后下一事件循环即可继续。 |
 | `fullResolutionSettleMs` | `number` | `300` | 当前 Raster 的缩放需求超过 Screen LOD 后，停稳多久才开始 Full LOD。继续导航或仍在长按会取消；`0` 表示需求出现后立即后台升级。只升级当前张；Fit 状态不会仅因后台停留而完整解码。 |
-| `rasterFullDecodeMaxBytes` | `number` | `1 GiB` | 原图 Full decode 的预估自然 RGBA8 字节上限。超过上限的已知尺寸图留在 `minimapSource` / `minimapSrc`；没有缩略图时安全失败，而不是用完整 bitmap 探测内存。 |
+| `rasterFullDecodeMaxBytes` | `number` | `1 GiB` | 原图 Full decode 的预估自然 RGBA8 字节上限。超过上限的已知尺寸图留在 `minimapSource` / `minimapSrc` 并显示常驻说明；没有缩略图时安全失败，而不是用完整 bitmap 探测内存。请传入原图的 `exif.width` / `exif.height`，以便解码前就能判断。 |
 | `preloadMemoryBudgetBytes` | `number` | 浏览器按显示器分档 | Raster 逻辑 RGBA8 texture payload 预算；按 `width × height × 4` 上传前硬准入，显式值始终优先。它不包含驱动内部副本、帧缓冲和 decoder 工作集，不是进程物理显存计量。Tauri 宿主应以 `sysinfo`/平台 GPU budget 调用 `suggestRasterHardwareTextureBudgetBytes` 后传入。Screen/Browse 数量另按实时图片舞台 DIV × DPR 和单图尺寸动态计算。 |
 | `rasterDecodeWorkers` | `number \| 'auto'` | `'auto'` | Raster Blob → ImageBitmap 的 Dedicated Worker 数量。auto 对 ≤4/≤8/>8 个逻辑线程保守选择 1/2/3；显式值仍受 `rasterDecodeWorkerMax` 与硬上限 3 限制。 |
 | `rasterDecodeWorkerMax` | `number` | `3` | 自动和显式解码并发的安全上限。自然像素超过 8000 万的来源始终独占 decode pool，不受此值影响。 |

@@ -21,6 +21,7 @@ describe('resolveStrings', () => {
   it('returns Chinese strings for "zh"', () => {
     const t = resolveStrings('zh');
     expect(t.zoomIn).toBe('放大');
+    expect(t.originalTooLargeNotice).toBe('原图太大，只能显示缩略图。');
   });
 
   it('returns Chinese strings for "zh-CN"', () => {

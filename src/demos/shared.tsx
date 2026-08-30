@@ -1,9 +1,10 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { cardStyle, thumbImgStyle, thumbLabelStyle } from './demoStyles';
 import type { DemoLocale, DemoStrings } from './demoLocale';
 
 export function ThumbCard({
   src,
+  fallbackSrc,
   alt,
   label,
   ariaLabel,
@@ -11,6 +12,8 @@ export function ThumbCard({
   onClick,
 }: {
   src: string;
+  /** If `src` 400s (common for some Wikimedia thumb widths), try this URL next. */
+  fallbackSrc?: string;
   alt: string;
   label: string;
   ariaLabel: string;
@@ -19,6 +22,14 @@ export function ThumbCard({
   onClick: () => void;
 }) {
   const [hover, setHover] = useState(false);
+  const [broken, setBroken] = useState(false);
+  const [activeSrc, setActiveSrc] = useState(src);
+
+  useEffect(() => {
+    setBroken(false);
+    setActiveSrc(src);
+  }, [src, fallbackSrc]);
+
   return (
     <button
       type="button"
@@ -36,7 +47,36 @@ export function ThumbCard({
       aria-label={ariaLabel}
     >
       <span style={{ position: 'relative', display: 'block' }}>
-        <img src={src} alt={alt} style={thumbImgStyle} loading="lazy" decoding="async" />
+        {broken ? (
+          <span
+            style={{
+              ...thumbImgStyle,
+              background: '#1a1d27',
+              color: '#667',
+              display: 'grid',
+              placeItems: 'center',
+              fontSize: 12,
+            }}
+          >
+            —
+          </span>
+        ) : (
+          <img
+            src={activeSrc}
+            alt={alt}
+            style={thumbImgStyle}
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            onError={() => {
+              if (fallbackSrc && activeSrc !== fallbackSrc) {
+                setActiveSrc(fallbackSrc);
+                return;
+              }
+              setBroken(true);
+            }}
+          />
+        )}
         <span
           aria-hidden
           style={{

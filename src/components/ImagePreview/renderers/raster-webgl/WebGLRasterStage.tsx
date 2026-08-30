@@ -726,6 +726,16 @@ export function WebGLRasterStage({
           return;
         }
         const error = cause instanceof Error ? cause : new Error(String(cause));
+        if (previewSource) {
+          activateFallback(
+            'texture-create-failed',
+            resourceKey,
+            naturalSize,
+            pipeline.currentContextStatus,
+            'preview',
+          );
+          return;
+        }
         callbacksRef.current.onPhaseChange('error');
         callbacksRef.current.onError(error);
       });

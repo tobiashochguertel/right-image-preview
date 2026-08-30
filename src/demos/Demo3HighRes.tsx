@@ -6,7 +6,9 @@ import { DEMO_HIGH_RES_IMAGES, demoApproxMbLabel } from './demoHighResSources';
 import type { DemoLocale, DemoStrings } from './demoLocale';
 import { ThumbCard } from './shared';
 
-function largeGallery(locale: DemoLocale): ImageItem[] {
+type Demo3Item = ImageItem & { gridFallbackSrc: string };
+
+function largeGallery(locale: DemoLocale): Demo3Item[] {
   const z = locale === 'zh';
   const loc = z ? 'zh' : 'en';
   const { carinaNebulaESO, northAmericaNebula } = DEMO_HIGH_RES_IMAGES;
@@ -14,12 +16,14 @@ function largeGallery(locale: DemoLocale): ImageItem[] {
     {
       src: carinaNebulaESO.src,
       minimapSrc: carinaNebulaESO.minimapSrc,
+      gridFallbackSrc: carinaNebulaESO.gridFallbackSrc,
       alt: z ? '船底座大星云（ESO）' : 'Carina Nebula (ESO)',
       name: `${z ? '船底座大星云 · ESO' : 'Carina Nebula, ESO'}${demoApproxMbLabel(carinaNebulaESO.approxBytes, loc)}`,
     },
     {
       src: northAmericaNebula.src,
       minimapSrc: northAmericaNebula.minimapSrc,
+      gridFallbackSrc: northAmericaNebula.gridFallbackSrc,
       alt: z ? '北美洲星云' : 'North America Nebula',
       name: `${z ? '北美洲星云' : 'North America Nebula'}${demoApproxMbLabel(northAmericaNebula.approxBytes, loc)}`,
     },
@@ -41,6 +45,7 @@ export function Demo3HighRes({ t, locale, previewLanguage }: { t: DemoStrings; l
             <ThumbCard
               key={img.src}
               src={img.minimapSrc ?? img.src}
+              fallbackSrc={img.gridFallbackSrc}
               alt={img.alt ?? ''}
               label={img.name ?? img.alt ?? ''}
               ariaLabel={t.thumbAria(img.name ?? img.alt ?? '')}

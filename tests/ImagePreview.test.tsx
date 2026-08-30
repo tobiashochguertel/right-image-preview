@@ -1295,4 +1295,52 @@ describe('ImagePreview component', () => {
       expect(onClose).toHaveBeenCalled();
     });
   });
+
+  describe('original-too-large notice', () => {
+    const huge = {
+      src: 'https://example.com/huge.jpg',
+      minimapSrc: 'https://example.com/huge-thumb.jpg',
+      exif: { width: 32_490, height: 22_590 },
+    };
+
+    it('shows a persistent banner and reports thumb-only when EXIF RGBA exceeds the cap', async () => {
+      const onMainImageLoadStageChange = vi.fn();
+      render(
+        <ImagePreview
+          images={[huge]}
+          visible
+          language="zh"
+          onMainImageLoadStageChange={onMainImageLoadStageChange}
+        />,
+      );
+      expect(screen.getByRole('status')).toHaveTextContent('原图太大，只能显示缩略图。');
+      await waitFor(() => {
+        expect(onMainImageLoadStageChange).toHaveBeenCalledWith('thumb-only');
+      });
+    });
+
+    it('does not show the banner for a normal-sized image with a minimap', () => {
+      render(
+        <ImagePreview
+          images={[{
+            src: 'https://example.com/a.jpg',
+            minimapSrc: 'https://example.com/a-mini.jpg',
+            exif: { width: 800, height: 600 },
+          }]}
+          visible
+        />,
+      );
+      expect(screen.queryByRole('status')).toBeNull();
+    });
+
+    it('does not show the banner when an oversized original has no preview', () => {
+      render(
+        <ImagePreview
+          images={[{ src: 'https://example.com/huge.jpg', exif: { width: 32_490, height: 22_590 } }]}
+          visible
+        />,
+      );
+      expect(screen.queryByRole('status')).toBeNull();
+    });
+  });
 });

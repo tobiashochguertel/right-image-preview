@@ -1,24 +1,35 @@
 /**
- * Demo 3: full `src` and progressive `minimapSrc` URLs on Tencent COS (Singapore).
+ * Demo 3: full `src` and progressive `minimapSrc` from Wikimedia Commons.
  *
- * Originals and license: Wikimedia Commons (see `commonsPage` below).
+ * The Raster pipeline loads these with `fetch` (Web Worker). The host must send
+ * `Access-Control-Allow-Origin`. Wikimedia does; the previous Tencent COS copies
+ * did not, so the overlay stayed blank while the grid `<img>` thumbs still loaded.
+ *
+ * North America Nebula’s 500px thumb 400s on some edges; the 1280px derivative
+ * is the size that loads in the browser, so the overlay progressive layer uses
+ * that instead of waiting on the 16 MB original.
  *
  * @see https://commons.wikimedia.org/wiki/File:ESO_-_The_Carina_Nebula_(by).jpg — ESO
  * @see https://commons.wikimedia.org/wiki/File:The_North_America_Nebula.jpg — Martin Pugh et al.
  */
-const COS_BASE =
-  'https://public-img-1253867148.cos.ap-singapore.myqcloud.com/img-in-projects/right-image-viewers';
+import { wikiOriginal, wikiThumb } from './wikiCommons';
+
+const CARINA = 'ESO_-_The_Carina_Nebula_(by).jpg';
+const NORTH_AMERICA = 'The_North_America_Nebula.jpg';
 
 export const DEMO_HIGH_RES_IMAGES = {
   carinaNebulaESO: {
-    src: `${COS_BASE}/ESO_-_The_Carina_Nebula_%28by%29.jpg`,
-    minimapSrc: `${COS_BASE}/carina-nebula-thumb.jpg`,
+    src: wikiOriginal('4/45', CARINA),
+    minimapSrc: wikiThumb('4/45', CARINA, 330),
+    /** Grid `<img>` fallback if the small thumb 400s. */
+    gridFallbackSrc: wikiThumb('4/45', CARINA, 1280),
     commonsPage: 'https://commons.wikimedia.org/wiki/File:ESO_-_The_Carina_Nebula_(by).jpg',
     approxBytes: 12_246_989,
   },
   northAmericaNebula: {
-    src: `${COS_BASE}/The_North_America_Nebula.jpg`,
-    minimapSrc: `${COS_BASE}/north-america-nebula-thumb.jpg`,
+    src: wikiOriginal('f/f2', NORTH_AMERICA),
+    minimapSrc: wikiThumb('f/f2', NORTH_AMERICA, 1280),
+    gridFallbackSrc: wikiThumb('f/f2', NORTH_AMERICA, 1920),
     commonsPage: 'https://commons.wikimedia.org/wiki/File:The_North_America_Nebula.jpg',
     approxBytes: 16_394_595,
   },

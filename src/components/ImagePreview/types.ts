@@ -280,7 +280,10 @@ export type MainImageLoadStage =
   | 'inactive'
   | 'preloading'
   | 'thumbnail-placeholder'
-  /** Full `src` failed to load/decode, but `minimapSrc` succeeded — main area shows thumbnail only. */
+  /**
+   * Main area is the thumbnail only: Full `src` failed, or known original RGBA exceeds
+   * {@link ImagePreviewProps.rasterFullDecodeMaxBytes} so decode stays on `minimapSrc`.
+   */
   | 'thumb-only'
   | 'full-ready'
   | 'error';
@@ -540,8 +543,11 @@ export interface ImagePreviewProps {
 
   /**
    * Maximum estimated natural RGBA8 bytes allowed for an original Full decode.
-   * Larger known images stay on `minimapSource`/`minimapSrc`; without one they
-   * fail safely instead of probing memory with a bitmap allocation. Default: `1 GiB`.
+   * Larger known images stay on `minimapSource`/`minimapSrc` and show a persistent
+   * notice; without a preview they fail safely instead of probing memory with a
+   * bitmap allocation. Default: `1 GiB`. Hosts should pass original
+   * `exif.width` / `exif.height` so the cap can be applied before decode.
+   * Override or hide the banner with `strings.originalTooLargeNotice`.
    */
   rasterFullDecodeMaxBytes?: number;
 

@@ -76,6 +76,8 @@ export interface DemoStrings {
   demo5PreloadHint: string;
   demo6Title: string;
   demo6Desc: string;
+  demo6SourceRemote: string;
+  demo6SourceLocal: string;
   demo6SidebarTitle: string;
   demo6HowTo: string;
   demo6HowToShort: string;
@@ -130,7 +132,7 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
       },
       {
         title: 'Keys on the keyboard',
-        body: 'Esc, arrows, space, page up/down, + and −, and more. See the short list below.',
+        body: 'Esc, arrows, space, page up/down, + and −, ⌘/Ctrl or Shift + arrows to pan, and more. See the short list below.',
       },
       {
         title: 'Small download',
@@ -156,6 +158,8 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
       ['Click a small picture', 'Opens that photo full screen'],
       ['Esc', 'Closes the viewer'],
       ['← / →', 'Previous photo / next photo'],
+      ['⌘ / Ctrl + Arrow', 'Pan when zoomed in (⌘ on Mac, Ctrl on Windows/Linux). Two arrows = diagonal.'],
+      ['Shift + Arrow', 'Also pans by default. With `shiftArrowAction="rotate"`, Left/Right rotate 90°; Up/Down still zoom.'],
       ['Mouse wheel', 'Zoom in or out (if wheel zoom is on)'],
       ['Double-click', 'Zoom in; double-click again to undo (if on)'],
       ['Drag', 'Move the photo when you are zoomed in'],
@@ -183,7 +187,7 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
       'Ten photos in three folders, like a trip album. The bottom thumbnail strip lists **only the current folder** (default `thumbnailsScope="group"`) — when you jump to another folder (double-chevron or PageUp/Down), the strip swaps to that group’s images. For a cross-folder strip use `thumbnailsScope="flat"` (see Demo 5). The badge’s second line starts with which folder you are in (e.g. (1/3)), then the folder name. The counter between the arrows is only your place inside that folder (e.g. 2/3).',
     demo3Title: 'Demo 3 · Thumbnail first, full image after',
     demo3Desc:
-      'Each item uses a small low-res preview (`minimapSrc`) so you see a stretched image right away instead of a long empty wait. When the full file is ready, it replaces the preview. Approximate file size is in each label. v0.4 uses adaptive neighbor texture preload by default; Demo 5 pins `preloadRadius={1}` for a bounded example.',
+      'Each item uses a small low-res preview (`minimapSrc`) so you see a stretched image right away instead of a long empty wait. When the full file is ready, it replaces the preview. Approximate file size is in each label. Large files come from Wikimedia Commons (`fetch` needs CORS; the overlay stays blank if the host omits `Access-Control-Allow-Origin`). v0.4 uses adaptive neighbor texture preload by default; Demo 5 pins `preloadRadius={1}` for a bounded example.',
     demo4Title: 'Demo 4 · EXIF + delete (host-owned list)',
     demo4Desc:
       'Toolbar “i” toggles EXIF; the trash button (or Delete / Backspace) removes the current image. Metadata is on `ImageItem.exif`. Deleting calls `onDeleteImage(index, item)` — this demo filters by `item.id`, so the count drops and focus moves to the next (or previous) photo. Empty fields are hidden; the third photo starts with no EXIF.',
@@ -195,15 +199,17 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo5HidePreview: 'Hide preview',
     demo5EmptyWorkspace: 'Preview hidden — sidebar still works.',
     demo5PreloadHint: 'Neighbor preload indexes',
-    demo6Title: 'Demo 6 · Local large JPGs (dev only, gitignored)',
+    demo6Title: 'Demo 6 · Preload lab (remote or local)',
     demo6Desc:
-      'Reads every original under gitignored `./test-images` that has a matching file in `thumbs/` (Vite middleware). A partial green bar is transfer progress; full green means the original completed once; **blue** means its decoded texture is still GPU-resident and should switch near-instantly. Toggle preload off to force every nav cold. New JPGs: run `bash scripts/generate-test-image-thumbs.sh`.',
+      'Default: Wikimedia Commons JPEGs (~1280–1920px, CORS-enabled) so GitHub Pages visitors can measure neighbor preload over the network. Switch to **Local** in `npm run dev` to use every JPG/PNG/WebP under gitignored `./test-images` (nested folders OK). Green bar = original transfer; **blue** = GPU-resident texture. Toggle preload off to force cold navigations.',
+    demo6SourceRemote: 'Remote (Wikimedia)',
+    demo6SourceLocal: 'Local folder',
     demo6SidebarTitle: 'Local large files',
     demo6HowTo:
       'Wait for blue on a ± neighbor, then ←/→. Full green means downloaded/cache-likely, but may still need decode/upload.',
     demo6HowToShort: 'Wait for blue on ±, then ←/→ · hover for detail',
     demo6Missing:
-      'No usable `./test-images` (need originals + matching files under thumbs/). Local only — never commit that folder. After adding JPGs: `bash scripts/generate-test-image-thumbs.sh`.',
+      'Local set is empty. In `npm run dev`, put JPG/PNG/WebP files under `./test-images` (nested folders OK; do not commit that folder) and refresh.',
     demo6GridHint: 'Click a card to open that index · scroll for more',
     demo6SlotsToggle: 'Neighbor preload (display-ready)',
     demo6MeterTitle: 'Last navigation',
@@ -254,7 +260,7 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
       },
       {
         title: '键盘友好',
-        body: 'Esc、方向键、空格、翻页、± 缩放等 — 详见下方操作说明。',
+        body: 'Esc、方向键、空格、翻页、± 缩放、⌘/Ctrl 或 Shift 加方向键平移等 — 详见下方操作说明。',
       },
       {
         title: '体积小、易集成',
@@ -274,6 +280,8 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
       ['点击缩略图', '全屏打开该图'],
       ['Esc', '关闭查看器'],
       ['← / →', '上一张 / 下一张'],
+      ['⌘ / Ctrl + 方向键', '放大后平移（Mac 用 ⌘，Windows / Linux 用 Ctrl）。同时按两个方向键为斜向。'],
+      ['Shift + 方向键', '默认同样平移。`shiftArrowAction="rotate"` 时左右键旋转 90°，上下键仍缩放。'],
       ['滚轮', '缩放（开启滚轮缩放时）'],
       ['双击', '放大；再次双击还原（开启双击缩放时）'],
       ['拖动', '放大后可拖动平移画面'],
@@ -301,7 +309,7 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
       '旅行相册场景，共 3 个文件夹 · 10 张图片。底部缩略图条（默认 `thumbnailsScope="group"`）**只展示当前文件夹**内的图片；跳转到下一组（双箭头或 PageUp/Down）后，条带会换成该组的缩略图。跨组全序列请用 `thumbnailsScope="flat"`（见 Demo 5）。信息条第二行先显示当前第几组、共几组（如 (1/3)），再跟文件夹名称。工具栏中间的序号只表示当前文件夹内第几张（如 2/3）。',
     demo3Title: 'Demo 3 · 先缩略占位，再切高清',
     demo3Desc:
-      '每张图先用较小的低清预览（`minimapSrc`）铺满画面，减少长时间黑屏等待；完整纹理就绪后立即替换。标签中标注约略文件大小。v0.4 默认使用动态邻图 texture 预加载；Demo 5 用 `preloadRadius={1}` 展示固定边界。',
+      '每张图先用较小的低清预览（`minimapSrc`）铺满画面，减少长时间黑屏等待；完整纹理就绪后立即替换。标签中标注约略文件大小。大图来自 Wikimedia Commons（WebGL 用 `fetch`，需要 CORS；若图床不返回 `Access-Control-Allow-Origin`，网格缩略图能显示但预览会一直空白）。v0.4 默认使用动态邻图 texture 预加载；Demo 5 用 `preloadRadius={1}` 展示固定边界。',
     demo4Title: 'Demo 4 · EXIF + 删除（宿主维护列表）',
     demo4Desc:
       '工具栏「i」开关 EXIF；垃圾桶（或 Delete / Backspace）删除当前图。元数据在 `ImageItem.exif`。删除回调为 `onDeleteImage(index, item)` — 本 Demo 按 `item.id` 更新列表，张数减一并跳到下一张（若已是最后一张则上一张）。空字段不显示；第三张默认无 EXIF。',
@@ -313,15 +321,17 @@ export const STRINGS: Record<DemoLocale, DemoStrings> = {
     demo5HidePreview: '隐藏预览',
     demo5EmptyWorkspace: '预览已隐藏 — 侧栏仍可用。',
     demo5PreloadHint: '相邻预加载下标',
-    demo6Title: 'Demo 6 · 本地大图 JPG（仅开发，已 gitignore）',
+    demo6Title: 'Demo 6 · 预加载实验室（远程或本地）',
     demo6Desc:
-      '中间件读取 `./test-images` 中**带同名 thumbs/** 的全部原图。绿条未满表示原图传输进度，满绿表示曾完整下载；**蓝条**表示已解码 texture 仍驻留 GPU，应接近瞬时切换。关掉预热可强制每次走 cold。新增 JPG 后执行：`bash scripts/generate-test-image-thumbs.sh`。',
+      '默认使用 Wikimedia Commons 的 JPEG（约 1280–1920px，带 CORS），GitHub Pages 访客也能测邻图预热与网络耗时。在 `npm run dev` 下可切到**本地**：递归读取 gitignored 的 `./test-images`（含子目录）。绿条为原图传输；**蓝条**表示 texture 仍在 GPU。关掉预热可强制每次 cold。',
+    demo6SourceRemote: '远程（Wikimedia）',
+    demo6SourceLocal: '本地目录',
     demo6SidebarTitle: '本地大图',
     demo6HowTo:
       '等 ± 邻居出现蓝条后 ←/→。满绿只表示已下载、很可能走缓存，仍可能需要解码/上传。',
     demo6HowToShort: '等 ± 蓝条后 ←/→ · 悬停看说明',
     demo6Missing:
-      '未找到可用的 `./test-images`（需原图 + thumbs/ 下同名缩略图）。仅本机使用，切勿提交该目录。新增后：`bash scripts/generate-test-image-thumbs.sh`。',
+      '本地图集为空。请用 `npm run dev`，把 JPG/PNG/WebP 放进 `./test-images`（含子目录，勿提交），然后刷新。',
     demo6GridHint: '点卡片打开对应 index · 可滚动',
     demo6SlotsToggle: '邻居预热（display-ready）',
     demo6MeterTitle: '上次切图',
