@@ -365,8 +365,12 @@ export const ImagePreviewInner = forwardRef<ImagePreviewRef, ImagePreviewProps>(
         zoomMode: mode,
         zoomPercent: mode === 'fit' ? fitEquivalentNativePercent : nativePercent,
         fitEquivalentNativePercent,
-        canZoomIn: !(mode === 'native' && nativePercent >= sortedStops[sortedStops.length - 1]),
-        canZoomOut: mode !== 'fit',
+        // Zoom-in is unbounded: the ladder extends geometrically past maxStop.
+        canZoomIn: true,
+        canZoomOut:
+          mode === 'native'
+            ? nativePercent > sortedStops[0]
+            : (fitEquivalentNativePercent ?? 0) > sortedStops[0],
         rotation: transform.rotation,
         flipH: transform.flipH,
         flipV: transform.flipV,

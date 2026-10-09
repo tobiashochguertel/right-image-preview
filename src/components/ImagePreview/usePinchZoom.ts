@@ -116,10 +116,12 @@ export function usePinchZoom(options: UsePinchZoomOptions): void {
       const baseScale = pinchStartScaleRef.current;
       let newScale = baseScale * ratio;
 
-      // Clamp: allow zooming beyond max stop (up to 4×) for "wow" factor but
-      // prevent extreme values that could lose the image off-screen.
-      const minScale = minStop / 100;
-      const maxScale = (maxStop * 4) / 100;
+      // Clamp relative to the pinch start scale: allow zooming beyond max stop
+      // (up to 4×) for "wow" factor, and never clamp through the start scale —
+      // fit mode can already exceed maxStop (e.g. an SVG upscaled to 950%), so
+      // pinching in must not snap the view back down.
+      const minScale = Math.min(minStop / 100, baseScale);
+      const maxScale = Math.max((maxStop * 4) / 100, baseScale * 4);
       newScale = Math.max(minScale, Math.min(maxScale, newScale));
 
       const rect = containerRef.current?.getBoundingClientRect();

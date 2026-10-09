@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DelayedTooltip } from './DelayedTooltip';
 import type { LocaleStrings } from './locale';
 import {
@@ -366,14 +366,14 @@ function ZoomInput({
     });
   }, [disabled, mode, nativePercent, fitEquivalentNativePercent]);
 
-  const maxStop = useMemo(() => Math.max(...stops), [stops]);
-
   const commit = useCallback((raw: string) => {
     const trimmed = raw.trim().replace('%', '');
     const num = parseInt(trimmed, 10);
-    if (!isNaN(num) && num > 0) onSetNative(Math.min(num, maxStop));
+    // Not clamped to the stops list — native zoom accepts any positive percent,
+    // which is required when fit upscales a small image past maxStop (e.g. 950%).
+    if (!isNaN(num) && num > 0) onSetNative(num);
     setIsOpen(false);
-  }, [maxStop, onSetNative]);
+  }, [onSetNative]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -572,7 +572,7 @@ export function Toolbar({
     zoom: true, nativeZoom: true, pan: true, rotate: true, flip: true, minimap: true,
   },
   mode, nativePercent, fitEquivalentNativePercent,
-  atMinStop, atMaxStop,
+  atMinStop,
   totalImages, currentIndex,
   groupCurrentIndex, groupTotal,
   hasPrevGroup, hasNextGroup,
@@ -598,8 +598,14 @@ export function Toolbar({
   zoomLabelSlotPx,
   zoomDropdownWidthPx,
 }: ToolbarProps) {
-  const canZoomOut = capabilities.zoom && mode === 'native' && !atMinStop;
-  const canZoomIn  = capabilities.zoom && !(mode === 'native' && atMaxStop);
+  // Zoom-out works in fit mode too when the fit-equivalent is above the lowest
+  // stop (e.g. a small image upscaled to fill the viewport past maxStop).
+  const minStop = Math.min(...stops);
+  const canZoomOut =
+    capabilities.zoom &&
+    (mode === 'native' ? !atMinStop : (fitEquivalentNativePercent ?? 0) > minStop);
+  // Zoom-in extends geometrically past the top stop — never disabled by level.
+  const canZoomIn  = capabilities.zoom;
   const isGroupMode = groupTotal !== undefined && groupCurrentIndex !== undefined;
   const showNav = isGroupMode || totalImages > 1;
 
