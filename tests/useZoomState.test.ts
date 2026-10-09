@@ -49,12 +49,14 @@ describe('useZoomState', () => {
       expect(result.current.nativePercent).toBe(100);
     });
 
-    it('strategy=above-fit: falls back to maxStop when fit-equivalent is above all stops', () => {
+    it('strategy=above-fit: continues geometrically when fit-equivalent is above all stops', () => {
       const { result } = renderHook(() => useZoomState(DEFAULT_OPTS));
       act(() => {
+        // A small SVG upscaled by Fit (e.g. to 950%): zoom-IN must not snap
+        // DOWN to maxStop — extend the ladder by the top-gap ratio (400/200=2).
         result.current.zoomIn(500); // above all stops
       });
-      expect(result.current.nativePercent).toBe(400);
+      expect(result.current.nativePercent).toBe(1000);
     });
 
     it('strategy=first-stop: always enters at first stop', () => {
@@ -87,12 +89,12 @@ describe('useZoomState', () => {
       expect(result.current.nativePercent).toBe(100);
     });
 
-    it('does nothing at max stop when behaviour=noop', () => {
+    it('extends past max stop geometrically when behaviour=noop', () => {
       const { result } = renderHook(() =>
         useZoomState({ ...DEFAULT_OPTS, initialMode: 'native', initialNativePercent: 400 }),
       );
       act(() => result.current.zoomIn());
-      expect(result.current.nativePercent).toBe(400);
+      expect(result.current.nativePercent).toBe(800);
     });
 
     it('calls onMaxStopReached when behaviour=notify', () => {
@@ -108,6 +110,8 @@ describe('useZoomState', () => {
       );
       act(() => result.current.zoomIn());
       expect(onMaxStopReached).toHaveBeenCalledOnce();
+      // ...but zoom still continues past the top stop.
+      expect(result.current.nativePercent).toBe(800);
     });
   });
 
@@ -144,10 +148,32 @@ describe('useZoomState', () => {
   });
 
   describe('zoomOut from fit mode', () => {
-    it('is a noop', () => {
+    it('is a noop without a fit-equivalent', () => {
       const { result } = renderHook(() => useZoomState(DEFAULT_OPTS));
       act(() => result.current.zoomOut());
       expect(result.current.mode).toBe('fit');
+    });
+
+    it('is a noop when fit-equivalent is already at/below the first stop', () => {
+      const { result } = renderHook(() => useZoomState(DEFAULT_OPTS));
+      act(() => result.current.zoomOut(20)); // below min stop 25
+      expect(result.current.mode).toBe('fit');
+    });
+
+    it('steps down to the stop below the fit-equivalent', () => {
+      const { result } = renderHook(() => useZoomState(DEFAULT_OPTS));
+      act(() => result.current.zoomOut(150));
+      expect(result.current.mode).toBe('native');
+      expect(result.current.nativePercent).toBe(100);
+    });
+
+    it('steps down geometrically when fit-equivalent exceeds all stops', () => {
+      const { result } = renderHook(() => useZoomState(DEFAULT_OPTS));
+      // Wheel-down at fit=950% must zoom out, not sit dead (previous behaviour)
+      // or jump to maxStop.
+      act(() => result.current.zoomOut(950));
+      expect(result.current.mode).toBe('native');
+      expect(result.current.nativePercent).toBe(475); // 950 / 2
     });
   });
 
@@ -231,12 +257,46 @@ describe('useZoomState', () => {
   });
 
   describe('boundary stops', () => {
-    it('stops at max stop boundary', () => {
+    it('extends past the top stop instead of dead-ending', () => {
       const { result } = renderHook(() =>
         useZoomState({ ...DEFAULT_OPTS, initialMode: 'native', initialNativePercent: 400 }),
       );
-      act(() => result.current.zoomIn()); // already at max
+      act(() => result.current.zoomIn()); // at max — continues geometrically
+      expect(result.current.nativePercent).toBe(800);
+    });
+
+    it('rejoins the stop ladder when zooming out crosses back below maxStop', () => {
+      const { result } = renderHook(() =>
+        useZoomState({ ...DEFAULT_OPTS, initialMode: 'native', initialNativePercent: 100 }),
+      );
+      act(() => result.current.setNative(410)); // just above maxStop
+      act(() => result.current.zoomOut());
+      // Geometric step would be 205 — below maxStop, so the previous stop wins.
       expect(result.current.nativePercent).toBe(400);
+      act(() => result.current.zoomOut());
+      expect(result.current.nativePercent).toBe(200);
+    });
+
+    it('never produces a non-finite percent when native is above maxStop', () => {
+      // Regression: native > maxStop (reachable via pinch zoom, maxStop × 4)
+      // used to index stops[-1] → undefined percent.
+      const { result } = renderHook(() =>
+        useZoomState({ ...DEFAULT_OPTS, initialMode: 'native' }),
+      );
+      act(() => result.current.setNative(500));
+      act(() => result.current.zoomIn());
+      const zoomedIn = result.current.nativePercent;
+      expect(Number.isFinite(zoomedIn)).toBe(true);
+      expect(zoomedIn).toBe(1000);
+      act(() => result.current.zoomOut());
+      expect(result.current.nativePercent).toBe(500);
+    });
+
+    it('peekZoomIn/peekZoomOut predict the applied targets past maxStop', () => {
+      const { result } = renderHook(() => useZoomState(DEFAULT_OPTS));
+      expect(result.current.peekZoomIn(950)).toEqual({ mode: 'native', percent: 1900 });
+      expect(result.current.peekZoomOut(950)).toEqual({ mode: 'native', percent: 475 });
+      expect(result.current.peekZoomOut(20)).toBeNull();
     });
   });
 });

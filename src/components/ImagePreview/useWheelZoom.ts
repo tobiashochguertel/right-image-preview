@@ -28,7 +28,7 @@ export interface UseWheelZoomOptions {
   /**
    * Returns what the next zoom-out state would be WITHOUT applying it, or null if at min.
    */
-  peekZoomOut(): { mode: ZoomMode; percent: number } | null;
+  peekZoomOut(fitEquiv?: number): { mode: ZoomMode; percent: number } | null;
   /**
    * Pre-adjust translate so the point under the cursor stays fixed during a zoom step.
    * Must be called BEFORE the zoom state update (same render batch via flushSync).
@@ -117,7 +117,7 @@ export function useWheelZoom(options: UseWheelZoomOptions): void {
 
         const peek = directionIn
           ? peekZoomIn(fitEquivalentNativePercent)
-          : peekZoomOut();
+          : peekZoomOut(fitEquivalentNativePercent);
         if (peek === null) {
           wheelAccumRef.current = 0;
           return false;

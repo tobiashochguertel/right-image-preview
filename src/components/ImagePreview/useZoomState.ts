@@ -33,7 +33,9 @@ export interface ZoomStateActions {
     fitEquivalentNativePercent?: number,
   ): { mode: ZoomMode; percent: NativePercent } | null;
   /** Returns what the next zoom-out state would be WITHOUT applying it. */
-  peekZoomOut(): { mode: ZoomMode; percent: NativePercent } | null;
+  peekZoomOut(
+    fitEquivalentNativePercent?: number,
+  ): { mode: ZoomMode; percent: NativePercent } | null;
 }
 
 function clampToStops(percent: NativePercent, stops: NativePercent[]): NativePercent {
@@ -59,6 +61,37 @@ export function useZoomState(options: ZoomStateOptions): ZoomStateActions {
   const sortedStops = [...stops].sort((a, b) => a - b);
   const minStop = sortedStops[0];
   const maxStop = sortedStops[sortedStops.length - 1];
+  /**
+   * Ratio of the top stop gap — used to extend the ladder geometrically beyond
+   * `maxStop` (and back down into it). Fit mode can exceed every stop (e.g. a
+   * small SVG upscaled to fill the viewport at 950%), so wheel zoom must keep
+   * stepping smoothly instead of snapping down to `maxStop`.
+   */
+  const beyondStopRatio =
+    sortedStops.length > 1 ? maxStop / sortedStops[sortedStops.length - 2] : 1.25;
+
+  /** Smallest zoom level strictly above `percent`: next stop, or a geometric step past `maxStop`. */
+  const nextZoomAbove = useCallback(
+    (percent: number): NativePercent => {
+      const above = sortedStops.find((s) => s > percent);
+      if (above !== undefined) return above;
+      // `percent + 1` guards the (degenerate) case where the rounded step would not move.
+      return Math.max(percent + 1, Math.round(percent * beyondStopRatio));
+    },
+    [sortedStops, beyondStopRatio],
+  );
+
+  /** Largest zoom level strictly below `percent`: previous stop, or a geometric step down when above `maxStop`. */
+  const nextZoomBelow = useCallback(
+    (percent: number): NativePercent | undefined => {
+      if (percent > maxStop) {
+        const geometric = percent / beyondStopRatio;
+        if (geometric > maxStop) return Math.round(geometric);
+      }
+      return [...sortedStops].reverse().find((s) => s < percent);
+    },
+    [sortedStops, maxStop, beyondStopRatio],
+  );
 
   const resolveInitialNative = (): NativePercent => {
     if (initialNativePercent !== undefined) {
@@ -109,16 +142,20 @@ export function useZoomState(options: ZoomStateOptions): ZoomStateActions {
 
       if (currentMode === 'fit') {
         // Entering native from fit
+        const equiv = fitEquivalentNativePercent ?? 0;
         let targetStop: NativePercent;
-        if (firstZoomInStrategy === 'hundred') {
+        if (equiv >= maxStop) {
+          // Fit already exceeds the top stop (e.g. an SVG upscaled to fill the
+          // viewport at 950%): continue zooming in geometrically — snapping to
+          // `maxStop` here would be a zoom-IN that visibly zooms OUT.
+          targetStop = nextZoomAbove(equiv);
+        } else if (firstZoomInStrategy === 'hundred') {
           targetStop = clampToStops(100, sortedStops);
         } else if (firstZoomInStrategy === 'first-stop') {
           targetStop = minStop;
         } else {
           // 'above-fit': smallest stop strictly greater than fit-equivalent
-          const equiv = fitEquivalentNativePercent ?? 0;
-          const above = sortedStops.find((s) => s > equiv);
-          targetStop = above ?? maxStop;
+          targetStop = sortedStops.find((s) => s > equiv) ?? maxStop;
         }
         stateRef.current = { mode: 'native', nativePercent: targetStop };
         setMode('native');
@@ -127,20 +164,12 @@ export function useZoomState(options: ZoomStateOptions): ZoomStateActions {
         return;
       }
 
-      // Already in native mode → go to next stop above current
-      const idx = sortedStops.findIndex((s) => s >= currentNative);
-      const currentIdx = sortedStops[idx] === currentNative ? idx : idx - 1;
-      const nextIdx = currentIdx + 1;
+      const nextStop = nextZoomAbove(currentNative);
 
-      if (nextIdx >= sortedStops.length) {
-        // Already at max
-        if (zoomInAtMaxBehaviour === 'notify') {
-          onMaxStopReached?.();
-        }
-        return;
+      if (currentNative === maxStop && zoomInAtMaxBehaviour === 'notify') {
+        onMaxStopReached?.();
       }
 
-      const nextStop = sortedStops[nextIdx];
       stateRef.current = { mode: 'native', nativePercent: nextStop };
       setNativePercent(nextStop);
       notify('native', nextStop, fitEquivalentNativePercent);
@@ -149,6 +178,7 @@ export function useZoomState(options: ZoomStateOptions): ZoomStateActions {
       sortedStops,
       minStop,
       maxStop,
+      nextZoomAbove,
       firstZoomInStrategy,
       zoomInAtMaxBehaviour,
       onMaxStopReached,
@@ -160,26 +190,18 @@ export function useZoomState(options: ZoomStateOptions): ZoomStateActions {
     (fitEquivalentNativePercent?: number) => {
       const { mode: currentMode, nativePercent: currentNative } = stateRef.current;
 
-      if (currentMode === 'fit') {
-        // Already at fit, nothing to do
-        return;
-      }
+      // In fit mode the effective zoom is the fit-equivalent percent — stepping
+      // down from it is required when fit lands above the stops list.
+      const effective = currentMode === 'fit'
+        ? (fitEquivalentNativePercent ?? 0)
+        : currentNative;
 
-      // Find the largest stop strictly below current
-      const below = [...sortedStops].reverse().find((s) => s < currentNative);
+      // Largest stop strictly below the effective zoom (geometric step when above maxStop)
+      const below = nextZoomBelow(effective);
 
-      if (below === undefined) {
+      if (below === undefined || below < minStop) {
         // Already at or below minimum stop
-        if (zoomOutBelowMinBehaviour === 'fit') {
-          stateRef.current = { mode: 'fit', nativePercent: currentNative };
-          setMode('fit');
-          notify('fit', currentNative, fitEquivalentNativePercent);
-        }
-        return;
-      }
-
-      if (below < minStop) {
-        if (zoomOutBelowMinBehaviour === 'fit') {
+        if (zoomOutBelowMinBehaviour === 'fit' && currentMode !== 'fit') {
           stateRef.current = { mode: 'fit', nativePercent: currentNative };
           setMode('fit');
           notify('fit', currentNative, fitEquivalentNativePercent);
@@ -188,50 +210,51 @@ export function useZoomState(options: ZoomStateOptions): ZoomStateActions {
       }
 
       stateRef.current = { mode: 'native', nativePercent: below };
+      setMode('native');
       setNativePercent(below);
       notify('native', below, fitEquivalentNativePercent);
     },
-    [sortedStops, minStop, zoomOutBelowMinBehaviour, notify],
+    [minStop, nextZoomBelow, zoomOutBelowMinBehaviour, notify],
   );
 
   const peekZoomIn = useCallback(
     (fitEquivalentNativePercent?: number): { mode: ZoomMode; percent: NativePercent } | null => {
       const { mode: m, nativePercent: np } = stateRef.current;
       if (m === 'fit') {
+        const equiv = fitEquivalentNativePercent ?? 0;
         let targetStop: NativePercent;
-        if (firstZoomInStrategy === 'hundred') {
+        if (equiv >= maxStop) {
+          targetStop = nextZoomAbove(equiv);
+        } else if (firstZoomInStrategy === 'hundred') {
           targetStop = clampToStops(100, sortedStops);
         } else if (firstZoomInStrategy === 'first-stop') {
           targetStop = minStop;
         } else {
-          const equiv = fitEquivalentNativePercent ?? 0;
-          const above = sortedStops.find((s) => s > equiv);
-          targetStop = above ?? maxStop;
+          targetStop = sortedStops.find((s) => s > equiv) ?? maxStop;
         }
         return { mode: 'native', percent: targetStop };
       }
-      const idx = sortedStops.findIndex((s) => s >= np);
-      const currentIdx = sortedStops[idx] === np ? idx : idx - 1;
-      const nextIdx = currentIdx + 1;
-      if (nextIdx >= sortedStops.length) return null;
-      return { mode: 'native', percent: sortedStops[nextIdx] };
+      return { mode: 'native', percent: nextZoomAbove(np) };
     },
-    [sortedStops, minStop, maxStop, firstZoomInStrategy],
+    [sortedStops, minStop, maxStop, nextZoomAbove, firstZoomInStrategy],
   );
 
-  const peekZoomOut = useCallback((): {
-    mode: ZoomMode;
-    percent: NativePercent;
-  } | null => {
-    const { mode: m, nativePercent: np } = stateRef.current;
-    if (m === 'fit') return null;
-    const below = [...sortedStops].reverse().find((s) => s < np);
-    if (below === undefined || below < minStop) {
-      if (zoomOutBelowMinBehaviour === 'fit') return { mode: 'fit', percent: np };
-      return null;
-    }
-    return { mode: 'native', percent: below };
-  }, [sortedStops, minStop, zoomOutBelowMinBehaviour]);
+  const peekZoomOut = useCallback(
+    (
+      fitEquivalentNativePercent?: number,
+    ): { mode: ZoomMode; percent: NativePercent } | null => {
+      const { mode: m, nativePercent: np } = stateRef.current;
+      const effective = m === 'fit' ? (fitEquivalentNativePercent ?? 0) : np;
+      const below = nextZoomBelow(effective);
+      if (below === undefined || below < minStop) {
+        if (zoomOutBelowMinBehaviour === 'fit' && m !== 'fit')
+          return { mode: 'fit', percent: np };
+        return null;
+      }
+      return { mode: 'native', percent: below };
+    },
+    [minStop, nextZoomBelow, zoomOutBelowMinBehaviour],
+  );
 
   const reset = useCallback(() => {
     stateRef.current = {

@@ -176,8 +176,11 @@ export type ZoomOutBelowMinBehaviour = 'fit' | 'noop';
 
 /**
  * Behaviour when zooming in at the maximum stop.
- * - 'noop': do nothing.
- * - 'notify': call onMaxStopReached.
+ * Zoom-in is never blocked: past the top stop the ladder continues
+ * geometrically (each step = top stop ratio). This option only controls the
+ * notification fired on the step that crosses `maxStop`.
+ * - 'noop': zoom continues silently.
+ * - 'notify': zoom continues and calls onMaxStopReached.
  */
 export type ZoomInAtMaxBehaviour = 'noop' | 'notify';
 
@@ -355,7 +358,9 @@ export interface ImagePreviewProps {
    * Discrete native-percent zoom stops.
    * Must be sorted ascending and contain at least one value.
    * Default: [5, 10, 20, 35, 50, 75, 100, 125, 150, 175, 200]
-   * (max 200 % — higher ratios are usually too soft for preview).
+   * Above the top stop, wheel/keyboard zoom continues geometrically (× top-gap
+   * ratio) — required because Fit can already exceed it (e.g. SVG upscaled to
+   * 950%), and snapping back to maxStop on the first zoom-in feels broken.
    */
   stops?: NativePercent[];
   /** Initial zoom mode. Default: 'fit'. */
